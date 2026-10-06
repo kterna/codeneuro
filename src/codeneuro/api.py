@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from codeneuro.decomposer import Decomposer
+from codeneuro.exporter import RuleExporter
 from codeneuro.matcher import ScopeMatcher
 from codeneuro.models import (
     ContextResolution,
@@ -36,8 +37,10 @@ class CreateProjectReq(BaseModel):
 
 
 class CreateTaskReq(BaseModel):
+    id: Optional[str] = None
     title: str
     description: Optional[str] = ""
+    status: TaskStatus = TaskStatus.ACTIVE
 
 
 class CreateRuleReq(BaseModel):
@@ -63,12 +66,18 @@ class CrystallizeFindingReq(BaseModel):
     scope_patterns: Optional[List[str]] = None
 
 
+class ExportReq(BaseModel):
+    format: str = "cursor" # cursor | claude
+    out_dir: Optional[str] = None
+    task_id: Optional[str] = None
+
+
 def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None) -> FastAPI:
     if storage is None:
         actual_path = db_path or os.getenv("CODETOKEN_DB", "codeneuro.db")
         storage = Storage(actual_path)
 
-    app = FastAPI(title="CodeNeuro Cognitive Context Hub", version="0.1.0")
+    app = FastAPI(title="CodeNeuro Cognitive Context Hub", version="0.2.0")
 
     app.add_middleware(
         CORSMiddleware,
@@ -81,6 +90,44 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
     matcher = ScopeMatcher()
     decomposer = Decomposer()
     static_dir = Path(__file__).parent / "static"
+
+    # --- System Stats Endpoint ---
+
+    @app.get("/api/stats")
+    def get_global_stats():
+        projects = storage.list_projects()
+        all_rules = []
+        for p in projects:
+            all_rules.extend(storage.list_rules(p.id, status=None))
+
+        p0 = sum(1 for r in all_rules if r.priority == Priority.P0 and r.status == RuleStatus.ACTIVE)
+        p1 = sum(1 for r in all_rules if r.priority == Priority.P1 and r.status == RuleStatus.ACTIVE)
+        p2 = sum(1 for r in all_rules if r.priority == Priority.P2 and r.status == RuleStatus.ACTIVE)
+        total_hits = sum(r.hit_count for r in all_rules)
+        long_term = sum(1 for r in all_rules if r.lifecycle == Lifecycle.LONG_TERM and r.status == RuleStatus.ACTIVE)
+        short_term = sum(1 for r in all_rules if r.lifecycle == Lifecycle.SHORT_TERM and r.status == RuleStatus.ACTIVE)
+
+        cur = storage.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM tasks WHERE status = 'active'")
+        active_tasks = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM findings WHERE status = 'pending_review'")
+        pending_findings = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM proposals WHERE status = 'pending'")
+        pending_proposals = cur.fetchone()[0]
+
+        return {
+            "total_projects": len(projects),
+            "active_rules": len([r for r in all_rules if r.status == RuleStatus.ACTIVE]),
+            "p0_count": p0,
+            "p1_count": p1,
+            "p2_count": p2,
+            "long_term_count": long_term,
+            "short_term_count": short_term,
+            "total_hits": total_hits,
+            "active_tasks": active_tasks,
+            "pending_findings": pending_findings,
+            "pending_proposals": pending_proposals,
+        }
 
     # --- Project Endpoints ---
 
@@ -111,13 +158,13 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
     @app.post("/api/projects/{project_id}/tasks", response_model=Task)
     def create_task(project_id: str, req: CreateTaskReq):
         get_project(project_id)
-        tid = f"TASK-{uuid.uuid4().hex[:6].upper()}"
+        tid = req.id or f"TASK-{uuid.uuid4().hex[:6].upper()}"
         t = Task(
             id=tid,
             project_id=project_id,
             title=req.title,
             description=req.description,
-            status=TaskStatus.ACTIVE,
+            status=req.status,
         )
         return storage.create_task(t)
 
@@ -173,6 +220,14 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
             raise HTTPException(status_code=404, detail="Rule not found")
         return {"status": "ok", "rule_id": rule_id, "new_status": status.value}
 
+    @app.delete("/api/rules/{rule_id}")
+    def delete_rule(rule_id: str):
+        cur = storage.conn.cursor()
+        cur.execute("DELETE FROM rules WHERE id = ?", (rule_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Rule not found")
+        return {"status": "ok", "deleted_rule_id": rule_id}
+
     # --- Context Resolution ---
 
     @app.get("/api/context", response_model=ContextResolution)
@@ -212,7 +267,7 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
     def decompose_requirement(project_id: str, req: DecomposeReq):
         get_project(project_id)
 
-        # Auto-create task if it does not exist yet to satisfy foreign key
+        # Auto-create task if not present
         if req.task_id and not storage.get_task(req.task_id):
             storage.create_task(
                 Task(
@@ -235,7 +290,110 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
             saved_rules.append(storage.create_rule(r))
         return saved_rules
 
-    # --- Heatmap / Hierarchy Tree ---
+    # --- Cognitive Tree & Heatmap ---
+
+    @app.get("/api/projects/{project_id}/tree")
+    def get_project_cognitive_tree(project_id: str):
+        """
+        Builds a hierarchical tree of files and directories for the project,
+        annotating each node with aggregated P0, P1, P2, and task rules.
+        """
+        proj = storage.get_project(project_id)
+        if not proj:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        rules = storage.list_rules(project_id=project_id, status=RuleStatus.ACTIVE)
+
+        # Build paths from actual disk if directory exists, otherwise synthesize from rules
+        known_files = set()
+        for root in proj.root_paths:
+            p = Path(root)
+            if p.exists() and p.is_dir():
+                for item in p.rglob("*"):
+                    if item.is_file() and not any(part.startswith((".", "__pycache__", "node_modules", "dist", "build", "venv")) for part in item.parts):
+                        try:
+                            rel = item.relative_to(p).as_posix()
+                            known_files.add(rel)
+                        except Exception:
+                            pass
+
+        # Also add paths inferred from rules
+        for r in rules:
+            for pat in r.scope_patterns:
+                clean = pat.rstrip("/*").rstrip("?")
+                if clean and not clean.startswith("*"):
+                    known_files.add(clean)
+
+        if not known_files:
+            known_files.add("src/index.ts")
+
+        # Tree root
+        tree_root: Dict[str, Any] = {
+            "name": proj.name,
+            "path": "",
+            "type": "directory",
+            "p0_count": 0,
+            "p1_count": 0,
+            "p2_count": 0,
+            "total_rules": 0,
+            "children": {}
+        }
+
+        # Match rules against each path
+        for fpath in known_files:
+            matched = [r for r in rules if matcher.matches_rule(r, fpath)]
+
+            # Insert into tree
+            parts = fpath.split("/")
+            curr = tree_root
+            curr_path = ""
+            for idx, part in enumerate(parts):
+                curr_path = f"{curr_path}/{part}" if curr_path else part
+                is_leaf = (idx == len(parts) - 1) and ("." in part or "*" not in part)
+                node_type = "file" if is_leaf else "directory"
+
+                if part not in curr["children"]:
+                    curr["children"][part] = {
+                        "name": part,
+                        "path": curr_path,
+                        "type": node_type,
+                        "p0_count": 0,
+                        "p1_count": 0,
+                        "p2_count": 0,
+                        "total_rules": 0,
+                        "rules": [],
+                        "children": {}
+                    }
+                node = curr["children"][part]
+
+                # Aggregate metrics
+                for r in matched:
+                    if r.id not in [x["id"] for x in node["rules"]]:
+                        node["rules"].append({"id": r.id, "title": r.title, "priority": r.priority.value, "lifecycle": r.lifecycle.value})
+                        node["total_rules"] += 1
+                        if r.priority == Priority.P0: node["p0_count"] += 1
+                        elif r.priority == Priority.P1: node["p1_count"] += 1
+                        else: node["p2_count"] += 1
+
+                curr = node
+
+        # Recursive dict to list
+        def format_node(node: Dict[str, Any]) -> Dict[str, Any]:
+            children_list = [format_node(c) for c in node["children"].values()]
+            children_list.sort(key=lambda x: (0 if x["type"] == "directory" else 1, x["name"].lower()))
+            return {
+                "name": node["name"],
+                "path": node["path"],
+                "type": node["type"],
+                "p0_count": node["p0_count"],
+                "p1_count": node["p1_count"],
+                "p2_count": node["p2_count"],
+                "total_rules": node["total_rules"],
+                "rules": node.get("rules", []),
+                "children": children_list
+            }
+
+        return {"project_id": project_id, "tree": format_node(tree_root)}
 
     @app.get("/api/projects/{project_id}/heatmap")
     def get_project_heatmap(project_id: str):
@@ -254,9 +412,11 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
                         "long_term": 0,
                         "short_term": 0,
                         "tasks": set(),
+                        "rule_titles": []
                     }
                 stat = path_stats[pattern]
                 stat["total_rules"] += 1
+                stat["rule_titles"].append(r.title)
                 if r.priority == Priority.P0:
                     stat["p0_count"] += 1
                 elif r.priority == Priority.P1:
@@ -272,7 +432,6 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
                 if r.task_id:
                     stat["tasks"].add(r.task_id)
 
-        # Convert sets to lists
         result = []
         for k, v in path_stats.items():
             v["tasks"] = list(v["tasks"])
@@ -297,26 +456,23 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
 
     @app.post("/api/findings/{finding_id}/crystallize", response_model=Rule)
     def crystallize_finding(finding_id: str, req: CrystallizeFindingReq):
-        """Promote an in-flight finding into a formal rule (either long-term or task rule)."""
-        findings = storage.list_findings(project_id="", status=None)
-        target_finding = next((f for f in findings if f.id == finding_id), None)
-        if not target_finding:
-            # Look up via direct query
-            cur = storage.conn.cursor()
-            cur.execute("SELECT * FROM findings WHERE id = ?", (finding_id,))
-            row = cur.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="Finding not found")
-            target_finding = Finding(
-                id=row["id"],
-                project_id=row["project_id"],
-                task_id=row["task_id"],
-                session_id=row["session_id"],
-                target_path=row["target_path"],
-                finding_text=row["finding_text"],
-                suggested_priority=Priority(row["suggested_priority"]),
-                status=FindingStatus(row["status"]),
-            )
+        """Promote an in-flight finding into a formal rule."""
+        cur = storage.conn.cursor()
+        cur.execute("SELECT * FROM findings WHERE id = ?", (finding_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Finding not found")
+
+        target_finding = Finding(
+            id=row["id"],
+            project_id=row["project_id"],
+            task_id=row["task_id"],
+            session_id=row["session_id"],
+            target_path=row["target_path"],
+            finding_text=row["finding_text"],
+            suggested_priority=Priority(row["suggested_priority"]),
+            status=FindingStatus(row["status"]),
+        )
 
         scopes = req.scope_patterns or [target_finding.target_path]
         rule_id = f"rule_crys_{uuid.uuid4().hex[:6]}"
@@ -352,7 +508,7 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         new_rule = Rule(
             id=rule_id,
             project_id=row["project_id"],
-            task_id=None, # Long term
+            task_id=None,
             scope_patterns=[row["target_component"]],
             priority=Priority.P0,
             lifecycle=Lifecycle.LONG_TERM,
@@ -364,6 +520,33 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         saved = storage.create_rule(new_rule)
         cur.execute("UPDATE proposals SET status = 'approved' WHERE id = ?", (proposal_id,))
         return saved
+
+    # --- Static Exporter API ---
+
+    @app.post("/api/projects/{project_id}/export")
+    def export_rules(project_id: str, req: ExportReq):
+        proj = storage.get_project(project_id)
+        if not proj:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        target_dir = Path(req.out_dir or (proj.root_paths[0] if proj.root_paths else ".")).resolve()
+        rules = storage.list_rules(project_id=project_id, status=RuleStatus.ACTIVE)
+
+        if req.format.lower() == "cursor":
+            paths = RuleExporter.export_cursor_rules(rules, out_dir=target_dir, active_task_id=req.task_id)
+            return {
+                "format": "cursor",
+                "target_dir": str(target_dir / ".cursor/rules"),
+                "files_count": len(paths),
+                "files": [p.name for p in paths]
+            }
+        else:
+            p = RuleExporter.export_claude_md(rules, out_file=target_dir / "CLAUDE.md", active_task_id=req.task_id)
+            return {
+                "format": "claude",
+                "target_file": str(p),
+                "rules_count": len(rules)
+            }
 
     # --- WebUI Static Files ---
 

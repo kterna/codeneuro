@@ -3,382 +3,943 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CodeNeuro - 认知与规则中枢</title>
+  <title>CodeNeuro — 认知与规则协同中枢</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
           colors: {
-            brand: { 50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+            surface: { 950: '#070a12', 900: '#0d1322', 850: '#11182c', 800: '#162038', 700: '#233256' },
+            brand: { 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
             p0: '#ef4444',
             p1: '#f59e0b',
-            p2: '#3b82f6',
+            p2: '#38bdf8',
           }
         }
       }
     }
   </script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    .badge-p0 { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
-    .badge-p1 { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
-    .badge-p2 { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #070a12; }
+    .code-font { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0d1322; }
+    ::-webkit-scrollbar-thumb { background: #233256; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #374151; }
+    .badge-p0 { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+    .badge-p1 { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .badge-p2 { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
+    .badge-long { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.3); }
+    .badge-short { background: rgba(20, 184, 166, 0.15); color: #5eead4; border: 1px solid rgba(20, 184, 166, 0.3); }
+    .glass-card { background: rgba(13, 19, 34, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(35, 50, 86, 0.6); }
+    .glow-dot { box-shadow: 0 0 10px rgba(34, 197, 94, 0.7); }
+    .pulse-p0 { box-shadow: 0 0 12px rgba(239, 68, 68, 0.5); }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
-  <!-- Top Navigation -->
-  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-30 px-6 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
+<body class="text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top System Bar -->
+  <header class="border-b border-surface-700/80 bg-surface-900/90 backdrop-blur-md sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 flex items-center justify-center font-black text-white shadow-lg shadow-indigo-600/30 text-base">
         ⚡
       </div>
       <div>
-        <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">CodeNeuro</span>
-        <span class="text-xs text-slate-400 ml-2 px-2 py-0.5 rounded bg-slate-800 border border-slate-700">Hub v0.1</span>
+        <div class="flex items-center gap-2.5">
+          <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">CodeNeuro</span>
+          <span class="code-font text-[11px] font-semibold text-indigo-400 px-2 py-0.5 rounded-full bg-indigo-950/80 border border-indigo-800/60">HUB v0.2.0</span>
+          <span class="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded-full font-medium">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 glow-dot animate-pulse"></span>
+            MCP Active
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-0.5">AI 编程多工作区协同认知与作用域规则中枢</p>
       </div>
     </div>
 
-    <!-- Project Selector -->
-    <div class="flex items-center gap-4">
-      <div class="flex items-center gap-2 text-sm">
-        <label class="text-slate-400">当前项目:</label>
-        <select id="project-select" class="bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500" onchange="onProjectChange()">
-          <option value="">加载中...</option>
+    <!-- Project Switcher & Actions -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 bg-surface-850 border border-surface-700 rounded-lg px-3 py-1.5">
+        <span class="text-xs text-slate-400 font-medium">项目:</span>
+        <select id="project-select" onchange="onProjectChange()" class="bg-transparent text-xs font-semibold text-slate-200 focus:outline-none cursor-pointer pr-2">
+          <option value="">载入中...</option>
         </select>
-        <button onclick="promptCreateProject()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-md font-medium transition">
-          + 新建项目
-        </button>
       </div>
+
+      <button onclick="openCreateProjectModal()" class="text-xs bg-surface-800 hover:bg-surface-700 text-slate-200 border border-surface-700 px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5">
+        <span>+</span> 注册新项目
+      </button>
+
+      <button onclick="refreshAll()" class="text-xs bg-indigo-600/90 hover:bg-indigo-600 text-white font-semibold px-3.5 py-1.5 rounded-lg shadow-sm shadow-indigo-500/20 transition flex items-center gap-1.5">
+        <span>↻</span> 实时同步
+      </button>
     </div>
   </header>
 
-  <!-- Main Container -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Left Column: Heatmap & Rule Matrix (2 cols) -->
-    <div class="lg:col-span-2 space-y-6">
-      <!-- Section: Heatmap -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-        <div class="flex items-center justify-between mb-4">
+  <!-- Global Metrics HUD -->
+  <section class="border-b border-surface-700/60 bg-surface-950/70 px-6 py-3">
+    <div class="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-6 gap-3">
+      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
+        <div>
+          <div class="text-[10px] uppercase font-bold tracking-wider text-slate-400">活跃纳管规则</div>
+          <div id="stat-active-rules" class="text-lg font-extrabold text-white mt-0.5">--</div>
+        </div>
+        <span class="text-xl opacity-60">📜</span>
+      </div>
+
+      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between border-red-900/30">
+        <div>
+          <div class="text-[10px] uppercase font-bold tracking-wider text-red-400">P0 阻断红线</div>
+          <div id="stat-p0" class="text-lg font-extrabold text-red-400 mt-0.5">--</div>
+        </div>
+        <span class="text-xl">🛑</span>
+      </div>
+
+      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
+        <div>
+          <div class="text-[10px] uppercase font-bold tracking-wider text-amber-400">P1 任务约束</div>
+          <div id="stat-p1" class="text-lg font-extrabold text-amber-400 mt-0.5">--</div>
+        </div>
+        <span class="text-xl">⚡</span>
+      </div>
+
+      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
+        <div>
+          <div class="text-[10px] uppercase font-bold tracking-wider text-indigo-400">长期架构骨骼</div>
+          <div id="stat-long" class="text-lg font-extrabold text-indigo-400 mt-0.5">--</div>
+        </div>
+        <span class="text-xl">🏛️</span>
+      </div>
+
+      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
+        <div>
+          <div class="text-[10px] uppercase font-bold tracking-wider text-teal-400">JIT 命中拦截</div>
+          <div id="stat-hits" class="text-lg font-extrabold text-teal-400 mt-0.5">--</div>
+        </div>
+        <span class="text-xl">🎯</span>
+      </div>
+
+      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
+        <div>
+          <div class="text-[10px] uppercase font-bold tracking-wider text-purple-400">排坑事实/提案</div>
+          <div id="stat-findings" class="text-lg font-extrabold text-purple-400 mt-0.5">--</div>
+        </div>
+        <span class="text-xl">💡</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Navigation View Tabs -->
+  <nav class="border-b border-surface-700/80 bg-surface-900/40 px-6 py-2">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-1.5" id="nav-tabs">
+        <button onclick="switchTab('tree')" id="tab-btn-tree" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm flex items-center gap-2">
+          <span>🏛️</span> 架构认知树与热力透镜
+        </button>
+        <button onclick="switchTab('kanban')" id="tab-btn-kanban" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2">
+          <span>⚡</span> 需求生命周期雷达
+        </button>
+        <button onclick="switchTab('distill')" id="tab-btn-distill" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2">
+          <span>💎</span> 认知提炼实验室
+          <span id="badge-distill-count" class="bg-purple-900/80 text-purple-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
+        </button>
+        <button onclick="switchTab('jit')" id="tab-btn-jit" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2">
+          <span>🎯</span> JIT 实时探针 & 导出
+        </button>
+      </div>
+
+      <div class="text-xs text-slate-400 flex items-center gap-2 code-font">
+        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+        <span id="project-meta-info">Loading project...</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main View Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6">
+
+    <!-- ==================== TAB 1: COGNITIVE TREE & LENS ==================== -->
+    <div id="tab-view-tree" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Left: File / Directory Tree (5 cols) -->
+      <div class="lg:col-span-5 glass-card rounded-2xl p-5 flex flex-col max-h-[760px]">
+        <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-700/60">
           <div>
-            <h2 class="text-base font-semibold flex items-center gap-2">
-              🔥 作用域认知热力矩阵 (Scope Heatmap)
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>🌳</span> 代码认知拓扑树 (Hierarchy Tree)
             </h2>
-            <p class="text-xs text-slate-400 mt-0.5">展示当前各文件与目录承载的约束密度与优先级分布</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">展开目录查看各层级受控规则密度与热力警示</p>
           </div>
-          <button onclick="loadHeatmap()" class="text-xs text-slate-400 hover:text-slate-200 bg-slate-800 px-2 py-1 rounded">刷新</button>
+          <button onclick="loadTree()" class="text-xs bg-surface-800 hover:bg-surface-700 px-2 py-1 rounded text-slate-300">刷新树</button>
         </div>
 
-        <div id="heatmap-container" class="space-y-2 max-h-[360px] overflow-y-auto pr-1">
-          <div class="text-xs text-slate-500 py-8 text-center">正在加载热力数据...</div>
+        <div id="tree-container" class="flex-1 overflow-y-auto space-y-1 pr-1 code-font text-xs">
+          <div class="text-slate-500 py-12 text-center text-xs">加载代码库拓扑中...</div>
         </div>
       </div>
 
-      <!-- Section: PRD / Ingestion Chamber -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-        <h2 class="text-base font-semibold flex items-center gap-2 mb-1">
-          📝 需求自动拆解室 (PRD Ingestion)
-        </h2>
-        <p class="text-xs text-slate-400 mb-4">粘贴业务需求或改动要点，系统将自动逆向分析路径、定级并生成短期规则</p>
-
-        <div class="space-y-3">
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="text-xs text-slate-400 block mb-1">挂载任务 / 需求 ID:</label>
-              <input id="ingest-task-id" type="text" placeholder="例如 TASK-001" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-200">
-            </div>
-            <div>
-              <label class="text-xs text-slate-400 block mb-1">快速预设需求模板:</label>
-              <select onchange="fillTemplate(this.value)" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-300">
-                <option value="">-- 选择模板填入 --</option>
-                <option value="payment">支付重构需求 (含P0红线与范围)</option>
-                <option value="auth">JWT鉴权升级需求 (中间件与配置)</option>
-              </select>
-            </div>
-          </div>
-
+      <!-- Right: Focus Inspector (7 cols) -->
+      <div class="lg:col-span-7 glass-card rounded-2xl p-5 flex flex-col max-h-[760px]">
+        <div class="flex items-center justify-between mb-4 pb-3 border-b border-surface-700/60">
           <div>
-            <label class="text-xs text-slate-400 block mb-1">需求细节描述 (包含改动点或涉及路径):</label>
-            <textarea id="ingest-text" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 font-mono" placeholder="# 支付拆单与灰度改造&#10;1. 涉及路径 src/services/pay/** 与 src/controllers/order.ts&#10;2. 禁止任何浮点数金额直接计算，必须使用 DecimalSafe 工具 (P0安全红线)&#10;3. 本次升级需在请求体中新增 split_tag 灰度字段"></textarea>
+            <div class="flex items-center gap-2">
+              <span class="text-xs uppercase font-bold text-indigo-400 tracking-wider">焦点视口 (Focus Lens)</span>
+              <span id="lens-type-badge" class="badge-long text-[10px] px-2 py-0.5 rounded font-mono">ROOT</span>
+            </div>
+            <h3 id="lens-target-path" class="text-base font-extrabold text-white mt-1 code-font truncate max-w-md">/ (全局项目范围)</h3>
           </div>
 
-          <div class="flex justify-end">
-            <button onclick="submitDecompose()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-md shadow-indigo-600/20">
-              ⚡ 执行自动拆解入库
+          <div class="flex items-center gap-2">
+            <button onclick="openAddRuleModal()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-1.5 rounded-lg shadow-sm transition">
+              + 追加此范围规则
             </button>
           </div>
         </div>
-      </div>
 
-      <!-- Section: Context Simulator -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-        <h2 class="text-base font-semibold flex items-center gap-2 mb-1">
-          🎯 JIT 上下文探针模拟器 (Context Inspector)
-        </h2>
-        <p class="text-xs text-slate-400 mb-3">模拟 Coding Agent 访问特定文件时接收到的下发提示词 (骨骼 + 血液)</p>
-        <div class="flex gap-2 mb-3">
-          <input id="test-file-path" type="text" value="src/services/pay/checkout.ts" class="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono">
-          <button onclick="testContextResolution()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs px-3 py-1.5 rounded font-medium">
-            测试探测
+        <!-- Matched Rules List inside Inspector -->
+        <div class="flex-1 overflow-y-auto space-y-3 pr-1" id="lens-rules-list">
+          <div class="text-slate-500 py-12 text-center text-xs">点击左侧目录或文件查看对应生效的长期契约与任务约束</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 2: REQUIREMENT KANBAN ==================== -->
+    <div id="tab-view-kanban" class="hidden space-y-6">
+      <!-- PRD Ingestion Trigger Box -->
+      <div class="glass-card rounded-2xl p-5 border border-indigo-900/40 bg-gradient-to-r from-surface-900 via-surface-900 to-indigo-950/20">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>📝</span> 需求自动逆向拆解室 (PRD Ingestion Chamber)
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">输入产品 PRD 或需求改动要点，系统将自动逆向分析涉及路径、识别 P0 阻断红线并生成迭代任务</p>
+          </div>
+          <button onclick="openDecomposeModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 self-start md:self-auto">
+            <span>⚡</span> 录入新需求 PRD
           </button>
         </div>
-        <pre id="context-preview" class="bg-slate-950 border border-slate-800 rounded p-3 text-xs text-slate-300 font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">点击“测试探测”查看渲染效果...</pre>
+      </div>
+
+      <!-- Kanban Swimlanes -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <!-- Lane: Active -->
+        <div class="bg-surface-900/80 border border-surface-700/80 rounded-xl p-4 flex flex-col max-h-[640px]">
+          <div class="flex items-center justify-between pb-3 border-b border-surface-700/60 mb-3">
+            <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 进行中 (Active)
+            </span>
+            <span id="count-lane-active" class="text-xs font-mono text-slate-400">0</span>
+          </div>
+          <div id="lane-active" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
+        </div>
+
+        <!-- Lane: Testing -->
+        <div class="bg-surface-900/80 border border-surface-700/80 rounded-xl p-4 flex flex-col max-h-[640px]">
+          <div class="flex items-center justify-between pb-3 border-b border-surface-700/60 mb-3">
+            <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span> 测试验证 (Testing)
+            </span>
+            <span id="count-lane-testing" class="text-xs font-mono text-slate-400">0</span>
+          </div>
+          <div id="lane-testing" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
+        </div>
+
+        <!-- Lane: Released -->
+        <div class="bg-surface-900/80 border border-surface-700/80 rounded-xl p-4 flex flex-col max-h-[640px]">
+          <div class="flex items-center justify-between pb-3 border-b border-surface-700/60 mb-3">
+            <span class="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-indigo-400"></span> 已发布 (Released)
+            </span>
+            <span id="count-lane-released" class="text-xs font-mono text-slate-400">0</span>
+          </div>
+          <div id="lane-released" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
+        </div>
+
+        <!-- Lane: Archived -->
+        <div class="bg-surface-900/80 border border-surface-700/80 rounded-xl p-4 flex flex-col max-h-[640px]">
+          <div class="flex items-center justify-between pb-3 border-b border-surface-700/60 mb-3">
+            <span class="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-slate-400"></span> 归档闭环 (Archived)
+            </span>
+            <span id="count-lane-archived" class="text-xs font-mono text-slate-400">0</span>
+          </div>
+          <div id="lane-archived" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
+        </div>
       </div>
     </div>
 
-    <!-- Right Column: Live Feed, Findings & Proposals (1 col) -->
-    <div class="space-y-6">
-      <!-- Section: Agent Findings Stream -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-        <div class="flex items-center justify-between mb-3">
+    <!-- ==================== TAB 3: DISTILLATION LAB ==================== -->
+    <div id="tab-view-distill" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Left: Agent Live Findings Stream -->
+      <div class="glass-card rounded-2xl p-5 flex flex-col max-h-[720px]">
+        <div class="flex items-center justify-between mb-4 pb-3 border-b border-surface-700/60">
           <div>
-            <h2 class="text-base font-semibold flex items-center gap-2">
-              💡 Agent 运行态排坑流
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>💡</span> Agent 运行时排坑事实流 (Live Findings)
             </h2>
-            <p class="text-xs text-slate-400">Agent 在编码循环中自行沉淀的经验</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">Coding Agent 在单测或长循环中识别到的避坑经验，支持一键升华结晶为长期规则</p>
           </div>
-          <button onclick="loadFindings()" class="text-xs text-slate-400 hover:text-slate-200">刷新</button>
+          <button onclick="loadFindings()" class="text-xs bg-surface-800 hover:bg-surface-700 px-2 py-1 rounded text-slate-300">刷新</button>
         </div>
-        <div id="findings-container" class="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
-          <div class="text-xs text-slate-500 py-6 text-center">暂无排坑发现</div>
+
+        <div id="distill-findings-list" class="flex-1 overflow-y-auto space-y-3 pr-1">
+          <div class="text-slate-500 py-12 text-center text-xs">暂无待确认的排坑事实</div>
         </div>
       </div>
 
-      <!-- Section: Proposals -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-        <div class="flex items-center justify-between mb-3">
+      <!-- Right: Architecture Proposals Box -->
+      <div class="glass-card rounded-2xl p-5 flex flex-col max-h-[720px]">
+        <div class="flex items-center justify-between mb-4 pb-3 border-b border-surface-700/60">
           <div>
-            <h2 class="text-base font-semibold flex items-center gap-2">
-              🏛️ 架构契约提案箱
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>🏛️</span> 架构契约修改提案箱 (Proposals Inbox)
             </h2>
-            <p class="text-xs text-slate-400">Agent 申请升华的长期骨骼契约</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">Agent 发起的永久架构变更提案，需由人类管理员审批批准入库</p>
           </div>
-          <button onclick="loadProposals()" class="text-xs text-slate-400 hover:text-slate-200">刷新</button>
+          <button onclick="loadProposals()" class="text-xs bg-surface-800 hover:bg-surface-700 px-2 py-1 rounded text-slate-300">刷新</button>
         </div>
-        <div id="proposals-container" class="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
-          <div class="text-xs text-slate-500 py-6 text-center">暂无待审提案</div>
+
+        <div id="distill-proposals-list" class="flex-1 overflow-y-auto space-y-3 pr-1">
+          <div class="text-slate-500 py-12 text-center text-xs">暂无待审提案</div>
         </div>
       </div>
     </div>
+
+    <!-- ==================== TAB 4: JIT STUDIO & EXPORT ==================== -->
+    <div id="tab-view-jit" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left: Probe Inspector -->
+        <div class="lg:col-span-8 glass-card rounded-2xl p-5 flex flex-col">
+          <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-700/60">
+            <div>
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>🎯</span> JIT 上下文探针仿真器 (Context Synthesizer)
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">实时模拟 Coding Agent 访问指定文件时系统下发的无感提示词视图 (骨骼 + 血液)</p>
+            </div>
+          </div>
+
+          <div class="flex gap-2.5 mb-3">
+            <input id="jit-probe-path" type="text" value="core/adapters/rcon_guard.py" class="flex-1 bg-surface-850 border border-surface-700 rounded-lg px-3 py-2 text-xs code-font text-indigo-300 focus:outline-none focus:border-indigo-500">
+            <button onclick="simulateJitProbe()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-md shadow-indigo-600/20">
+              ⚡ 立即探测
+            </button>
+          </div>
+
+          <div class="relative flex-1">
+            <pre id="jit-preview-box" class="bg-surface-950 border border-surface-700/80 rounded-xl p-4 text-xs text-slate-300 code-font whitespace-pre-wrap max-h-[500px] overflow-y-auto leading-relaxed">正在加载探针...</pre>
+          </div>
+        </div>
+
+        <!-- Right: Real Static Exporter Box -->
+        <div class="lg:col-span-4 glass-card rounded-2xl p-5 space-y-4">
+          <div>
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>📦</span> 物理工作区导出同步
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">将 CodeNeuro 数据库规则实时编译写回当前项目的静态规则文件</p>
+          </div>
+
+          <div class="space-y-3 pt-2">
+            <div class="p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 space-y-2">
+              <div class="text-xs font-bold text-slate-200 flex items-center justify-between">
+                <span>Cursor MDC 规则集</span>
+                <span class="badge-long text-[10px] px-2 py-0.5 rounded">.cursor/rules/*.mdc</span>
+              </div>
+              <p class="text-[11px] text-slate-400">将每个作用域编译为独立 MDC 规则并注入 Glob 通配元数据</p>
+              <button onclick="triggerExport('cursor')" class="w-full text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-lg transition">
+                导出到本地 .cursor/rules
+              </button>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 space-y-2">
+              <div class="text-xs font-bold text-slate-200 flex items-center justify-between">
+                <span>Claude / Hermes 统一约束</span>
+                <span class="badge-short text-[10px] px-2 py-0.5 rounded">CLAUDE.md</span>
+              </div>
+              <p class="text-[11px] text-slate-400">汇总所有 P0 架构红线与活跃迭代规约至单体文档</p>
+              <button onclick="triggerExport('claude')" class="w-full text-xs bg-surface-700 hover:bg-surface-600 text-slate-200 font-semibold py-2 rounded-lg transition">
+                导出到本地 CLAUDE.md
+              </button>
+            </div>
+
+            <div id="export-status-box" class="text-xs text-emerald-400 p-3 rounded-lg bg-emerald-950/40 border border-emerald-800/40 hidden">
+              <!-- Export output info -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 
-  <footer class="border-t border-slate-800 bg-slate-900/40 text-center py-4 text-xs text-slate-500">
-    CodeNeuro Cognitive Context Hub • Multi-Worktree Autonomous Agent Governance
-  </footer>
+  <!-- ==================== MODAL: ADD RULE ==================== -->
+  <div id="modal-add-rule" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card max-w-lg w-full rounded-2xl p-6 border border-surface-700 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-surface-700">
+        <h3 class="font-bold text-sm text-white">添加作用域规则</h3>
+        <button onclick="closeAddRuleModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
 
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">匹配作用域 (Glob 路径，逗号分隔):</label>
+          <input id="input-rule-scopes" type="text" value="core/adapters/**" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 code-font text-indigo-300">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">优先级:</label>
+            <select id="input-rule-priority" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 text-slate-200">
+              <option value="P0">P0 (阻断红线 / 架构契约)</option>
+              <option value="P1" selected>P1 (任务必须 / 测例契约)</option>
+              <option value="P2">P2 (参考建议 / 风格约定)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">生命周期:</label>
+            <select id="input-rule-lifecycle" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 text-slate-200">
+              <option value="long_term">长期骨骼 (Long-Term Invariant)</option>
+              <option value="short_term" selected>短期血液 (Active Task)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-400 mb-1">规则标题:</label>
+          <input id="input-rule-title" type="text" placeholder="例如：超时强制熔断防护规范" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 text-slate-200">
+        </div>
+
+        <div>
+          <label class="block text-slate-400 mb-1">具体约束条款 (每行一条):</label>
+          <textarea id="input-rule-points" rows="3" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 text-slate-200 code-font" placeholder="1. 外部网络调用必须包裹超时&#10;2. 禁止吞掉异常导致挂起"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-surface-700">
+        <button onclick="closeAddRuleModal()" class="px-3 py-1.5 rounded-lg text-xs bg-surface-800 text-slate-300">取消</button>
+        <button onclick="submitNewRule()" class="px-4 py-1.5 rounded-lg text-xs bg-indigo-600 hover:bg-indigo-500 font-semibold text-white">确定入库</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: DECOMPOSE PRD ==================== -->
+  <div id="modal-decompose" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card max-w-xl w-full rounded-2xl p-6 border border-surface-700 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-surface-700">
+        <h3 class="font-bold text-sm text-white flex items-center gap-2">
+          <span>⚡</span> PRD 逆向拆解入库
+        </h3>
+        <button onclick="closeDecomposeModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">任务 ID (Task ID):</label>
+          <input id="input-decomp-task" type="text" placeholder="例如 TASK-NEW-FEATURE" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 code-font text-indigo-300">
+        </div>
+
+        <div>
+          <label class="block text-slate-400 mb-1">需求细节 / PRD 内容 (支持包含路径与禁止关键字):</label>
+          <textarea id="input-decomp-text" rows="5" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2.5 text-slate-200 code-font leading-relaxed" placeholder="# 需求标题&#10;1. 涉及路径 core/adapters/xxx.py&#10;2. 严禁使用未经验证的裸连接 (P0)&#10;3. 支持批量操作与重试"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-surface-700">
+        <button onclick="closeDecomposeModal()" class="px-3 py-1.5 rounded-lg text-xs bg-surface-800 text-slate-300">取消</button>
+        <button onclick="submitDecomposeForm()" id="btn-submit-decomp" class="px-4 py-1.5 rounded-lg text-xs bg-indigo-600 hover:bg-indigo-500 font-semibold text-white">
+          开始自动逆向拆解
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT APP ==================== -->
   <script>
     let currentProjectId = "";
+    let projectTreeData = null;
+    let selectedNodePath = "";
 
     async function init() {
       await loadProjects();
+      await loadGlobalStats();
     }
 
-    async function loadProjects() {
-      try {
-        const res = await fetch("/api/projects");
-        const projects = await res.json();
-        const sel = document.getElementById("project-select");
-        sel.innerHTML = "";
+    async function refreshAll() {
+      await loadGlobalStats();
+      await loadTree();
+      await loadKanban();
+      await loadFindings();
+      await loadProposals();
+      await simulateJitProbe();
+    }
 
-        if (projects.length === 0) {
-          // Auto create default project
-          const p = await fetch("/api/projects", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: "默认电商核心项目", description: "Default Ecommerce Core" })
-          }).then(r => r.json());
-          currentProjectId = p.id;
-          sel.innerHTML = `<option value="${p.id}">${p.name} (${p.id})</option>`;
-        } else {
-          projects.forEach(p => {
-            const opt = document.createElement("option");
-            opt.value = p.id;
-            opt.textContent = `${p.name} (${p.id})`;
-            sel.appendChild(opt);
-          });
-          currentProjectId = projects[0].id;
-        }
-        onProjectChange();
+    // --- TAB SWITCHING ---
+    function switchTab(tab) {
+      ['tree', 'kanban', 'distill', 'jit'].forEach(t => {
+        document.getElementById(`tab-view-${t}`).classList.add('hidden');
+        const btn = document.getElementById(`tab-btn-${t}`);
+        btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2";
+      });
+
+      document.getElementById(`tab-view-${tab}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-btn-${tab}`);
+      activeBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm flex items-center gap-2";
+
+      if (tab === 'kanban') loadKanban();
+      if (tab === 'distill') { loadFindings(); loadProposals(); }
+      if (tab === 'jit') simulateJitProbe();
+    }
+
+    // --- GLOBAL STATS ---
+    async function loadGlobalStats() {
+      try {
+        const res = await fetch("/api/stats");
+        const s = await res.json();
+        document.getElementById("stat-active-rules").textContent = s.active_rules;
+        document.getElementById("stat-p0").textContent = s.p0_count;
+        document.getElementById("stat-p1").textContent = s.p1_count;
+        document.getElementById("stat-long").textContent = s.long_term_count;
+        document.getElementById("stat-hits").textContent = s.total_hits;
+        document.getElementById("stat-findings").textContent = `${s.pending_findings} / ${s.pending_proposals}`;
+        document.getElementById("badge-distill-count").textContent = s.pending_findings + s.pending_proposals;
       } catch (e) {
-        console.error("加载项目失败", e);
+        console.error("加载统计失败", e);
       }
     }
 
-    function onProjectChange() {
-      currentProjectId = document.getElementById("project-select").value;
-      loadHeatmap();
-      loadFindings();
-      loadProposals();
-      testContextResolution();
+    // --- PROJECTS ---
+    async function loadProjects() {
+      try {
+        const res = await fetch("/api/projects");
+        const list = await res.json();
+        const sel = document.getElementById("project-select");
+        sel.innerHTML = "";
+        if (!list || list.length === 0) return;
+
+        list.forEach(p => {
+          const opt = document.createElement("option");
+          opt.value = p.id;
+          opt.textContent = `${p.name} (${p.id})`;
+          sel.appendChild(opt);
+        });
+
+        currentProjectId = list[0].id;
+        onProjectChange();
+      } catch (e) {
+        console.error("加载项目列表失败", e);
+      }
     }
 
-    async function promptCreateProject() {
+    async function onProjectChange() {
+      currentProjectId = document.getElementById("project-select").value;
+      const res = await fetch(`/api/projects/${currentProjectId}`);
+      const p = await res.json();
+      document.getElementById("project-meta-info").textContent = `${p.name} • 根路径: ${p.root_paths.join(", ")}`;
+      refreshAll();
+    }
+
+    async function openCreateProjectModal() {
       const name = prompt("请输入新项目名称:");
       if (!name) return;
+      const rootPath = prompt("请输入本地代码库绝对路径 (可选，用于自动扫描文件树):", "/home/oneadmin/projects/...");
       await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name })
+        body: JSON.stringify({ name: name, root_paths: rootPath ? [rootPath] : ["."] })
       });
       await loadProjects();
     }
 
-    async function loadHeatmap() {
+    // --- TAB 1: COGNITIVE HIERARCHY TREE ---
+    async function loadTree() {
       if (!currentProjectId) return;
-      const res = await fetch(`/api/projects/${currentProjectId}/heatmap`);
-      const data = await res.json();
-      const container = document.getElementById("heatmap-container");
-      container.innerHTML = "";
+      try {
+        const res = await fetch(`/api/projects/${currentProjectId}/tree`);
+        const data = await res.json();
+        projectTreeData = data.tree;
+        const container = document.getElementById("tree-container");
+        container.innerHTML = "";
+        renderTreeNode(container, projectTreeData, 0);
 
-      if (!data.heatmap || data.heatmap.length === 0) {
-        container.innerHTML = `<div class="text-xs text-slate-500 py-6 text-center">该项目暂无作用域规则，请在下方提交需求或添加规则。</div>`;
+        // Auto select root if none selected
+        if (!selectedNodePath) {
+          inspectNode(projectTreeData);
+        }
+      } catch (e) {
+        console.error("构建认知树失败", e);
+      }
+    }
+
+    function renderTreeNode(parentElement, node, depth) {
+      const itemDiv = document.createElement("div");
+      itemDiv.className = "group select-none";
+
+      const row = document.createElement("div");
+      const isSelected = selectedNodePath === node.path;
+      row.className = `flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition ${isSelected ? 'bg-indigo-950/80 text-white border border-indigo-700/60' : 'hover:bg-surface-800 text-slate-300'}`;
+      row.style.paddingLeft = `${depth * 14 + 10}px`;
+
+      const left = document.createElement("div");
+      left.className = "flex items-center gap-2 truncate";
+
+      const icon = node.type === "directory" ? "📁" : "📄";
+      left.innerHTML = `<span>${icon}</span><span class="truncate font-medium">${node.name}</span>`;
+
+      const right = document.createElement("div");
+      right.className = "flex items-center gap-1 shrink-0 ml-2";
+
+      if (node.p0_count > 0) {
+        right.innerHTML += `<span class="badge-p0 text-[10px] px-1.5 py-0.2 rounded font-bold">P0:${node.p0_count}</span>`;
+      }
+      if (node.p1_count > 0) {
+        right.innerHTML += `<span class="badge-p1 text-[10px] px-1.5 py-0.2 rounded">P1:${node.p1_count}</span>`;
+      }
+
+      row.appendChild(left);
+      row.appendChild(right);
+
+      const childrenContainer = document.createElement("div");
+      childrenContainer.className = "space-y-1";
+
+      row.onclick = () => {
+        inspectNode(node);
+        if (node.children && node.children.length > 0) {
+          childrenContainer.classList.toggle("hidden");
+        }
+      };
+
+      itemDiv.appendChild(row);
+
+      if (node.children && node.children.length > 0) {
+        node.children.forEach(child => {
+          renderTreeNode(childrenContainer, child, depth + 1);
+        });
+        itemDiv.appendChild(childrenContainer);
+      }
+
+      parentElement.appendChild(itemDiv);
+    }
+
+    async function inspectNode(node) {
+      selectedNodePath = node.path;
+      document.getElementById("lens-target-path").textContent = node.path || "/ (项目全局)";
+      document.getElementById("lens-type-badge").textContent = node.type ? node.type.toUpperCase() : "ROOT";
+
+      const listContainer = document.getElementById("lens-rules-list");
+      listContainer.innerHTML = `<div class="text-xs text-slate-500 py-6 text-center">正在解析匹配作用域规约...</div>`;
+
+      // Fetch all active rules
+      const res = await fetch(`/api/projects/${currentProjectId}/rules?status=active`);
+      const allRules = await res.json();
+
+      // Check which rules match this node path
+      const matchedRules = [];
+      const queryPath = node.path || "**";
+
+      for (const r of allRules) {
+        let isMatch = false;
+        for (const pat of r.scope_patterns) {
+          if (pat === "**" || queryPath.startsWith(pat.replace("/**", "")) || pat.includes(node.name) || !node.path) {
+            isMatch = true;
+            break;
+          }
+        }
+        if (isMatch) matchedRules.push(r);
+      }
+
+      listContainer.innerHTML = "";
+      if (matchedRules.length === 0) {
+        listContainer.innerHTML = `<div class="text-xs text-slate-500 py-12 text-center">当前节点暂无特殊契约，继承全局通用架构标准。</div>`;
         return;
       }
 
-      data.heatmap.forEach(item => {
-        const div = document.createElement("div");
-        div.className = "p-3 rounded-lg bg-slate-800/80 border border-slate-700/80 flex items-center justify-between hover:border-slate-600 transition";
-        div.innerHTML = `
-          <div>
-            <div class="font-mono text-xs font-semibold text-indigo-300">${item.pattern}</div>
-            <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
-              <span>🏛️ 长期骨骼: ${item.long_term}</span>
-              <span>⚡ 短期需求: ${item.short_term}</span>
-              ${item.tasks.length ? `<span class="bg-slate-700/60 px-1.5 py-0.5 rounded text-[10px] text-slate-300">Task: ${item.tasks.join(", ")}</span>` : ""}
+      matchedRules.sort((a, b) => (a.priority === "P0" ? -1 : 1));
+
+      matchedRules.forEach(r => {
+        const card = document.createElement("div");
+        const isP0 = r.priority === "P0";
+        card.className = `p-4 rounded-xl border ${isP0 ? 'bg-red-950/20 border-red-900/40' : 'bg-surface-850 border-surface-700'} space-y-2.5`;
+        
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="${isP0 ? 'badge-p0' : 'badge-p1'} text-[10px] px-2 py-0.5 rounded font-extrabold">${r.priority}</span>
+              <span class="${r.lifecycle === 'long_term' ? 'badge-long' : 'badge-short'} text-[10px] px-2 py-0.5 rounded">${r.lifecycle === 'long_term' ? '🏛️ 长期骨骼' : '⚡ 短期需求'}</span>
+              <span class="font-bold text-xs text-white">${r.title}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] text-slate-400 font-mono">命中: ${r.hit_count || 0}</span>
+              <button onclick="deleteRule('${r.id}')" class="text-slate-500 hover:text-red-400 text-xs">✕</button>
             </div>
           </div>
-          <div class="flex items-center gap-1.5">
-            ${item.p0_count > 0 ? `<span class="badge-p0 text-xs px-2 py-0.5 rounded font-bold">P0: ${item.p0_count}</span>` : ""}
-            ${item.p1_count > 0 ? `<span class="badge-p1 text-xs px-2 py-0.5 rounded font-bold">P1: ${item.p1_count}</span>` : ""}
-            ${item.p2_count > 0 ? `<span class="badge-p2 text-xs px-2 py-0.5 rounded font-bold">P2: ${item.p2_count}</span>` : ""}
-          </div>
+          <div class="text-[11px] text-slate-400 code-font">作用域: ${r.scope_patterns.map(s => `<span class="bg-surface-800 text-indigo-300 px-1 py-0.5 rounded">${s}</span>`).join(" ")}</div>
+          <ul class="text-xs text-slate-300 space-y-1 list-disc list-inside">
+            ${r.content_points.map(p => `<li>${p}</li>`).join("")}
+          </ul>
         `;
-        container.appendChild(div);
+        listContainer.appendChild(card);
       });
     }
 
+    async function deleteRule(ruleId) {
+      if (!confirm("确定要删除此条规则吗？")) return;
+      await fetch(`/api/rules/${ruleId}`, { method: "DELETE" });
+      loadTree();
+      loadGlobalStats();
+    }
+
+    // --- TAB 2: KANBAN ---
+    async function loadKanban() {
+      if (!currentProjectId) return;
+      try {
+        const res = await fetch(`/api/projects/${currentProjectId}/tasks`);
+        const tasks = await res.json();
+
+        ['active', 'testing', 'released', 'archived'].forEach(st => {
+          document.getElementById(`lane-${st}`).innerHTML = "";
+          document.getElementById(`count-lane-${st}`).textContent = "0";
+        });
+
+        const statusCounts = { active: 0, testing: 0, released: 0, archived: 0 };
+
+        tasks.forEach(t => {
+          const st = t.status || 'active';
+          if (!statusCounts.hasOwnProperty(st)) return;
+          statusCounts[st]++;
+
+          const card = document.createElement("div");
+          card.className = "p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 hover:border-slate-500 transition space-y-2";
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <span class="code-font text-[10px] font-bold text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/40">${t.id}</span>
+              <span class="text-[10px] text-slate-500">${new Date(t.created_at).toLocaleDateString()}</span>
+            </div>
+            <div class="text-xs font-bold text-white">${t.title}</div>
+            <div class="text-[11px] text-slate-400 line-clamp-2">${t.description || "无详细描述"}</div>
+            <div class="pt-2 border-t border-surface-700/50 flex justify-between items-center text-[10px]">
+              <span class="text-slate-500">流转阶段:</span>
+              <select onchange="updateTaskStage('${t.id}', this.value)" class="bg-surface-800 text-slate-300 rounded px-1.5 py-0.5 border border-surface-700">
+                <option value="active" ${st === 'active' ? 'selected' : ''}>进行中</option>
+                <option value="testing" ${st === 'testing' ? 'selected' : ''}>测试中</option>
+                <option value="released" ${st === 'released' ? 'selected' : ''}>已发布</option>
+                <option value="archived" ${st === 'archived' ? 'selected' : ''}>归档</option>
+              </select>
+            </div>
+          `;
+          document.getElementById(`lane-${st}`).appendChild(card);
+        });
+
+        Object.keys(statusCounts).forEach(st => {
+          document.getElementById(`count-lane-${st}`).textContent = statusCounts[st];
+        });
+      } catch (e) {
+        console.error("加载需求看板失败", e);
+      }
+    }
+
+    async function updateTaskStage(taskId, newStatus) {
+      await fetch(`/api/tasks/${taskId}/status?status=${newStatus}`, { method: "PATCH" });
+      loadKanban();
+    }
+
+    // --- TAB 3: DISTILLATION LAB ---
     async function loadFindings() {
       if (!currentProjectId) return;
       const res = await fetch(`/api/projects/${currentProjectId}/findings?status=pending_review`);
       const findings = await res.json();
-      const container = document.getElementById("findings-container");
-      container.innerHTML = "";
+      const list = document.getElementById("distill-findings-list");
+      list.innerHTML = "";
 
       if (!findings || findings.length === 0) {
-        container.innerHTML = `<div class="text-xs text-slate-500 py-6 text-center">暂无待确认的排坑记录</div>`;
+        list.innerHTML = `<div class="text-xs text-slate-500 py-12 text-center">暂无待确认的排坑事实</div>`;
         return;
       }
 
       findings.forEach(f => {
-        const div = document.createElement("div");
-        div.className = "p-2.5 rounded bg-slate-800/70 border border-slate-700 text-xs space-y-1.5";
-        div.innerHTML = `
-          <div class="flex justify-between items-center">
-            <span class="font-mono text-[11px] text-amber-300">${f.target_path}</span>
-            <span class="badge-p1 text-[10px] px-1.5 py-0.2 rounded font-semibold">${f.suggested_priority}</span>
+        const card = document.createElement("div");
+        card.className = "p-4 rounded-xl bg-surface-850 border border-surface-700 space-y-2.5";
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="code-font text-xs font-bold text-amber-400">${f.target_path}</span>
+            <span class="badge-p1 text-[10px] px-2 py-0.5 rounded font-mono">${f.suggested_priority}</span>
           </div>
-          <div class="text-slate-300 text-[11px] leading-relaxed">${f.finding_text}</div>
-          <div class="flex justify-end gap-2 pt-1 border-t border-slate-700/50">
-            <button onclick="crystallizeFinding('${f.id}')" class="text-[10px] bg-indigo-600/80 hover:bg-indigo-600 text-white px-2 py-1 rounded">
-              💎 结晶升华为规则
+          <p class="text-xs text-slate-200 leading-relaxed">${f.finding_text}</p>
+          <div class="pt-2 border-t border-surface-700/50 flex justify-between items-center text-[10px] text-slate-400">
+            <span>任务绑定: ${f.task_id || "全局"}</span>
+            <button onclick="crystallizeFinding('${f.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-1 rounded-lg transition">
+              💎 结晶升华为长期规则
             </button>
           </div>
         `;
-        container.appendChild(div);
+        list.appendChild(card);
       });
     }
 
     async function crystallizeFinding(fid) {
-      const title = prompt("请输入升华后的规则标题:", "关键排坑与环境约束");
+      const title = prompt("请输入升华后的规则标题:", "关键防坑与运行时硬约束");
       if (!title) return;
       await fetch(`/api/findings/${fid}/crystallize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title, priority: "P1", lifecycle: "long_term" })
+        body: JSON.stringify({ title: title, priority: "P0", lifecycle: "long_term" })
       });
       loadFindings();
-      loadHeatmap();
+      loadGlobalStats();
+      loadTree();
     }
 
     async function loadProposals() {
       if (!currentProjectId) return;
       const res = await fetch(`/api/projects/${currentProjectId}/proposals?status=pending`);
       const props = await res.json();
-      const container = document.getElementById("proposals-container");
-      container.innerHTML = "";
+      const list = document.getElementById("distill-proposals-list");
+      list.innerHTML = "";
 
       if (!props || props.length === 0) {
-        container.innerHTML = `<div class="text-xs text-slate-500 py-6 text-center">暂无待审提案</div>`;
+        list.innerHTML = `<div class="text-xs text-slate-500 py-12 text-center">暂无待审架构提案</div>`;
         return;
       }
 
       props.forEach(p => {
-        const div = document.createElement("div");
-        div.className = "p-2.5 rounded bg-slate-800/70 border border-slate-700 text-xs space-y-1.5";
-        div.innerHTML = `
-          <div class="font-mono text-indigo-300 font-semibold">${p.target_component}</div>
-          <div class="text-slate-300 text-[11px]"><span class="text-slate-500">提案内容:</span> ${p.proposed_contract}</div>
-          <div class="text-slate-400 text-[10px] italic"><span class="text-slate-500">理由:</span> ${p.justification}</div>
-          <div class="flex justify-end pt-1 border-t border-slate-700/50">
-            <button onclick="approveProposal('${p.id}')" class="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded font-medium">
-              ✓ 批准为长期P0契约
+        const card = document.createElement("div");
+        card.className = "p-4 rounded-xl bg-surface-850 border border-surface-700 space-y-2.5";
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="code-font text-xs font-bold text-indigo-400">${p.target_component}</span>
+            <span class="badge-p0 text-[10px] px-2 py-0.5 rounded font-bold">P0 提案</span>
+          </div>
+          <div class="text-xs text-slate-200"><span class="text-slate-500">条款:</span> ${p.proposed_contract}</div>
+          <div class="text-[11px] text-slate-400 italic"><span class="text-slate-500">论证:</span> ${p.justification}</div>
+          <div class="pt-2 border-t border-surface-700/50 flex justify-end">
+            <button onclick="approveProposal('${p.id}')" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-3 py-1 rounded-lg transition">
+              ✓ 批准为 P0 长期契约
             </button>
           </div>
         `;
-        container.appendChild(div);
+        list.appendChild(card);
       });
     }
 
     async function approveProposal(pid) {
       await fetch(`/api/proposals/${pid}/approve`, { method: "POST" });
       loadProposals();
-      loadHeatmap();
+      loadGlobalStats();
+      loadTree();
     }
 
-    async function submitDecompose() {
-      const text = document.getElementById("ingest-text").value.trim();
-      const taskId = document.getElementById("ingest-task-id").value.trim() || "TASK-NEW";
-      if (!text) return alert("请先填写需求内容");
+    // --- TAB 4: JIT & EXPORT ---
+    async function simulateJitProbe() {
+      if (!currentProjectId) return;
+      const path = document.getElementById("jit-probe-path").value.trim() || "core/adapters/rcon_guard.py";
+      const box = document.getElementById("jit-preview-box");
+      box.textContent = "正在探测下发上下文...";
 
-      const btn = event.target;
-      btn.textContent = "拆解中...";
+      try {
+        const res = await fetch(`/api/context?project_id=${currentProjectId}&file_path=${encodeURIComponent(path)}`);
+        const data = await res.json();
+        box.textContent = data.rendered_markdown || "此路径无任何匹配规则";
+      } catch (e) {
+        box.textContent = "探测失败: " + e.message;
+      }
+    }
+
+    async function triggerExport(fmt) {
+      if (!currentProjectId) return;
+      const outBox = document.getElementById("export-status-box");
+      outBox.classList.remove("hidden");
+      outBox.textContent = `正在执行 ${fmt.toUpperCase()} 导出...`;
+
+      try {
+        const res = await fetch(`/api/projects/${currentProjectId}/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: fmt })
+        });
+        const d = await res.json();
+        outBox.innerHTML = `✅ 导出成功！<br>• 目录: <span class="code-font">${d.target_dir || d.target_file}</span><br>• 编译规则数: <b>${d.files_count || d.rules_count}</b>`;
+      } catch (e) {
+        outBox.innerHTML = `❌ 导出失败: ` + e.message;
+      }
+    }
+
+    // --- MODAL ACTIONS ---
+    function openAddRuleModal() {
+      if (selectedNodePath) {
+        document.getElementById("input-rule-scopes").value = selectedNodePath.includes(".") ? selectedNodePath : `${selectedNodePath}/**`;
+      }
+      document.getElementById("modal-add-rule").classList.remove("hidden");
+    }
+
+    function closeAddRuleModal() {
+      document.getElementById("modal-add-rule").classList.add("hidden");
+    }
+
+    async function submitNewRule() {
+      const scopes = document.getElementById("input-rule-scopes").value.split(",").map(s => s.trim()).filter(Boolean);
+      const prio = document.getElementById("input-rule-priority").value;
+      const life = document.getElementById("input-rule-lifecycle").value;
+      const title = document.getElementById("input-rule-title").value.trim();
+      const points = document.getElementById("input-rule-points").value.split("\n").map(p => p.trim()).filter(Boolean);
+
+      if (!title || points.length === 0) return alert("请填写完整的规则标题和内容");
+
+      await fetch(`/api/projects/${currentProjectId}/rules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope_patterns: scopes,
+          priority: prio,
+          lifecycle: life,
+          title: title,
+          content_points: points,
+        })
+      });
+
+      closeAddRuleModal();
+      refreshAll();
+    }
+
+    function openDecomposeModal() {
+      document.getElementById("modal-decompose").classList.remove("hidden");
+    }
+
+    function closeDecomposeModal() {
+      document.getElementById("modal-decompose").classList.add("hidden");
+    }
+
+    async function submitDecomposeForm() {
+      const tid = document.getElementById("input-decomp-task").value.trim() || `TASK-${Date.now().toString().slice(-4)}`;
+      const text = document.getElementById("input-decomp-text").value.trim();
+      if (!text) return alert("请先填写 PRD 需求内容");
+
+      const btn = document.getElementById("btn-submit-decomp");
+      btn.textContent = "分析中...";
       btn.disabled = true;
 
       try {
         await fetch(`/api/projects/${currentProjectId}/decompose`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ task_id: taskId, text: text })
+          body: JSON.stringify({ task_id: tid, text: text })
         });
-        alert("需求拆解完成并已自动注入规则矩阵！");
-        loadHeatmap();
-        testContextResolution();
+        closeDecomposeModal();
+        refreshAll();
+        switchTab('kanban');
       } catch (e) {
-        alert("拆解请求出错: " + e.message);
+        alert("拆解失败: " + e.message);
       } finally {
-        btn.textContent = "⚡ 执行自动拆解入库";
+        btn.textContent = "开始自动逆向拆解";
         btn.disabled = false;
       }
-    }
-
-    function fillTemplate(type) {
-      if (type === "payment") {
-        document.getElementById("ingest-task-id").value = "TASK-PAY-V2";
-        document.getElementById("ingest-text").value = "# 支付拆单与灰度改造\n1. 涉及路径 src/services/pay/** 与 src/controllers/order.ts\n2. 严禁任何浮点数金额直接相乘，所有分摊必须调用 safeDecimalMultiply() (P0安全阻断)\n3. 本次升级需在请求体中新增 split_tag 灰度字段\n4. 针对结算页建议添加注释说明灰度比例 (P2)";
-      } else if (type === "auth") {
-        document.getElementById("ingest-task-id").value = "TASK-AUTH-JWT";
-        document.getElementById("ingest-text").value = "# JWT鉴权中间件升级\n1. 涉及路径 src/middleware/auth.ts 与 config/jwt.yaml\n2. 禁止在日志中明文打印 JWT Token (P0安全红线)\n3. 增加刷新令牌滑动窗口机制 (P1)";
-      }
-    }
-
-    async function testContextResolution() {
-      const path = document.getElementById("test-file-path").value.trim();
-      const taskId = document.getElementById("ingest-task-id").value.trim() || undefined;
-      const url = `/api/context?project_id=${currentProjectId}&file_path=${encodeURIComponent(path)}${taskId ? `&task_id=${taskId}` : ""}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      document.getElementById("context-preview").textContent = data.rendered_markdown || "未解析到匹配上下文";
     }
 
     window.onload = init;
