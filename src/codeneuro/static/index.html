@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeNeuro - 认知与规则中枢</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+            p0: '#ef4444',
+            p1: '#f59e0b',
+            p2: '#3b82f6',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .badge-p0 { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .badge-p1 { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .badge-p2 { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+  <!-- Top Navigation -->
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-30 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
+        ⚡
+      </div>
+      <div>
+        <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">CodeNeuro</span>
+        <span class="text-xs text-slate-400 ml-2 px-2 py-0.5 rounded bg-slate-800 border border-slate-700">Hub v0.1</span>
+      </div>
+    </div>
+
+    <!-- Project Selector -->
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 text-sm">
+        <label class="text-slate-400">当前项目:</label>
+        <select id="project-select" class="bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500" onchange="onProjectChange()">
+          <option value="">加载中...</option>
+        </select>
+        <button onclick="promptCreateProject()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-md font-medium transition">
+          + 新建项目
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Left Column: Heatmap & Rule Matrix (2 cols) -->
+    <div class="lg:col-span-2 space-y-6">
+      <!-- Section: Heatmap -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-base font-semibold flex items-center gap-2">
+              🔥 作用域认知热力矩阵 (Scope Heatmap)
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">展示当前各文件与目录承载的约束密度与优先级分布</p>
+          </div>
+          <button onclick="loadHeatmap()" class="text-xs text-slate-400 hover:text-slate-200 bg-slate-800 px-2 py-1 rounded">刷新</button>
+        </div>
+
+        <div id="heatmap-container" class="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+          <div class="text-xs text-slate-500 py-8 text-center">正在加载热力数据...</div>
+        </div>
+      </div>
+
+      <!-- Section: PRD / Ingestion Chamber -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <h2 class="text-base font-semibold flex items-center gap-2 mb-1">
+          📝 需求自动拆解室 (PRD Ingestion)
+        </h2>
+        <p class="text-xs text-slate-400 mb-4">粘贴业务需求或改动要点，系统将自动逆向分析路径、定级并生成短期规则</p>
+
+        <div class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-slate-400 block mb-1">挂载任务 / 需求 ID:</label>
+              <input id="ingest-task-id" type="text" placeholder="例如 TASK-001" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-200">
+            </div>
+            <div>
+              <label class="text-xs text-slate-400 block mb-1">快速预设需求模板:</label>
+              <select onchange="fillTemplate(this.value)" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-300">
+                <option value="">-- 选择模板填入 --</option>
+                <option value="payment">支付重构需求 (含P0红线与范围)</option>
+                <option value="auth">JWT鉴权升级需求 (中间件与配置)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs text-slate-400 block mb-1">需求细节描述 (包含改动点或涉及路径):</label>
+            <textarea id="ingest-text" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 font-mono" placeholder="# 支付拆单与灰度改造&#10;1. 涉及路径 src/services/pay/** 与 src/controllers/order.ts&#10;2. 禁止任何浮点数金额直接计算，必须使用 DecimalSafe 工具 (P0安全红线)&#10;3. 本次升级需在请求体中新增 split_tag 灰度字段"></textarea>
+          </div>
+
+          <div class="flex justify-end">
+            <button onclick="submitDecompose()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-md shadow-indigo-600/20">
+              ⚡ 执行自动拆解入库
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section: Context Simulator -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <h2 class="text-base font-semibold flex items-center gap-2 mb-1">
+          🎯 JIT 上下文探针模拟器 (Context Inspector)
+        </h2>
+        <p class="text-xs text-slate-400 mb-3">模拟 Coding Agent 访问特定文件时接收到的下发提示词 (骨骼 + 血液)</p>
+        <div class="flex gap-2 mb-3">
+          <input id="test-file-path" type="text" value="src/services/pay/checkout.ts" class="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono">
+          <button onclick="testContextResolution()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs px-3 py-1.5 rounded font-medium">
+            测试探测
+          </button>
+        </div>
+        <pre id="context-preview" class="bg-slate-950 border border-slate-800 rounded p-3 text-xs text-slate-300 font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">点击“测试探测”查看渲染效果...</pre>
+      </div>
+    </div>
+
+    <!-- Right Column: Live Feed, Findings & Proposals (1 col) -->
+    <div class="space-y-6">
+      <!-- Section: Agent Findings Stream -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-base font-semibold flex items-center gap-2">
+              💡 Agent 运行态排坑流
+            </h2>
+            <p class="text-xs text-slate-400">Agent 在编码循环中自行沉淀的经验</p>
+          </div>
+          <button onclick="loadFindings()" class="text-xs text-slate-400 hover:text-slate-200">刷新</button>
+        </div>
+        <div id="findings-container" class="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+          <div class="text-xs text-slate-500 py-6 text-center">暂无排坑发现</div>
+        </div>
+      </div>
+
+      <!-- Section: Proposals -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-base font-semibold flex items-center gap-2">
+              🏛️ 架构契约提案箱
+            </h2>
+            <p class="text-xs text-slate-400">Agent 申请升华的长期骨骼契约</p>
+          </div>
+          <button onclick="loadProposals()" class="text-xs text-slate-400 hover:text-slate-200">刷新</button>
+        </div>
+        <div id="proposals-container" class="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
+          <div class="text-xs text-slate-500 py-6 text-center">暂无待审提案</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="border-t border-slate-800 bg-slate-900/40 text-center py-4 text-xs text-slate-500">
+    CodeNeuro Cognitive Context Hub • Multi-Worktree Autonomous Agent Governance
+  </footer>
+
+  <script>
+    let currentProjectId = "";
+
+    async function init() {
+      await loadProjects();
+    }
+
+    async function loadProjects() {
+      try {
+        const res = await fetch("/api/projects");
+        const projects = await res.json();
+        const sel = document.getElementById("project-select");
+        sel.innerHTML = "";
+
+        if (projects.length === 0) {
+          // Auto create default project
+          const p = await fetch("/api/projects", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: "默认电商核心项目", description: "Default Ecommerce Core" })
+          }).then(r => r.json());
+          currentProjectId = p.id;
+          sel.innerHTML = `<option value="${p.id}">${p.name} (${p.id})</option>`;
+        } else {
+          projects.forEach(p => {
+            const opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = `${p.name} (${p.id})`;
+            sel.appendChild(opt);
+          });
+          currentProjectId = projects[0].id;
+        }
+        onProjectChange();
+      } catch (e) {
+        console.error("加载项目失败", e);
+      }
+    }
+
+    function onProjectChange() {
+      currentProjectId = document.getElementById("project-select").value;
+      loadHeatmap();
+      loadFindings();
+      loadProposals();
+      testContextResolution();
+    }
+
+    async function promptCreateProject() {
+      const name = prompt("请输入新项目名称:");
+      if (!name) return;
+      await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name })
+      });
+      await loadProjects();
+    }
+
+    async function loadHeatmap() {
+      if (!currentProjectId) return;
+      const res = await fetch(`/api/projects/${currentProjectId}/heatmap`);
+      const data = await res.json();
+      const container = document.getElementById("heatmap-container");
+      container.innerHTML = "";
+
+      if (!data.heatmap || data.heatmap.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-500 py-6 text-center">该项目暂无作用域规则，请在下方提交需求或添加规则。</div>`;
+        return;
+      }
+
+      data.heatmap.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "p-3 rounded-lg bg-slate-800/80 border border-slate-700/80 flex items-center justify-between hover:border-slate-600 transition";
+        div.innerHTML = `
+          <div>
+            <div class="font-mono text-xs font-semibold text-indigo-300">${item.pattern}</div>
+            <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
+              <span>🏛️ 长期骨骼: ${item.long_term}</span>
+              <span>⚡ 短期需求: ${item.short_term}</span>
+              ${item.tasks.length ? `<span class="bg-slate-700/60 px-1.5 py-0.5 rounded text-[10px] text-slate-300">Task: ${item.tasks.join(", ")}</span>` : ""}
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            ${item.p0_count > 0 ? `<span class="badge-p0 text-xs px-2 py-0.5 rounded font-bold">P0: ${item.p0_count}</span>` : ""}
+            ${item.p1_count > 0 ? `<span class="badge-p1 text-xs px-2 py-0.5 rounded font-bold">P1: ${item.p1_count}</span>` : ""}
+            ${item.p2_count > 0 ? `<span class="badge-p2 text-xs px-2 py-0.5 rounded font-bold">P2: ${item.p2_count}</span>` : ""}
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function loadFindings() {
+      if (!currentProjectId) return;
+      const res = await fetch(`/api/projects/${currentProjectId}/findings?status=pending_review`);
+      const findings = await res.json();
+      const container = document.getElementById("findings-container");
+      container.innerHTML = "";
+
+      if (!findings || findings.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-500 py-6 text-center">暂无待确认的排坑记录</div>`;
+        return;
+      }
+
+      findings.forEach(f => {
+        const div = document.createElement("div");
+        div.className = "p-2.5 rounded bg-slate-800/70 border border-slate-700 text-xs space-y-1.5";
+        div.innerHTML = `
+          <div class="flex justify-between items-center">
+            <span class="font-mono text-[11px] text-amber-300">${f.target_path}</span>
+            <span class="badge-p1 text-[10px] px-1.5 py-0.2 rounded font-semibold">${f.suggested_priority}</span>
+          </div>
+          <div class="text-slate-300 text-[11px] leading-relaxed">${f.finding_text}</div>
+          <div class="flex justify-end gap-2 pt-1 border-t border-slate-700/50">
+            <button onclick="crystallizeFinding('${f.id}')" class="text-[10px] bg-indigo-600/80 hover:bg-indigo-600 text-white px-2 py-1 rounded">
+              💎 结晶升华为规则
+            </button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function crystallizeFinding(fid) {
+      const title = prompt("请输入升华后的规则标题:", "关键排坑与环境约束");
+      if (!title) return;
+      await fetch(`/api/findings/${fid}/crystallize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title, priority: "P1", lifecycle: "long_term" })
+      });
+      loadFindings();
+      loadHeatmap();
+    }
+
+    async function loadProposals() {
+      if (!currentProjectId) return;
+      const res = await fetch(`/api/projects/${currentProjectId}/proposals?status=pending`);
+      const props = await res.json();
+      const container = document.getElementById("proposals-container");
+      container.innerHTML = "";
+
+      if (!props || props.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-500 py-6 text-center">暂无待审提案</div>`;
+        return;
+      }
+
+      props.forEach(p => {
+        const div = document.createElement("div");
+        div.className = "p-2.5 rounded bg-slate-800/70 border border-slate-700 text-xs space-y-1.5";
+        div.innerHTML = `
+          <div class="font-mono text-indigo-300 font-semibold">${p.target_component}</div>
+          <div class="text-slate-300 text-[11px]"><span class="text-slate-500">提案内容:</span> ${p.proposed_contract}</div>
+          <div class="text-slate-400 text-[10px] italic"><span class="text-slate-500">理由:</span> ${p.justification}</div>
+          <div class="flex justify-end pt-1 border-t border-slate-700/50">
+            <button onclick="approveProposal('${p.id}')" class="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded font-medium">
+              ✓ 批准为长期P0契约
+            </button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function approveProposal(pid) {
+      await fetch(`/api/proposals/${pid}/approve`, { method: "POST" });
+      loadProposals();
+      loadHeatmap();
+    }
+
+    async function submitDecompose() {
+      const text = document.getElementById("ingest-text").value.trim();
+      const taskId = document.getElementById("ingest-task-id").value.trim() || "TASK-NEW";
+      if (!text) return alert("请先填写需求内容");
+
+      const btn = event.target;
+      btn.textContent = "拆解中...";
+      btn.disabled = true;
+
+      try {
+        await fetch(`/api/projects/${currentProjectId}/decompose`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ task_id: taskId, text: text })
+        });
+        alert("需求拆解完成并已自动注入规则矩阵！");
+        loadHeatmap();
+        testContextResolution();
+      } catch (e) {
+        alert("拆解请求出错: " + e.message);
+      } finally {
+        btn.textContent = "⚡ 执行自动拆解入库";
+        btn.disabled = false;
+      }
+    }
+
+    function fillTemplate(type) {
+      if (type === "payment") {
+        document.getElementById("ingest-task-id").value = "TASK-PAY-V2";
+        document.getElementById("ingest-text").value = "# 支付拆单与灰度改造\n1. 涉及路径 src/services/pay/** 与 src/controllers/order.ts\n2. 严禁任何浮点数金额直接相乘，所有分摊必须调用 safeDecimalMultiply() (P0安全阻断)\n3. 本次升级需在请求体中新增 split_tag 灰度字段\n4. 针对结算页建议添加注释说明灰度比例 (P2)";
+      } else if (type === "auth") {
+        document.getElementById("ingest-task-id").value = "TASK-AUTH-JWT";
+        document.getElementById("ingest-text").value = "# JWT鉴权中间件升级\n1. 涉及路径 src/middleware/auth.ts 与 config/jwt.yaml\n2. 禁止在日志中明文打印 JWT Token (P0安全红线)\n3. 增加刷新令牌滑动窗口机制 (P1)";
+      }
+    }
+
+    async function testContextResolution() {
+      const path = document.getElementById("test-file-path").value.trim();
+      const taskId = document.getElementById("ingest-task-id").value.trim() || undefined;
+      const url = `/api/context?project_id=${currentProjectId}&file_path=${encodeURIComponent(path)}${taskId ? `&task_id=${taskId}` : ""}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      document.getElementById("context-preview").textContent = data.rendered_markdown || "未解析到匹配上下文";
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
