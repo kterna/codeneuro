@@ -81,4 +81,4 @@ def test_full_api_workflow(client: TestClient):
     res_ui = client.get("/")
     assert res_ui.status_code == 200
     assert "CodeNeuro" in res_ui.text
-    assert "代码认知拓扑树" in res_ui.text
+    assert "作用域认知拓扑树" in res_ui.text

@@ -3,466 +3,564 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CodeNeuro — 认知与规则协同中枢</title>
+  <title>CodeNeuro — Autonomous Cognitive Hub</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;450;500;550;600;650&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
           fontFamily: {
-            sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
+            sans: ['"Inter"', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
           },
           colors: {
-            surface: { 950: '#070a12', 900: '#0d1322', 850: '#11182c', 800: '#162038', 700: '#233256' },
-            brand: { 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
-            p0: '#ef4444',
-            p1: '#f59e0b',
-            p2: '#38bdf8',
+            canvas: '#08090a',
+            sidebar: '#0c0d10',
+            panel: '#101114',
+            surface: {
+              50: 'rgba(255, 255, 255, 0.02)',
+              100: 'rgba(255, 255, 255, 0.04)',
+              200: 'rgba(255, 255, 255, 0.06)',
+              300: 'rgba(255, 255, 255, 0.08)',
+              hover: 'rgba(255, 255, 255, 0.045)',
+              active: 'rgba(255, 255, 255, 0.08)',
+            },
+            line: {
+              subtle: 'rgba(255, 255, 255, 0.06)',
+              medium: 'rgba(255, 255, 255, 0.09)',
+              strong: 'rgba(255, 255, 255, 0.14)',
+            },
+            accent: {
+              DEFAULT: '#5e6ad2',
+              hover: '#7170ff',
+              subtle: 'rgba(94, 106, 210, 0.12)',
+              border: 'rgba(113, 112, 255, 0.3)',
+            },
+            ruby: {
+              DEFAULT: '#f87171',
+              subtle: 'rgba(239, 68, 68, 0.1)',
+              border: 'rgba(239, 68, 68, 0.25)',
+            },
+            amber: {
+              DEFAULT: '#fbbf24',
+              subtle: 'rgba(245, 158, 11, 0.1)',
+              border: 'rgba(245, 158, 11, 0.25)',
+            },
+            emerald: {
+              DEFAULT: '#34d399',
+              subtle: 'rgba(16, 185, 129, 0.1)',
+              border: 'rgba(16, 185, 129, 0.25)',
+            }
+          },
+          letterSpacing: {
+            tighter: '-0.03em',
+            tight: '-0.02em',
+            normal: '-0.005em',
           }
         }
       }
     }
   </script>
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #070a12; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-feature-settings: "cv01", "ss03";
+      background-color: #08090a;
+      color: #f7f8f8;
+      letter-spacing: -0.01em;
+    }
     .code-font { font-family: 'JetBrains Mono', monospace; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0d1322; }
-    ::-webkit-scrollbar-thumb { background: #233256; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #374151; }
-    .badge-p0 { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
-    .badge-p1 { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
-    .badge-p2 { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
-    .badge-long { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.3); }
-    .badge-short { background: rgba(20, 184, 166, 0.15); color: #5eead4; border: 1px solid rgba(20, 184, 166, 0.3); }
-    .glass-card { background: rgba(13, 19, 34, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(35, 50, 86, 0.6); }
-    .glow-dot { box-shadow: 0 0 10px rgba(34, 197, 94, 0.7); }
-    .pulse-p0 { box-shadow: 0 0 12px rgba(239, 68, 68, 0.5); }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+    
+    .linear-card {
+      background: rgba(255, 255, 255, 0.022);
+      border: 1px solid rgba(255, 255, 255, 0.065);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+    .linear-card-elevated {
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    .linear-btn-primary {
+      background: #5e6ad2;
+      color: #ffffff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .linear-btn-primary:hover {
+      background: #7170ff;
+      transform: translateY(-0.5px);
+    }
+    .linear-btn-secondary {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #d0d6e0;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .linear-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .glow-accent {
+      box-shadow: 0 0 16px rgba(94, 106, 210, 0.35);
+    }
+    .tag-p0 {
+      background: rgba(239, 68, 68, 0.1);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.22);
+    }
+    .tag-p1 {
+      background: rgba(245, 158, 11, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.22);
+    }
+    .tag-p2 {
+      background: rgba(56, 189, 248, 0.1);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.22);
+    }
+    .tag-long {
+      background: rgba(94, 106, 210, 0.12);
+      color: #a5b4fc;
+      border: 1px solid rgba(94, 106, 210, 0.28);
+    }
+    .tag-short {
+      background: rgba(16, 185, 129, 0.1);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.24);
+    }
+    .kbd-shortcut {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+    }
   </style>
 </head>
-<body class="text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+<body class="min-h-screen flex text-[13px] antialiased selection:bg-indigo-600 selection:text-white">
 
-  <!-- Top System Bar -->
-  <header class="border-b border-surface-700/80 bg-surface-900/90 backdrop-blur-md sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between">
-    <div class="flex items-center gap-4">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 flex items-center justify-center font-black text-white shadow-lg shadow-indigo-600/30 text-base">
-        ⚡
-      </div>
-      <div>
-        <div class="flex items-center gap-2.5">
-          <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">CodeNeuro</span>
-          <span class="code-font text-[11px] font-semibold text-indigo-400 px-2 py-0.5 rounded-full bg-indigo-950/80 border border-indigo-800/60">HUB v0.2.0</span>
-          <span class="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded-full font-medium">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 glow-dot animate-pulse"></span>
-            MCP Active
-          </span>
+  <!-- ==================== LEFT COMMAND SIDEBAR ==================== -->
+  <aside class="w-64 bg-sidebar border-r border-line-subtle flex flex-col shrink-0 select-none z-30">
+    <!-- Brand & Workspace Header -->
+    <div class="h-14 px-4 border-b border-line-subtle flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-accent flex items-center justify-center text-white shadow-sm glow-accent">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
         </div>
-        <p class="text-[11px] text-slate-400 mt-0.5">AI 编程多工作区协同认知与作用域规则中枢</p>
+        <div>
+          <span class="font-semibold tracking-tight text-[13px] text-white">CodeNeuro</span>
+          <span class="text-[10px] code-font text-slate-500 ml-1 font-medium">v0.2.2</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-subtle px-2 py-0.5 rounded-full border border-emerald-border font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        MCP
       </div>
     </div>
 
-    <!-- Project Switcher & Actions -->
-    <div class="flex items-center gap-3">
-      <div class="flex items-center gap-2 bg-surface-850 border border-surface-700 rounded-lg px-3 py-1.5">
-        <span class="text-xs text-slate-400 font-medium">项目:</span>
-        <select id="project-select" onchange="onProjectChange()" class="bg-transparent text-xs font-semibold text-slate-200 focus:outline-none cursor-pointer pr-2">
-          <option value="">载入中...</option>
+    <!-- Project Switcher Box -->
+    <div class="p-3 border-b border-line-subtle">
+      <div class="text-[10px] uppercase font-bold tracking-wider text-slate-500 mb-1.5 px-1">当前工程工作区</div>
+      <div class="relative">
+        <select id="project-select" onchange="onProjectChange()" class="w-full bg-surface-100 hover:bg-surface-200 border border-line-subtle hover:border-line-medium rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-200 focus:outline-none focus:border-accent transition appearance-none cursor-pointer pr-7">
+          <option value="">载入工程中...</option>
         </select>
+        <svg class="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </div>
 
-      <button onclick="openCreateProjectModal()" class="text-xs bg-surface-800 hover:bg-surface-700 text-slate-200 border border-surface-700 px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5">
-        <span>+</span> 注册新项目
+      <div class="flex items-center justify-between mt-2 px-1">
+        <button onclick="openCreateProjectModal()" class="text-[11px] text-slate-400 hover:text-white transition flex items-center gap-1">
+          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          注册新工程
+        </button>
+        <span id="sidebar-repo-indicator" class="text-[10px] code-font text-slate-500 truncate max-w-[120px]">mcqq</span>
+      </div>
+    </div>
+
+    <!-- Quick Search / Command Trigger -->
+    <div class="px-3 pt-3">
+      <button onclick="openCommandPalette()" class="w-full bg-surface-50 hover:bg-surface-100 border border-line-subtle rounded-lg px-2.5 py-1.5 text-xs text-slate-400 flex items-center justify-between transition">
+        <span class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          快速检索规则...
+        </span>
+        <span class="kbd-shortcut text-[10px] code-font px-1.5 py-0.5 rounded text-slate-400">⌘K</span>
+      </button>
+    </div>
+
+    <!-- Navigation Menu -->
+    <div class="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
+      <div class="text-[10px] uppercase font-bold tracking-wider text-slate-500 px-2 py-1">协同视口</div>
+
+      <button onclick="switchTab('tree')" id="nav-btn-tree" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium bg-surface-active text-white border border-line-medium transition">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          <span>作用域认知树</span>
+        </div>
+        <span id="badge-nav-tree-rules" class="text-[10px] code-font text-slate-400">0</span>
       </button>
 
-      <button onclick="refreshAll()" class="text-xs bg-indigo-600/90 hover:bg-indigo-600 text-white font-semibold px-3.5 py-1.5 rounded-lg shadow-sm shadow-indigo-500/20 transition flex items-center gap-1.5">
-        <span>↻</span> 实时同步
+      <button onclick="switchTab('kanban')" id="nav-btn-kanban" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-surface-hover transition">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span>需求任务雷达</span>
+        </div>
+        <span id="badge-nav-tasks" class="text-[10px] code-font text-slate-400">0</span>
+      </button>
+
+      <button onclick="switchTab('distill')" id="nav-btn-distill" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-surface-hover transition">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>记忆提炼中心</span>
+        </div>
+        <span id="badge-nav-distill" class="text-[10px] code-font text-purple-400 font-semibold">0</span>
+      </button>
+
+      <button onclick="switchTab('debug')" id="nav-btn-debug" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-surface-hover transition">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <span>质量调优诊断</span>
+        </div>
+        <span id="badge-nav-issues" class="text-[10px] code-font text-red-400 font-bold hidden">0</span>
+      </button>
+
+      <button onclick="switchTab('jit')" id="nav-btn-jit" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-surface-hover transition">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-teal-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="m10 15 5-3-5-3v6Z"/></svg>
+          <span>JIT 探针 & 导出</span>
+        </div>
       </button>
     </div>
-  </header>
 
-  <!-- Global Metrics HUD -->
-  <section class="border-b border-surface-700/60 bg-surface-950/70 px-6 py-3">
-    <div class="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-6 gap-3">
-      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
-        <div>
-          <div class="text-[10px] uppercase font-bold tracking-wider text-slate-400">活跃纳管规则</div>
-          <div id="stat-active-rules" class="text-lg font-extrabold text-white mt-0.5">--</div>
-        </div>
-        <span class="text-xl opacity-60">📜</span>
+    <!-- Sidebar Bottom Status Dock -->
+    <div class="p-3 border-t border-line-subtle bg-surface-50 space-y-2">
+      <div class="flex items-center justify-between text-[11px] text-slate-400">
+        <span class="flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> 服务端口
+        </span>
+        <span class="code-font text-slate-300">:8800</span>
       </div>
-
-      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between border-red-900/30">
-        <div>
-          <div class="text-[10px] uppercase font-bold tracking-wider text-red-400">P0 阻断红线</div>
-          <div id="stat-p0" class="text-lg font-extrabold text-red-400 mt-0.5">--</div>
-        </div>
-        <span class="text-xl">🛑</span>
+      <div class="flex items-center justify-between text-[11px] text-slate-400">
+        <span class="flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span> 守护 Worker
+        </span>
+        <span class="code-font text-slate-300">2050375</span>
       </div>
-
-      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
-        <div>
-          <div class="text-[10px] uppercase font-bold tracking-wider text-amber-400">P1 任务约束</div>
-          <div id="stat-p1" class="text-lg font-extrabold text-amber-400 mt-0.5">--</div>
-        </div>
-        <span class="text-xl">⚡</span>
-      </div>
-
-      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
-        <div>
-          <div class="text-[10px] uppercase font-bold tracking-wider text-indigo-400">长期架构骨骼</div>
-          <div id="stat-long" class="text-lg font-extrabold text-indigo-400 mt-0.5">--</div>
-        </div>
-        <span class="text-xl">🏛️</span>
-      </div>
-
-      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
-        <div>
-          <div class="text-[10px] uppercase font-bold tracking-wider text-teal-400">JIT 命中拦截</div>
-          <div id="stat-hits" class="text-lg font-extrabold text-teal-400 mt-0.5">--</div>
-        </div>
-        <span class="text-xl">🎯</span>
-      </div>
-
-      <div class="glass-card rounded-lg p-2.5 flex items-center justify-between">
-        <div>
-          <div class="text-[10px] uppercase font-bold tracking-wider text-purple-400">排坑事实/提案</div>
-          <div id="stat-findings" class="text-lg font-extrabold text-purple-400 mt-0.5">--</div>
-        </div>
-        <span class="text-xl">💡</span>
+      <div class="pt-1 flex items-center justify-between text-[10px] text-slate-500 border-t border-line-subtle">
+        <span>截止目标: 04:00 CST</span>
+        <button onclick="refreshAll()" class="hover:text-slate-300 transition">↻ 刷新</button>
       </div>
     </div>
-  </section>
+  </aside>
 
-  <!-- Navigation View Tabs -->
-  <nav class="border-b border-surface-700/80 bg-surface-900/40 px-6 py-2">
-    <div class="max-w-7xl mx-auto flex items-center justify-between">
-      <div class="flex items-center gap-1.5" id="nav-tabs">
-        <button onclick="switchTab('tree')" id="tab-btn-tree" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm flex items-center gap-2">
-          <span>🏛️</span> 架构认知树与热力透镜
-        </button>
-        <button onclick="switchTab('kanban')" id="tab-btn-kanban" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2">
-          <span>⚡</span> 需求生命周期雷达
-        </button>
-        <button onclick="switchTab('distill')" id="tab-btn-distill" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2">
-          <span>💎</span> 认知提炼实验室
-          <span id="badge-distill-count" class="bg-purple-900/80 text-purple-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
-        </button>
-        <button onclick="switchTab('debug')" id="tab-btn-debug" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2">
-          <span>🛠️</span> 质量调优与诊断 (Debug Studio)
-          <span id="badge-issues-count" class="bg-red-900/80 text-red-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold hidden">0</span>
-        </button>
-        <button onclick="switchTab('jit')" id="tab-btn-jit" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2">
-          <span>🎯</span> JIT 实时探针 & 导出
-        </button>
+  <!-- ==================== MAIN STAGE ==================== -->
+  <div class="flex-1 flex flex-col min-w-0 bg-canvas overflow-y-auto">
+
+    <!-- Top Executive Header -->
+    <header class="h-14 border-b border-line-subtle px-6 flex items-center justify-between shrink-0 bg-canvas/80 backdrop-blur sticky top-0 z-20">
+      <!-- Breadcrumbs & Focus Path -->
+      <div class="flex items-center gap-2 text-xs truncate max-w-lg">
+        <span class="text-slate-500 font-medium" id="header-project-name">AstrBot Plugin MCQQ</span>
+        <span class="text-slate-600">/</span>
+        <span class="font-medium text-slate-300 truncate" id="header-view-title">作用域认知拓扑树</span>
       </div>
 
-      <div class="text-xs text-slate-400 flex items-center gap-2 code-font">
-        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-        <span id="project-meta-info">Loading project...</span>
+      <!-- Action Cluster -->
+      <div class="flex items-center gap-3">
+        <!-- Quick Stats Pill -->
+        <div class="hidden md:flex items-center gap-3 text-xs bg-surface-100 border border-line-subtle rounded-full px-3 py-1 code-font">
+          <span class="text-slate-400">P0 红线: <b id="stat-hud-p0" class="text-ruby font-bold">0</b></span>
+          <span class="text-slate-600">|</span>
+          <span class="text-slate-400">P1 约束: <b id="stat-hud-p1" class="text-amber font-bold">0</b></span>
+          <span class="text-slate-600">|</span>
+          <span class="text-slate-400">总命中: <b id="stat-hud-hits" class="text-slate-200">0</b></span>
+        </div>
+
+        <button onclick="openDecomposeModal()" class="linear-btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          录入 PRD
+        </button>
+
+        <button onclick="triggerExport('cursor')" class="linear-btn-primary px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          一键导出 MDC
+        </button>
       </div>
-    </div>
-  </nav>
+    </header>
 
-  <!-- Main View Container -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-6">
+    <!-- Main Workspace Container -->
+    <main class="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
 
-    <!-- ==================== TAB 1: COGNITIVE TREE & LENS ==================== -->
-    <div id="tab-view-tree" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <!-- Left: File / Directory Tree (5 cols) -->
-      <div class="lg:col-span-5 glass-card rounded-2xl p-5 flex flex-col max-h-[760px]">
-        <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-700/60">
-          <div>
-            <h2 class="text-sm font-bold text-white flex items-center gap-2">
-              <span>🌳</span> 代码认知拓扑树 (Hierarchy Tree)
-            </h2>
-            <p class="text-[11px] text-slate-400 mt-0.5">展开目录查看各层级受控规则密度与热力警示</p>
+      <!-- ==================== TAB 1: SCOPE COGNITIVE TREE & LENS ==================== -->
+      <section id="view-tree" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <!-- Left: File / Directory Tree (5 cols) -->
+        <div class="lg:col-span-5 linear-card rounded-xl p-4 flex flex-col max-h-[740px]">
+          <div class="flex items-center justify-between mb-3 pb-2.5 border-b border-line-subtle">
+            <div>
+              <h2 class="text-xs font-semibold text-white uppercase tracking-wider">文件认知拓扑</h2>
+              <p class="text-[11px] text-slate-500 mt-0.5">挂载约束与阻断红线的代码结构树</p>
+            </div>
+            <button onclick="loadTree()" class="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded bg-surface-100 hover:bg-surface-200 transition">
+              重新扫描
+            </button>
           </div>
-          <button onclick="loadTree()" class="text-xs bg-surface-800 hover:bg-surface-700 px-2 py-1 rounded text-slate-300">刷新树</button>
+
+          <div id="tree-container" class="flex-1 overflow-y-auto space-y-0.5 pr-1 code-font text-xs">
+            <div class="text-slate-500 py-12 text-center text-xs">加载代码库拓扑中...</div>
+          </div>
         </div>
 
-        <div id="tree-container" class="flex-1 overflow-y-auto space-y-1 pr-1 code-font text-xs">
-          <div class="text-slate-500 py-12 text-center text-xs">加载代码库拓扑中...</div>
-        </div>
-      </div>
+        <!-- Right: Focus Inspector (7 cols) -->
+        <div class="lg:col-span-7 linear-card-elevated rounded-xl p-5 flex flex-col max-h-[740px]">
+          <div class="flex items-center justify-between mb-4 pb-3 border-b border-line-subtle">
+            <div class="truncate max-w-md">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] uppercase font-bold tracking-wider text-indigo-400">作用域透镜</span>
+                <span id="lens-type-badge" class="tag-long text-[9px] px-1.5 py-0.2 rounded font-mono font-semibold">ROOT</span>
+              </div>
+              <h3 id="lens-target-path" class="text-sm font-semibold text-white mt-1 code-font truncate">/ (全局项目范围)</h3>
+            </div>
 
-      <!-- Right: Focus Inspector (7 cols) -->
-      <div class="lg:col-span-7 glass-card rounded-2xl p-5 flex flex-col max-h-[760px]">
-        <div class="flex items-center justify-between mb-4 pb-3 border-b border-surface-700/60">
-          <div>
             <div class="flex items-center gap-2">
-              <span class="text-xs uppercase font-bold text-indigo-400 tracking-wider">焦点视口 (Focus Lens)</span>
-              <span id="lens-type-badge" class="badge-long text-[10px] px-2 py-0.5 rounded font-mono">ROOT</span>
-            </div>
-            <h3 id="lens-target-path" class="text-base font-extrabold text-white mt-1 code-font truncate max-w-md">/ (全局项目范围)</h3>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <button onclick="openAddRuleModal()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-1.5 rounded-lg shadow-sm transition">
-              + 追加此范围规则
-            </button>
-          </div>
-        </div>
-
-        <!-- Matched Rules List inside Inspector -->
-        <div class="flex-1 overflow-y-auto space-y-3 pr-1" id="lens-rules-list">
-          <div class="text-slate-500 py-12 text-center text-xs">点击左侧目录或文件查看对应生效的长期契约与任务约束</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== TAB 2: REQUIREMENT KANBAN ==================== -->
-    <div id="tab-view-kanban" class="hidden space-y-6">
-      <!-- PRD Ingestion Trigger Box -->
-      <div class="glass-card rounded-2xl p-5 border border-indigo-900/40 bg-gradient-to-r from-surface-900 via-surface-900 to-indigo-950/20">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h2 class="text-sm font-bold text-white flex items-center gap-2">
-              <span>📝</span> 需求自动逆向拆解室 (PRD Ingestion Chamber)
-            </h2>
-            <p class="text-xs text-slate-400 mt-1">输入产品 PRD 或需求改动要点，系统将自动逆向分析涉及路径、识别 P0 阻断红线并生成迭代任务</p>
-          </div>
-          <button onclick="openDecomposeModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 self-start md:self-auto">
-            <span>⚡</span> 录入新需求 PRD
-          </button>
-        </div>
-      </div>
-
-      <!-- Kanban Swimlanes -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <!-- Lane: Active -->
-        <div class="bg-surface-900/80 border border-surface-700/80 rounded-xl p-4 flex flex-col max-h-[640px]">
-          <div class="flex items-center justify-between pb-3 border-b border-surface-700/60 mb-3">
-            <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 进行中 (Active)
-            </span>
-            <span id="count-lane-active" class="text-xs font-mono text-slate-400">0</span>
-          </div>
-          <div id="lane-active" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
-        </div>
-
-        <!-- Lane: Testing -->
-        <div class="bg-surface-900/80 border border-surface-700/80 rounded-xl p-4 flex flex-col max-h-[640px]">
-          <div class="flex items-center justify-between pb-3 border-b border-surface-700/60 mb-3">
-            <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-amber-400"></span> 测试验证 (Testing)
-            </span>
-            <span id="count-lane-testing" class="text-xs font-mono text-slate-400">0</span>
-          </div>
-          <div id="lane-testing" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
-        </div>
-
-        <!-- Lane: Released -->
-        <div class="bg-surface-900/80 border border-surface-700/80 rounded-xl p-4 flex flex-col max-h-[640px]">
-          <div class="flex items-center justify-between pb-3 border-b border-surface-700/60 mb-3">
-            <span class="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-indigo-400"></span> 已发布 (Released)
-            </span>
-            <span id="count-lane-released" class="text-xs font-mono text-slate-400">0</span>
-          </div>
-          <div id="lane-released" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
-        </div>
-
-        <!-- Lane: Archived -->
-        <div class="bg-surface-900/80 border border-surface-700/80 rounded-xl p-4 flex flex-col max-h-[640px]">
-          <div class="flex items-center justify-between pb-3 border-b border-surface-700/60 mb-3">
-            <span class="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-slate-400"></span> 归档闭环 (Archived)
-            </span>
-            <span id="count-lane-archived" class="text-xs font-mono text-slate-400">0</span>
-          </div>
-          <div id="lane-archived" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== TAB 3: DISTILLATION LAB ==================== -->
-    <div id="tab-view-distill" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- Left: Agent Live Findings Stream -->
-      <div class="glass-card rounded-2xl p-5 flex flex-col max-h-[720px]">
-        <div class="flex items-center justify-between mb-4 pb-3 border-b border-surface-700/60">
-          <div>
-            <h2 class="text-sm font-bold text-white flex items-center gap-2">
-              <span>💡</span> Agent 运行时排坑事实流 (Live Findings)
-            </h2>
-            <p class="text-[11px] text-slate-400 mt-0.5">Coding Agent 在单测或长循环中识别到的避坑经验，支持一键升华结晶为长期规则</p>
-          </div>
-          <button onclick="loadFindings()" class="text-xs bg-surface-800 hover:bg-surface-700 px-2 py-1 rounded text-slate-300">刷新</button>
-        </div>
-
-        <div id="distill-findings-list" class="flex-1 overflow-y-auto space-y-3 pr-1">
-          <div class="text-slate-500 py-12 text-center text-xs">暂无待确认的排坑事实</div>
-        </div>
-      </div>
-
-      <!-- Right: Architecture Proposals Box -->
-      <div class="glass-card rounded-2xl p-5 flex flex-col max-h-[720px]">
-        <div class="flex items-center justify-between mb-4 pb-3 border-b border-surface-700/60">
-          <div>
-            <h2 class="text-sm font-bold text-white flex items-center gap-2">
-              <span>🏛️</span> 架构契约修改提案箱 (Proposals Inbox)
-            </h2>
-            <p class="text-[11px] text-slate-400 mt-0.5">Agent 发起的永久架构变更提案，需由人类管理员审批批准入库</p>
-          </div>
-          <button onclick="loadProposals()" class="text-xs bg-surface-800 hover:bg-surface-700 px-2 py-1 rounded text-slate-300">刷新</button>
-        </div>
-
-        <div id="distill-proposals-list" class="flex-1 overflow-y-auto space-y-3 pr-1">
-          <div class="text-slate-500 py-12 text-center text-xs">暂无待审提案</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== TAB: DEBUG STUDIO (QUALITY & ISSUE REFLECTION) ==================== -->
-    <div id="tab-view-debug" class="hidden space-y-6">
-      <!-- Quality Analytics Top Bar -->
-      <div class="glass-card rounded-2xl p-5 border border-indigo-900/50 bg-gradient-to-r from-surface-900 via-surface-900 to-purple-950/30">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h2 class="text-sm font-bold text-white flex items-center gap-2">
-              <span>🛠️</span> CodeNeuro Debug 模式诊断控制台 (RLHF Quality Studio)
-            </h2>
-            <p class="text-xs text-slate-400 mt-1">
-              通过 <code class="code-font text-indigo-300">codeneuro_rate_rule</code> 收集 Agent 规则评分反馈，
-              通过 <code class="code-font text-indigo-300">codeneuro_report_issue</code> 捕获架构冲突与知识盲区，形成治理自愈闭环。
-            </p>
-          </div>
-          <div class="flex items-center gap-3">
-            <span class="text-xs text-slate-400 font-mono" id="debug-eval-total">总评分样本: 0</span>
-            <button onclick="loadDebugStudio()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-3.5 py-2 rounded-xl transition">
-              刷新诊断数据
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Main Columns: Rule Quality Table (Left) + Issue Work Orders (Right) -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <!-- Left: Rule Quality & Anti-Fatigue Matrix (7 cols) -->
-        <div class="lg:col-span-7 glass-card rounded-2xl p-5 flex flex-col max-h-[720px]">
-          <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-700/60">
-            <div>
-              <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                <span>📊</span> 规则有效性与疲劳度透视 (Rule Ratings & Fatigue Matrix)
-              </h3>
-              <p class="text-[11px] text-slate-400 mt-0.5">识别 5分核心规则与 0分认知疲劳、1分不相关噪音</p>
+              <button onclick="openAddRuleModal()" class="linear-btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                追加约束
+              </button>
             </div>
           </div>
 
-          <div class="flex-1 overflow-y-auto space-y-2.5 pr-1" id="debug-rules-quality-list">
-            <div class="text-slate-500 py-12 text-center text-xs">加载规则质量度量中...</div>
+          <!-- Matched Rules List inside Inspector -->
+          <div class="flex-1 overflow-y-auto space-y-3 pr-1" id="lens-rules-list">
+            <div class="text-slate-500 py-12 text-center text-xs">点击左侧目录或文件查看对应生效的长期契约与任务约束</div>
           </div>
         </div>
+      </section>
 
-        <!-- Right: Agent Active Issues & Reflection Stream (5 cols) -->
-        <div class="lg:col-span-5 glass-card rounded-2xl p-5 flex flex-col max-h-[720px]">
-          <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-700/60">
-            <div>
-              <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                <span>🚨</span> Agent 架构与规则异常反馈流 (Active Issues)
-              </h3>
-              <p class="text-[11px] text-slate-400 mt-0.5">互斥冲突、过时规则与知识盲区申报工单</p>
+      <!-- ==================== TAB 2: REQUIREMENT KANBAN ==================== -->
+      <section id="view-kanban" class="hidden space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <!-- Active Lane -->
+          <div class="linear-card rounded-xl p-3.5 flex flex-col max-h-[700px]">
+            <div class="flex items-center justify-between pb-2.5 border-b border-line-subtle mb-3">
+              <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 进行中 (Active)
+              </span>
+              <span id="count-lane-active" class="text-xs font-mono text-slate-500">0</span>
             </div>
-            <span id="debug-issues-badge" class="badge-p0 text-[10px] px-2 py-0.5 rounded font-mono">0 待处理</span>
+            <div id="lane-active" class="space-y-2.5 overflow-y-auto flex-1 pr-1"></div>
           </div>
 
-          <div class="flex-1 overflow-y-auto space-y-3 pr-1" id="debug-issues-list">
-            <div class="text-slate-500 py-12 text-center text-xs">暂无待处理的异常反馈工单</div>
+          <!-- Testing Lane -->
+          <div class="linear-card rounded-xl p-3.5 flex flex-col max-h-[700px]">
+            <div class="flex items-center justify-between pb-2.5 border-b border-line-subtle mb-3">
+              <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span> 验证中 (Testing)
+              </span>
+              <span id="count-lane-testing" class="text-xs font-mono text-slate-500">0</span>
+            </div>
+            <div id="lane-testing" class="space-y-2.5 overflow-y-auto flex-1 pr-1"></div>
+          </div>
+
+          <!-- Released Lane -->
+          <div class="linear-card rounded-xl p-3.5 flex flex-col max-h-[700px]">
+            <div class="flex items-center justify-between pb-2.5 border-b border-line-subtle mb-3">
+              <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-indigo-400"></span> 已发布 (Released)
+              </span>
+              <span id="count-lane-released" class="text-xs font-mono text-slate-500">0</span>
+            </div>
+            <div id="lane-released" class="space-y-2.5 overflow-y-auto flex-1 pr-1"></div>
+          </div>
+
+          <!-- Archived Lane -->
+          <div class="linear-card rounded-xl p-3.5 flex flex-col max-h-[700px]">
+            <div class="flex items-center justify-between pb-2.5 border-b border-line-subtle mb-3">
+              <span class="text-xs font-semibold text-slate-400 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-slate-500"></span> 已归档 (Archived)
+              </span>
+              <span id="count-lane-archived" class="text-xs font-mono text-slate-500">0</span>
+            </div>
+            <div id="lane-archived" class="space-y-2.5 overflow-y-auto flex-1 pr-1"></div>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- ==================== TAB 4: JIT STUDIO & EXPORT ==================== -->
-    <div id="tab-view-jit" class="hidden space-y-6">
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <!-- Left: Probe Inspector -->
-        <div class="lg:col-span-8 glass-card rounded-2xl p-5 flex flex-col">
-          <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-700/60">
+      <!-- ==================== TAB 3: DISTILLATION LAB ==================== -->
+      <section id="view-distill" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Findings Stream -->
+        <div class="linear-card rounded-xl p-5 flex flex-col max-h-[720px]">
+          <div class="flex items-center justify-between mb-4 pb-3 border-b border-line-subtle">
             <div>
-              <h2 class="text-sm font-bold text-white flex items-center gap-2">
-                <span>🎯</span> JIT 上下文探针仿真器 (Context Synthesizer)
+              <h2 class="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
+                <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                运行时排坑事实流 (Live Findings)
               </h2>
-              <p class="text-xs text-slate-400 mt-0.5">实时模拟 Coding Agent 访问指定文件时系统下发的无感提示词视图 (骨骼 + 血液)</p>
+              <p class="text-[11px] text-slate-500 mt-0.5">Agent 在编码与单测中沉淀的实战避坑事实，支持结晶升华为长期规则</p>
             </div>
+            <button onclick="loadFindings()" class="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded bg-surface-100">刷新</button>
           </div>
-
-          <div class="flex gap-2.5 mb-3">
-            <input id="jit-probe-path" type="text" value="core/adapters/rcon_guard.py" class="flex-1 bg-surface-850 border border-surface-700 rounded-lg px-3 py-2 text-xs code-font text-indigo-300 focus:outline-none focus:border-indigo-500">
-            <button onclick="simulateJitProbe()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-md shadow-indigo-600/20">
-              ⚡ 立即探测
-            </button>
-          </div>
-
-          <div class="relative flex-1">
-            <pre id="jit-preview-box" class="bg-surface-950 border border-surface-700/80 rounded-xl p-4 text-xs text-slate-300 code-font whitespace-pre-wrap max-h-[500px] overflow-y-auto leading-relaxed">正在加载探针...</pre>
+          <div id="distill-findings-list" class="flex-1 overflow-y-auto space-y-3 pr-1">
+            <div class="text-slate-500 py-12 text-center text-xs">暂无待确认事实</div>
           </div>
         </div>
 
-        <!-- Right: Real Static Exporter Box -->
-        <div class="lg:col-span-4 glass-card rounded-2xl p-5 space-y-4">
-          <div>
-            <h2 class="text-sm font-bold text-white flex items-center gap-2">
-              <span>📦</span> 物理工作区导出同步
-            </h2>
-            <p class="text-xs text-slate-400 mt-1">将 CodeNeuro 数据库规则实时编译写回当前项目的静态规则文件</p>
+        <!-- Proposals Inbox -->
+        <div class="linear-card rounded-xl p-5 flex flex-col max-h-[720px]">
+          <div class="flex items-center justify-between mb-4 pb-3 border-b border-line-subtle">
+            <div>
+              <h2 class="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
+                <svg class="w-3.5 h-3.5 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/></svg>
+                架构契约修改提案箱 (Proposals)
+              </h2>
+              <p class="text-[11px] text-slate-500 mt-0.5">Agent 申请升华为长期架构红线的提案，由人类审计审批</p>
+            </div>
+            <button onclick="loadProposals()" class="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded bg-surface-100">刷新</button>
+          </div>
+          <div id="distill-proposals-list" class="flex-1 overflow-y-auto space-y-3 pr-1">
+            <div class="text-slate-500 py-12 text-center text-xs">暂无待审提案</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 4: DEBUG STUDIO ==================== -->
+      <section id="view-debug" class="hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Quality Matrix (7 cols) -->
+          <div class="lg:col-span-7 linear-card rounded-xl p-5 flex flex-col max-h-[720px]">
+            <div class="flex items-center justify-between mb-3 pb-3 border-b border-line-subtle">
+              <div>
+                <h3 class="text-xs font-semibold text-white uppercase tracking-wider">规则精准度与疲劳度透视</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Agent 0-5 分质检评分：精准识别高价值规范与重复疲劳噪音</p>
+              </div>
+              <span id="debug-eval-total" class="text-[11px] code-font text-slate-400 bg-surface-100 px-2 py-0.5 rounded">0 样本</span>
+            </div>
+            <div class="flex-1 overflow-y-auto space-y-2 pr-1" id="debug-rules-quality-list">
+              <div class="text-slate-500 py-12 text-center text-xs">加载规则质量度量中...</div>
+            </div>
           </div>
 
-          <div class="space-y-3 pt-2">
-            <div class="p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 space-y-2">
-              <div class="text-xs font-bold text-slate-200 flex items-center justify-between">
-                <span>Cursor MDC 规则集</span>
-                <span class="badge-long text-[10px] px-2 py-0.5 rounded">.cursor/rules/*.mdc</span>
+          <!-- Issues Work Orders (5 cols) -->
+          <div class="lg:col-span-5 linear-card rounded-xl p-5 flex flex-col max-h-[720px]">
+            <div class="flex items-center justify-between mb-3 pb-3 border-b border-line-subtle">
+              <div>
+                <h3 class="text-xs font-semibold text-white uppercase tracking-wider">Agent 异常申报工单</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">互斥冲突、过时条款与暗礁盲区反馈</p>
               </div>
-              <p class="text-[11px] text-slate-400">将每个作用域编译为独立 MDC 规则并注入 Glob 通配元数据</p>
-              <button onclick="triggerExport('cursor')" class="w-full text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-lg transition">
-                导出到本地 .cursor/rules
-              </button>
+              <span id="debug-issues-badge" class="tag-p0 text-[10px] px-2 py-0.5 rounded font-mono font-bold">0 待处理</span>
             </div>
-
-            <div class="p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 space-y-2">
-              <div class="text-xs font-bold text-slate-200 flex items-center justify-between">
-                <span>Claude / Hermes 统一约束</span>
-                <span class="badge-short text-[10px] px-2 py-0.5 rounded">CLAUDE.md</span>
-              </div>
-              <p class="text-[11px] text-slate-400">汇总所有 P0 架构红线与活跃迭代规约至单体文档</p>
-              <button onclick="triggerExport('claude')" class="w-full text-xs bg-surface-700 hover:bg-surface-600 text-slate-200 font-semibold py-2 rounded-lg transition">
-                导出到本地 CLAUDE.md
-              </button>
-            </div>
-
-            <div id="export-status-box" class="text-xs text-emerald-400 p-3 rounded-lg bg-emerald-950/40 border border-emerald-800/40 hidden">
-              <!-- Export output info -->
+            <div class="flex-1 overflow-y-auto space-y-3 pr-1" id="debug-issues-list">
+              <div class="text-slate-500 py-12 text-center text-xs">暂无待处理工单</div>
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- ==================== TAB 5: JIT STUDIO & EXPORT ==================== -->
+      <section id="view-jit" class="hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <!-- JIT Simulator -->
+          <div class="lg:col-span-8 linear-card rounded-xl p-5 flex flex-col">
+            <div class="flex items-center justify-between mb-3 pb-3 border-b border-line-subtle">
+              <div>
+                <h2 class="text-xs font-semibold text-white uppercase tracking-wider">JIT 上下文探针仿真器</h2>
+                <p class="text-[11px] text-slate-500 mt-0.5">模拟 Coding Agent 访问文件瞬间接收到的无感下发提示词</p>
+              </div>
+            </div>
+
+            <div class="flex gap-2.5 mb-3">
+              <input id="jit-probe-path" type="text" value="core/adapters/rcon_guard.py" class="flex-1 bg-surface-100 border border-line-subtle rounded-lg px-3 py-2 text-xs code-font text-indigo-300 focus:outline-none focus:border-accent">
+              <button onclick="simulateJitProbe()" class="linear-btn-primary px-4 py-2 rounded-lg text-xs font-medium">
+                执行探测
+              </button>
+            </div>
+
+            <pre id="jit-preview-box" class="bg-sidebar border border-line-subtle rounded-lg p-4 text-xs text-slate-300 code-font whitespace-pre-wrap max-h-[480px] overflow-y-auto leading-relaxed">正在准备探针...</pre>
+          </div>
+
+          <!-- Exporter Box -->
+          <div class="lg:col-span-4 linear-card rounded-xl p-5 space-y-4">
+            <div>
+              <h2 class="text-xs font-semibold text-white uppercase tracking-wider">本地静态工作区同步</h2>
+              <p class="text-[11px] text-slate-500 mt-0.5">将 CodeNeuro 数据库规则实时编译写回当前物理工作区</p>
+            </div>
+
+            <div class="space-y-3 pt-1">
+              <div class="p-3.5 rounded-lg bg-surface-50 border border-line-subtle space-y-2">
+                <div class="text-xs font-medium text-slate-200 flex items-center justify-between">
+                  <span>Cursor MDC 规则集</span>
+                  <span class="tag-long text-[9px] px-1.5 py-0.2 rounded font-mono">.cursor/rules</span>
+                </div>
+                <p class="text-[11px] text-slate-400">将每个作用域编译为独立带 Glob 通配的 .mdc 规则文件</p>
+                <button onclick="triggerExport('cursor')" class="w-full linear-btn-primary py-2 rounded-lg text-xs font-medium">
+                  导出到当前项目 .cursor/rules
+                </button>
+              </div>
+
+              <div class="p-3.5 rounded-lg bg-surface-50 border border-line-subtle space-y-2">
+                <div class="text-xs font-medium text-slate-200 flex items-center justify-between">
+                  <span>Claude / Hermes 全局约束</span>
+                  <span class="tag-short text-[9px] px-1.5 py-0.2 rounded font-mono">CLAUDE.md</span>
+                </div>
+                <p class="text-[11px] text-slate-400">汇总所有 P0 架构红线与活跃迭代规约至单体文档</p>
+                <button onclick="triggerExport('claude')" class="w-full linear-btn-secondary py-2 rounded-lg text-xs font-medium">
+                  导出到当前项目 CLAUDE.md
+                </button>
+              </div>
+
+              <div id="export-status-box" class="text-xs text-emerald-400 p-3 rounded-lg bg-emerald-subtle border border-emerald-border hidden"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ==================== COMMAND PALETTE (CMD+K) ==================== -->
+  <div id="modal-cmd-palette" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center pt-24 px-4 hidden">
+    <div class="linear-card-elevated max-w-lg w-full rounded-xl border border-line-medium shadow-2xl overflow-hidden flex flex-col">
+      <div class="p-3 border-b border-line-subtle flex items-center gap-2.5">
+        <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+        <input id="cmd-palette-input" oninput="filterCommandPalette(this.value)" type="text" placeholder="跳转视图、检索规则或文件..." class="flex-1 bg-transparent text-xs text-white focus:outline-none placeholder:text-slate-500">
+        <span class="kbd-shortcut text-[10px] code-font px-1.5 py-0.5 rounded text-slate-400">ESC</span>
+      </div>
+      <div id="cmd-palette-results" class="max-h-72 overflow-y-auto p-2 space-y-1 text-xs">
+        <!-- Results -->
       </div>
     </div>
-
-  </main>
+  </div>
 
   <!-- ==================== MODAL: ADD RULE ==================== -->
-  <div id="modal-add-rule" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="glass-card max-w-lg w-full rounded-2xl p-6 border border-surface-700 shadow-2xl space-y-4">
-      <div class="flex items-center justify-between pb-3 border-b border-surface-700">
-        <h3 class="font-bold text-sm text-white">添加作用域规则</h3>
-        <button onclick="closeAddRuleModal()" class="text-slate-400 hover:text-white">✕</button>
+  <div id="modal-add-rule" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="linear-card-elevated max-w-lg w-full rounded-xl p-5 border border-line-medium shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-line-subtle">
+        <h3 class="font-semibold text-xs text-white uppercase tracking-wider">新建作用域规则</h3>
+        <button onclick="closeAddRuleModal()" class="text-slate-400 hover:text-white text-xs">✕</button>
       </div>
 
       <div class="space-y-3 text-xs">
         <div>
           <label class="block text-slate-400 mb-1">匹配作用域 (Glob 路径，逗号分隔):</label>
-          <input id="input-rule-scopes" type="text" value="core/adapters/**" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 code-font text-indigo-300">
+          <input id="input-rule-scopes" type="text" value="core/adapters/**" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 code-font text-indigo-300 focus:outline-none focus:border-accent">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-slate-400 mb-1">优先级:</label>
-            <select id="input-rule-priority" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 text-slate-200">
+            <select id="input-rule-priority" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 text-slate-200 focus:outline-none">
               <option value="P0">P0 (阻断红线 / 架构契约)</option>
               <option value="P1" selected>P1 (任务必须 / 测例契约)</option>
               <option value="P2">P2 (参考建议 / 风格约定)</option>
@@ -470,7 +568,7 @@
           </div>
           <div>
             <label class="block text-slate-400 mb-1">生命周期:</label>
-            <select id="input-rule-lifecycle" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 text-slate-200">
+            <select id="input-rule-lifecycle" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 text-slate-200 focus:outline-none">
               <option value="long_term">长期骨骼 (Long-Term Invariant)</option>
               <option value="short_term" selected>短期血液 (Active Task)</option>
             </select>
@@ -479,62 +577,77 @@
 
         <div>
           <label class="block text-slate-400 mb-1">规则标题:</label>
-          <input id="input-rule-title" type="text" placeholder="例如：超时强制熔断防护规范" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 text-slate-200">
+          <input id="input-rule-title" type="text" placeholder="例如：超时强制熔断防护规范" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 text-slate-200 focus:outline-none">
         </div>
 
         <div>
           <label class="block text-slate-400 mb-1">具体约束条款 (每行一条):</label>
-          <textarea id="input-rule-points" rows="3" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 text-slate-200 code-font" placeholder="1. 外部网络调用必须包裹超时&#10;2. 禁止吞掉异常导致挂起"></textarea>
+          <textarea id="input-rule-points" rows="3" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 text-slate-200 code-font focus:outline-none" placeholder="1. 外部网络调用必须包裹超时&#10;2. 禁止吞掉异常导致挂起"></textarea>
         </div>
       </div>
 
-      <div class="flex justify-end gap-2 pt-3 border-t border-surface-700">
-        <button onclick="closeAddRuleModal()" class="px-3 py-1.5 rounded-lg text-xs bg-surface-800 text-slate-300">取消</button>
-        <button onclick="submitNewRule()" class="px-4 py-1.5 rounded-lg text-xs bg-indigo-600 hover:bg-indigo-500 font-semibold text-white">确定入库</button>
+      <div class="flex justify-end gap-2 pt-3 border-t border-line-subtle">
+        <button onclick="closeAddRuleModal()" class="px-3 py-1.5 rounded-lg text-xs linear-btn-secondary">取消</button>
+        <button onclick="submitNewRule()" class="px-4 py-1.5 rounded-lg text-xs linear-btn-primary">确定入库</button>
       </div>
     </div>
   </div>
 
   <!-- ==================== MODAL: DECOMPOSE PRD ==================== -->
-  <div id="modal-decompose" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="glass-card max-w-xl w-full rounded-2xl p-6 border border-surface-700 shadow-2xl space-y-4">
-      <div class="flex items-center justify-between pb-3 border-b border-surface-700">
-        <h3 class="font-bold text-sm text-white flex items-center gap-2">
-          <span>⚡</span> PRD 逆向拆解入库
+  <div id="modal-decompose" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="linear-card-elevated max-w-xl w-full rounded-xl p-5 border border-line-medium shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-line-subtle">
+        <h3 class="font-semibold text-xs text-white uppercase tracking-wider flex items-center gap-2">
+          <span>PRD 自动逆向拆解入库</span>
         </h3>
-        <button onclick="closeDecomposeModal()" class="text-slate-400 hover:text-white">✕</button>
+        <button onclick="closeDecomposeModal()" class="text-slate-400 hover:text-white text-xs">✕</button>
       </div>
 
       <div class="space-y-3 text-xs">
         <div>
           <label class="block text-slate-400 mb-1">任务 ID (Task ID):</label>
-          <input id="input-decomp-task" type="text" placeholder="例如 TASK-NEW-FEATURE" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2 code-font text-indigo-300">
+          <input id="input-decomp-task" type="text" placeholder="例如 TASK-NEW-FEATURE" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 code-font text-indigo-300 focus:outline-none">
         </div>
 
         <div>
           <label class="block text-slate-400 mb-1">需求细节 / PRD 内容 (支持包含路径与禁止关键字):</label>
-          <textarea id="input-decomp-text" rows="5" class="w-full bg-surface-850 border border-surface-700 rounded-lg p-2.5 text-slate-200 code-font leading-relaxed" placeholder="# 需求标题&#10;1. 涉及路径 core/adapters/xxx.py&#10;2. 严禁使用未经验证的裸连接 (P0)&#10;3. 支持批量操作与重试"></textarea>
+          <textarea id="input-decomp-text" rows="5" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2.5 text-slate-200 code-font leading-relaxed focus:outline-none" placeholder="# 需求标题&#10;1. 涉及路径 core/adapters/xxx.py&#10;2. 严禁使用未经验证的裸连接 (P0)&#10;3. 支持批量操作与重试"></textarea>
         </div>
       </div>
 
-      <div class="flex justify-end gap-2 pt-3 border-t border-surface-700">
-        <button onclick="closeDecomposeModal()" class="px-3 py-1.5 rounded-lg text-xs bg-surface-800 text-slate-300">取消</button>
-        <button onclick="submitDecomposeForm()" id="btn-submit-decomp" class="px-4 py-1.5 rounded-lg text-xs bg-indigo-600 hover:bg-indigo-500 font-semibold text-white">
+      <div class="flex justify-end gap-2 pt-3 border-t border-line-subtle">
+        <button onclick="closeDecomposeModal()" class="px-3 py-1.5 rounded-lg text-xs linear-btn-secondary">取消</button>
+        <button onclick="submitDecomposeForm()" id="btn-submit-decomp" class="px-4 py-1.5 rounded-lg text-xs linear-btn-primary">
           开始自动逆向拆解
         </button>
       </div>
     </div>
   </div>
 
-  <!-- ==================== JAVASCRIPT APP ==================== -->
+  <!-- ==================== APPLICATION SCRIPT ==================== -->
   <script>
     let currentProjectId = "";
     let projectTreeData = null;
     let selectedNodePath = "";
+    let cachedRules = [];
 
     async function init() {
       await loadProjects();
       await loadGlobalStats();
+      setupKeybindings();
+    }
+
+    function setupKeybindings() {
+      window.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+          e.preventDefault();
+          openCommandPalette();
+        } else if (e.key === "Escape") {
+          closeCommandPalette();
+          closeAddRuleModal();
+          closeDecomposeModal();
+        }
+      });
     }
 
     async function refreshAll() {
@@ -543,20 +656,37 @@
       await loadKanban();
       await loadFindings();
       await loadProposals();
+      await loadDebugStudio();
       await simulateJitProbe();
     }
 
     // --- TAB SWITCHING ---
     function switchTab(tab) {
       ['tree', 'kanban', 'distill', 'debug', 'jit'].forEach(t => {
-        document.getElementById(`tab-view-${t}`).classList.add('hidden');
-        const btn = document.getElementById(`tab-btn-${t}`);
-        btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2";
+        const view = document.getElementById(`view-${t}`);
+        if (view) view.classList.add('hidden');
+        const btn = document.getElementById(`nav-btn-${t}`);
+        if (btn) {
+          btn.className = "w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-surface-hover transition";
+        }
       });
 
-      document.getElementById(`tab-view-${tab}`).classList.remove('hidden');
-      const activeBtn = document.getElementById(`tab-btn-${tab}`);
-      activeBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm flex items-center gap-2";
+      const activeView = document.getElementById(`view-${tab}`);
+      if (activeView) activeView.classList.remove('hidden');
+
+      const activeBtn = document.getElementById(`nav-btn-${tab}`);
+      if (activeBtn) {
+        activeBtn.className = "w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium bg-surface-active text-white border border-line-medium transition";
+      }
+
+      const titles = {
+        tree: '作用域认知拓扑树',
+        kanban: '需求任务生命周期雷达',
+        distill: '记忆提炼中心 (Findings & Proposals)',
+        debug: '质量调优与异常诊断 (RLHF Studio)',
+        jit: 'JIT 探针仿真器 & 静态规则导出'
+      };
+      document.getElementById('header-view-title').textContent = titles[tab] || '';
 
       if (tab === 'kanban') loadKanban();
       if (tab === 'distill') { loadFindings(); loadProposals(); }
@@ -569,15 +699,22 @@
       try {
         const res = await fetch("/api/stats");
         const s = await res.json();
-        document.getElementById("stat-active-rules").textContent = s.active_rules;
-        document.getElementById("stat-p0").textContent = s.p0_count;
-        document.getElementById("stat-p1").textContent = s.p1_count;
-        document.getElementById("stat-long").textContent = s.long_term_count;
-        document.getElementById("stat-hits").textContent = s.total_hits;
-        document.getElementById("stat-findings").textContent = `${s.pending_findings} / ${s.pending_proposals}`;
-        document.getElementById("badge-distill-count").textContent = s.pending_findings + s.pending_proposals;
+        document.getElementById("stat-hud-p0").textContent = s.p0_count;
+        document.getElementById("stat-hud-p1").textContent = s.p1_count;
+        document.getElementById("stat-hud-hits").textContent = s.total_hits;
+        document.getElementById("badge-nav-tree-rules").textContent = s.active_rules;
+        document.getElementById("badge-nav-tasks").textContent = s.active_tasks;
+        document.getElementById("badge-nav-distill").textContent = s.pending_findings + s.pending_proposals;
+
+        const issuesBadge = document.getElementById("badge-nav-issues");
+        if (s.open_issues_count > 0) {
+          issuesBadge.textContent = s.open_issues_count;
+          issuesBadge.classList.remove("hidden");
+        } else {
+          issuesBadge.classList.add("hidden");
+        }
       } catch (e) {
-        console.error("加载统计失败", e);
+        console.error("加载全局度量失败", e);
       }
     }
 
@@ -593,7 +730,7 @@
         list.forEach(p => {
           const opt = document.createElement("option");
           opt.value = p.id;
-          opt.textContent = `${p.name} (${p.id})`;
+          opt.textContent = `${p.name}`;
           sel.appendChild(opt);
         });
 
@@ -608,12 +745,13 @@
       currentProjectId = document.getElementById("project-select").value;
       const res = await fetch(`/api/projects/${currentProjectId}`);
       const p = await res.json();
-      document.getElementById("project-meta-info").textContent = `${p.name} • 根路径: ${p.root_paths.join(", ")}`;
+      document.getElementById("header-project-name").textContent = p.name;
+      document.getElementById("sidebar-repo-indicator").textContent = p.root_paths[0] ? p.root_paths[0].split("/").pop() : p.id;
       refreshAll();
     }
 
     async function openCreateProjectModal() {
-      const name = prompt("请输入新项目名称:");
+      const name = prompt("请输入新工程名称:");
       if (!name) return;
       const rootPath = prompt("请输入本地代码库绝对路径 (可选，用于自动扫描文件树):", "/home/oneadmin/projects/...");
       await fetch("/api/projects", {
@@ -635,7 +773,6 @@
         container.innerHTML = "";
         renderTreeNode(container, projectTreeData, 0);
 
-        // Auto select root if none selected
         if (!selectedNodePath) {
           inspectNode(projectTreeData);
         }
@@ -650,30 +787,34 @@
 
       const row = document.createElement("div");
       const isSelected = selectedNodePath === node.path;
-      row.className = `flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition ${isSelected ? 'bg-indigo-950/80 text-white border border-indigo-700/60' : 'hover:bg-surface-800 text-slate-300'}`;
-      row.style.paddingLeft = `${depth * 14 + 10}px`;
+      row.className = `flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition ${isSelected ? 'bg-surface-active text-white border border-line-medium' : 'hover:bg-surface-hover text-slate-300'}`;
+      row.style.paddingLeft = `${depth * 12 + 8}px`;
 
       const left = document.createElement("div");
       left.className = "flex items-center gap-2 truncate";
 
-      const icon = node.type === "directory" ? "📁" : "📄";
-      left.innerHTML = `<span>${icon}</span><span class="truncate font-medium">${node.name}</span>`;
+      const isDir = node.type === "directory";
+      const iconSvg = isDir
+        ? `<svg class="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>`
+        : `<svg class="w-3.5 h-3.5 text-slate-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+
+      left.innerHTML = `${iconSvg}<span class="truncate font-medium text-xs">${node.name}</span>`;
 
       const right = document.createElement("div");
-      right.className = "flex items-center gap-1 shrink-0 ml-2";
+      right.className = "flex items-center gap-1 shrink-0 ml-2 font-mono text-[10px]";
 
       if (node.p0_count > 0) {
-        right.innerHTML += `<span class="badge-p0 text-[10px] px-1.5 py-0.2 rounded font-bold">P0:${node.p0_count}</span>`;
+        right.innerHTML += `<span class="tag-p0 px-1 py-0.2 rounded font-bold">${node.p0_count}</span>`;
       }
       if (node.p1_count > 0) {
-        right.innerHTML += `<span class="badge-p1 text-[10px] px-1.5 py-0.2 rounded">P1:${node.p1_count}</span>`;
+        right.innerHTML += `<span class="tag-p1 px-1 py-0.2 rounded font-medium">${node.p1_count}</span>`;
       }
 
       row.appendChild(left);
       row.appendChild(right);
 
       const childrenContainer = document.createElement("div");
-      childrenContainer.className = "space-y-1";
+      childrenContainer.className = "space-y-0.5";
 
       row.onclick = () => {
         inspectNode(node);
@@ -702,15 +843,13 @@
       const listContainer = document.getElementById("lens-rules-list");
       listContainer.innerHTML = `<div class="text-xs text-slate-500 py-6 text-center">正在解析匹配作用域规约...</div>`;
 
-      // Fetch all active rules
       const res = await fetch(`/api/projects/${currentProjectId}/rules?status=active`);
-      const allRules = await res.json();
+      cachedRules = await res.json();
 
-      // Check which rules match this node path
       const matchedRules = [];
       const queryPath = node.path || "**";
 
-      for (const r of allRules) {
+      for (const r of cachedRules) {
         let isMatch = false;
         for (const pat of r.scope_patterns) {
           if (pat === "**" || queryPath.startsWith(pat.replace("/**", "")) || pat.includes(node.name) || !node.path) {
@@ -732,21 +871,23 @@
       matchedRules.forEach(r => {
         const card = document.createElement("div");
         const isP0 = r.priority === "P0";
-        card.className = `p-4 rounded-xl border ${isP0 ? 'bg-red-950/20 border-red-900/40' : 'bg-surface-850 border-surface-700'} space-y-2.5`;
+        card.className = `p-3.5 rounded-lg border ${isP0 ? 'bg-ruby/5 border-ruby/20' : 'bg-surface-50 border-line-subtle'} space-y-2`;
         
         card.innerHTML = `
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="${isP0 ? 'badge-p0' : 'badge-p1'} text-[10px] px-2 py-0.5 rounded font-extrabold">${r.priority}</span>
-              <span class="${r.lifecycle === 'long_term' ? 'badge-long' : 'badge-short'} text-[10px] px-2 py-0.5 rounded">${r.lifecycle === 'long_term' ? '🏛️ 长期骨骼' : '⚡ 短期需求'}</span>
-              <span class="font-bold text-xs text-white">${r.title}</span>
+              <span class="${isP0 ? 'tag-p0' : 'tag-p1'} text-[10px] px-1.5 py-0.2 rounded font-bold">${r.priority}</span>
+              <span class="${r.lifecycle === 'long_term' ? 'tag-long' : 'tag-short'} text-[10px] px-1.5 py-0.2 rounded font-medium">${r.lifecycle === 'long_term' ? '长期骨骼' : '短期任务'}</span>
+              <span class="font-medium text-xs text-white">${r.title}</span>
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-[10px] text-slate-400 font-mono">命中: ${r.hit_count || 0}</span>
-              <button onclick="deleteRule('${r.id}')" class="text-slate-500 hover:text-red-400 text-xs">✕</button>
+              <span class="text-[10px] text-slate-500 font-mono">命中: ${r.hit_count || 0}</span>
+              <button onclick="deleteRule('${r.id}')" class="text-slate-500 hover:text-red-400 text-xs transition">✕</button>
             </div>
           </div>
-          <div class="text-[11px] text-slate-400 code-font">作用域: ${r.scope_patterns.map(s => `<span class="bg-surface-800 text-indigo-300 px-1 py-0.5 rounded">${s}</span>`).join(" ")}</div>
+          <div class="text-[11px] text-slate-400 code-font flex flex-wrap gap-1">
+            ${r.scope_patterns.map(s => `<span class="bg-surface-100 text-slate-300 px-1.5 py-0.2 rounded">${s}</span>`).join("")}
+          </div>
           <ul class="text-xs text-slate-300 space-y-1 list-disc list-inside">
             ${r.content_points.map(p => `<li>${p}</li>`).join("")}
           </ul>
@@ -782,17 +923,17 @@
           statusCounts[st]++;
 
           const card = document.createElement("div");
-          card.className = "p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 hover:border-slate-500 transition space-y-2";
+          card.className = "p-3 rounded-lg bg-surface-50 border border-line-subtle hover:border-line-medium transition space-y-2";
           card.innerHTML = `
             <div class="flex items-center justify-between">
-              <span class="code-font text-[10px] font-bold text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/40">${t.id}</span>
+              <span class="code-font text-[10px] font-bold text-indigo-400 bg-surface-100 px-1.5 py-0.2 rounded border border-line-subtle">${t.id}</span>
               <span class="text-[10px] text-slate-500">${new Date(t.created_at).toLocaleDateString()}</span>
             </div>
-            <div class="text-xs font-bold text-white">${t.title}</div>
+            <div class="text-xs font-medium text-white">${t.title}</div>
             <div class="text-[11px] text-slate-400 line-clamp-2">${t.description || "无详细描述"}</div>
-            <div class="pt-2 border-t border-surface-700/50 flex justify-between items-center text-[10px]">
-              <span class="text-slate-500">流转阶段:</span>
-              <select onchange="updateTaskStage('${t.id}', this.value)" class="bg-surface-800 text-slate-300 rounded px-1.5 py-0.5 border border-surface-700">
+            <div class="pt-2 border-t border-line-subtle flex justify-between items-center text-[10px]">
+              <span class="text-slate-500">阶段流转:</span>
+              <select onchange="updateTaskStage('${t.id}', this.value)" class="bg-surface-100 text-slate-300 rounded px-1.5 py-0.5 border border-line-subtle focus:outline-none">
                 <option value="active" ${st === 'active' ? 'selected' : ''}>进行中</option>
                 <option value="testing" ${st === 'testing' ? 'selected' : ''}>测试中</option>
                 <option value="released" ${st === 'released' ? 'selected' : ''}>已发布</option>
@@ -825,23 +966,23 @@
       list.innerHTML = "";
 
       if (!findings || findings.length === 0) {
-        list.innerHTML = `<div class="text-xs text-slate-500 py-12 text-center">暂无待确认的排坑事实</div>`;
+        list.innerHTML = `<div class="text-xs text-slate-500 py-12 text-center">暂无待确认事实</div>`;
         return;
       }
 
       findings.forEach(f => {
         const card = document.createElement("div");
-        card.className = "p-4 rounded-xl bg-surface-850 border border-surface-700 space-y-2.5";
+        card.className = "p-3.5 rounded-lg bg-surface-50 border border-line-subtle space-y-2";
         card.innerHTML = `
           <div class="flex items-center justify-between">
-            <span class="code-font text-xs font-bold text-amber-400">${f.target_path}</span>
-            <span class="badge-p1 text-[10px] px-2 py-0.5 rounded font-mono">${f.suggested_priority}</span>
+            <span class="code-font text-xs font-semibold text-amber-300">${f.target_path}</span>
+            <span class="tag-p1 text-[10px] px-1.5 py-0.2 rounded font-mono">${f.suggested_priority}</span>
           </div>
-          <p class="text-xs text-slate-200 leading-relaxed">${f.finding_text}</p>
-          <div class="pt-2 border-t border-surface-700/50 flex justify-between items-center text-[10px] text-slate-400">
-            <span>任务绑定: ${f.task_id || "全局"}</span>
-            <button onclick="crystallizeFinding('${f.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-1 rounded-lg transition">
-              💎 结晶升华为长期规则
+          <p class="text-xs text-slate-300 leading-relaxed">${f.finding_text}</p>
+          <div class="pt-2 border-t border-line-subtle flex justify-between items-center text-[10px] text-slate-400">
+            <span>任务: ${f.task_id || "全局"}</span>
+            <button onclick="crystallizeFinding('${f.id}')" class="linear-btn-primary text-xs font-medium px-2.5 py-1 rounded-md transition">
+              结晶为长期规则
             </button>
           </div>
         `;
@@ -870,23 +1011,23 @@
       list.innerHTML = "";
 
       if (!props || props.length === 0) {
-        list.innerHTML = `<div class="text-xs text-slate-500 py-12 text-center">暂无待审架构提案</div>`;
+        list.innerHTML = `<div class="text-xs text-slate-500 py-12 text-center">暂无待审提案</div>`;
         return;
       }
 
       props.forEach(p => {
         const card = document.createElement("div");
-        card.className = "p-4 rounded-xl bg-surface-850 border border-surface-700 space-y-2.5";
+        card.className = "p-3.5 rounded-lg bg-surface-50 border border-line-subtle space-y-2";
         card.innerHTML = `
           <div class="flex items-center justify-between">
-            <span class="code-font text-xs font-bold text-indigo-400">${p.target_component}</span>
-            <span class="badge-p0 text-[10px] px-2 py-0.5 rounded font-bold">P0 提案</span>
+            <span class="code-font text-xs font-semibold text-indigo-300">${p.target_component}</span>
+            <span class="tag-p0 text-[10px] px-1.5 py-0.2 rounded font-bold">P0 提案</span>
           </div>
           <div class="text-xs text-slate-200"><span class="text-slate-500">条款:</span> ${p.proposed_contract}</div>
           <div class="text-[11px] text-slate-400 italic"><span class="text-slate-500">论证:</span> ${p.justification}</div>
-          <div class="pt-2 border-t border-surface-700/50 flex justify-end">
-            <button onclick="approveProposal('${p.id}')" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-3 py-1 rounded-lg transition">
-              ✓ 批准为 P0 长期契约
+          <div class="pt-2 border-t border-line-subtle flex justify-end">
+            <button onclick="approveProposal('${p.id}')" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-2.5 py-1 rounded-md transition">
+              批准为 P0 长期契约
             </button>
           </div>
         `;
@@ -901,27 +1042,17 @@
       loadTree();
     }
 
-    // --- TAB: DEBUG STUDIO ---
+    // --- TAB 4: DEBUG STUDIO ---
     async function loadDebugStudio() {
       if (!currentProjectId) return;
       try {
         const res = await fetch(`/api/projects/${currentProjectId}/rule-quality`);
         const data = await res.json();
 
-        document.getElementById("debug-eval-total").textContent = `总评分样本: ${data.total_evaluations}`;
+        document.getElementById("debug-eval-total").textContent = `${data.total_evaluations} 样本`;
         const issuesBadge = document.getElementById("debug-issues-badge");
         issuesBadge.textContent = `${data.open_issues_count} 待处理`;
-        issuesBadge.className = data.open_issues_count > 0 ? "badge-p0 text-[10px] px-2 py-0.5 rounded font-mono pulse-p0" : "badge-long text-[10px] px-2 py-0.5 rounded font-mono";
 
-        const badgeNav = document.getElementById("badge-issues-count");
-        if (data.open_issues_count > 0) {
-          badgeNav.textContent = data.open_issues_count;
-          badgeNav.classList.remove("hidden");
-        } else {
-          badgeNav.classList.add("hidden");
-        }
-
-        // Render Rule Quality Matrix
         const qList = document.getElementById("debug-rules-quality-list");
         qList.innerHTML = "";
 
@@ -933,27 +1064,25 @@
             const isP0 = rq.priority === "P0";
             const stars = rq.avg_score !== null ? `⭐ ${rq.avg_score} / 5.0` : "未评测";
             
-            row.className = "p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 hover:border-slate-500 transition space-y-2";
+            row.className = "p-3 rounded-lg bg-surface-50 border border-line-subtle hover:border-line-medium transition space-y-1.5";
             row.innerHTML = `
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                  <span class="${isP0 ? 'badge-p0' : 'badge-p1'} text-[10px] px-2 py-0.5 rounded font-bold">${rq.priority}</span>
-                  <span class="code-font text-xs font-bold text-white">${rq.title}</span>
+                  <span class="${isP0 ? 'tag-p0' : 'tag-p1'} text-[10px] px-1.5 py-0.2 rounded font-bold">${rq.priority}</span>
+                  <span class="code-font text-xs font-medium text-white">${rq.title}</span>
                   <span class="text-[10px] text-slate-500 font-mono">(${rq.rule_id})</span>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="code-font text-xs font-semibold ${rq.avg_score >= 4 ? 'text-emerald-400' : (rq.avg_score <= 2 && rq.avg_score !== null ? 'text-red-400' : 'text-amber-300')}">${stars}</span>
-                  <span class="text-[10px] text-slate-400 font-mono">(${rq.eval_count}次评分)</span>
+                  <span class="code-font text-xs font-semibold ${rq.avg_score >= 4 ? 'text-emerald-400' : (rq.avg_score <= 2 && rq.avg_score !== null ? 'text-ruby' : 'text-amber-300')}">${stars}</span>
+                  <span class="text-[10px] text-slate-400 font-mono">(${rq.eval_count}次)</span>
                 </div>
               </div>
 
               <div class="flex items-center justify-between text-[11px] text-slate-400">
-                <span class="code-font truncate max-w-xs">作用域: ${rq.scope_patterns.join(", ")}</span>
+                <span class="code-font truncate max-w-xs">${rq.scope_patterns.join(", ")}</span>
                 <div class="flex items-center gap-2">
-                  ${rq.zero_score_count > 0 ? `<span class="text-amber-400 bg-amber-950/60 border border-amber-800/40 px-1.5 py-0.2 rounded text-[10px]">0分疲劳: ${rq.zero_score_count}次</span>` : ""}
-                  ${rq.one_score_count > 0 ? `<span class="text-red-400 bg-red-950/60 border border-red-800/40 px-1.5 py-0.2 rounded text-[10px]">1分噪音: ${rq.one_score_count}次</span>` : ""}
-                  ${rq.fatigue_alert ? `<span class="badge-p1 text-[9px] px-1 rounded animate-pulse">⚠️ 建议折叠</span>` : ""}
-                  ${rq.noise_alert ? `<span class="badge-p0 text-[9px] px-1 rounded animate-pulse">🛑 作用域过大</span>` : ""}
+                  ${rq.zero_score_count > 0 ? `<span class="tag-p1 text-[9px] px-1.5 py-0.2 rounded">0分疲劳: ${rq.zero_score_count}</span>` : ""}
+                  ${rq.one_score_count > 0 ? `<span class="tag-p0 text-[9px] px-1.5 py-0.2 rounded">1分噪音: ${rq.one_score_count}</span>` : ""}
                 </div>
               </div>
             `;
@@ -961,28 +1090,27 @@
           });
         }
 
-        // Render Issue Stream
         const iList = document.getElementById("debug-issues-list");
         iList.innerHTML = "";
 
         if (!data.recent_issues || data.recent_issues.length === 0) {
-          iList.innerHTML = `<div class="text-slate-500 py-12 text-center text-xs">当前无未决的异常工单，架构运行健康</div>`;
+          iList.innerHTML = `<div class="text-slate-500 py-12 text-center text-xs">无待处理的异常工单</div>`;
         } else {
           data.recent_issues.forEach(iss => {
             const card = document.createElement("div");
-            card.className = "p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 space-y-2";
+            card.className = "p-3 rounded-lg bg-surface-50 border border-line-subtle space-y-2";
             card.innerHTML = `
               <div class="flex items-center justify-between">
-                <span class="code-font text-[10px] font-bold text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-800/40">${iss.issue_type}</span>
+                <span class="code-font text-[10px] font-bold text-ruby bg-ruby-subtle px-1.5 py-0.2 rounded border border-ruby-border">${iss.issue_type}</span>
                 <span class="text-[10px] text-slate-500">${new Date(iss.created_at).toLocaleTimeString()}</span>
               </div>
-              <div class="text-xs font-bold text-white">${iss.title}</div>
+              <div class="text-xs font-medium text-white">${iss.title}</div>
               <div class="text-[11px] text-slate-300 leading-relaxed">${iss.description}</div>
-              <div class="code-font text-[10px] text-indigo-300 truncate">文件: ${iss.file_path}</div>
-              ${iss.suggested_action ? `<div class="text-[11px] text-emerald-400 bg-emerald-950/40 p-1.5 rounded border border-emerald-800/40">💡 建议措施: ${iss.suggested_action}</div>` : ""}
-              <div class="pt-2 border-t border-surface-700/50 flex justify-end">
-                <button onclick="resolveAgentIssue('${iss.id}')" class="text-xs bg-surface-700 hover:bg-emerald-600 text-slate-200 hover:text-white font-medium px-2.5 py-1 rounded-lg transition">
-                  ✓ 标记已处理
+              <div class="code-font text-[10px] text-indigo-300 truncate">${iss.file_path}</div>
+              ${iss.suggested_action ? `<div class="text-[11px] text-emerald-400 bg-emerald-subtle p-1.5 rounded border border-emerald-border">建议: ${iss.suggested_action}</div>` : ""}
+              <div class="pt-1.5 border-t border-line-subtle flex justify-end">
+                <button onclick="resolveAgentIssue('${iss.id}')" class="text-xs linear-btn-secondary px-2.5 py-1 rounded-md transition">
+                  标记已处理
                 </button>
               </div>
             `;
@@ -1000,7 +1128,7 @@
       loadGlobalStats();
     }
 
-    // --- TAB 4: JIT & EXPORT ---
+    // --- TAB 5: JIT & EXPORT ---
     async function simulateJitProbe() {
       if (!currentProjectId) return;
       const path = document.getElementById("jit-probe-path").value.trim() || "core/adapters/rcon_guard.py";
@@ -1029,9 +1157,58 @@
           body: JSON.stringify({ format: fmt })
         });
         const d = await res.json();
-        outBox.innerHTML = `✅ 导出成功！<br>• 目录: <span class="code-font">${d.target_dir || d.target_file}</span><br>• 编译规则数: <b>${d.files_count || d.rules_count}</b>`;
+        outBox.innerHTML = `✅ 导出成功！<br>• 目标: <span class="code-font">${d.target_dir || d.target_file}</span><br>• 规则编译数: <b>${d.files_count || d.rules_count}</b>`;
       } catch (e) {
         outBox.innerHTML = `❌ 导出失败: ` + e.message;
+      }
+    }
+
+    // --- COMMAND PALETTE ---
+    function openCommandPalette() {
+      document.getElementById("modal-cmd-palette").classList.remove("hidden");
+      document.getElementById("cmd-palette-input").focus();
+      filterCommandPalette("");
+    }
+
+    function closeCommandPalette() {
+      document.getElementById("modal-cmd-palette").classList.add("hidden");
+    }
+
+    function filterCommandPalette(q) {
+      const container = document.getElementById("cmd-palette-results");
+      container.innerHTML = "";
+      const query = q.toLowerCase();
+
+      const actions = [
+        { label: "跳转至：作用域认知拓扑树", tab: "tree" },
+        { label: "跳转至：需求任务雷达 (Kanban)", tab: "kanban" },
+        { label: "跳转至：记忆提炼中心 (Distillation)", tab: "distill" },
+        { label: "跳转至：质量调优与诊断 (Debug Studio)", tab: "debug" },
+        { label: "跳转至：JIT 探针与物理导出", tab: "jit" },
+      ];
+
+      actions.filter(a => a.label.toLowerCase().includes(query)).forEach(act => {
+        const item = document.createElement("div");
+        item.className = "px-3 py-2 rounded-lg hover:bg-surface-active cursor-pointer text-slate-300 flex items-center justify-between";
+        item.innerHTML = `<span>${act.label}</span><span class="text-[10px] code-font text-slate-500">跳转</span>`;
+        item.onclick = () => {
+          switchTab(act.tab);
+          closeCommandPalette();
+        };
+        container.appendChild(item);
+      });
+
+      if (cachedRules && cachedRules.length > 0) {
+        cachedRules.filter(r => r.title.toLowerCase().includes(query) || r.scope_patterns.some(p => p.toLowerCase().includes(query))).slice(0, 5).forEach(r => {
+          const item = document.createElement("div");
+          item.className = "px-3 py-2 rounded-lg hover:bg-surface-active cursor-pointer text-slate-300 flex items-center justify-between";
+          item.innerHTML = `<span class="truncate">📜 ${r.title} <span class="code-font text-slate-500 text-[10px]">(${r.scope_patterns[0]})</span></span><span class="tag-p0 text-[9px] px-1 rounded">${r.priority}</span>`;
+          item.onclick = () => {
+            switchTab('tree');
+            closeCommandPalette();
+          };
+          container.appendChild(item);
+        });
       }
     }
 
