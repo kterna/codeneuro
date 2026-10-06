@@ -42,6 +42,20 @@ class FindingStatus(str, Enum):
     DISCARDED = "discarded"
 
 
+class IssueType(str, Enum):
+    RULE_CONFLICT = "rule_conflict"     # Conflicting rules (e.g. mutually exclusive requirements)
+    RULE_OUTDATED = "rule_outdated"     # Rule does not match reality of codebase
+    SCOPE_MISSING = "scope_missing"     # Discovered severe gotcha not guarded by any rule
+    NOISE_OVERFLOW = "noise_overflow"   # Context window saturated by too many low-value rules
+    OTHER = "other"
+
+
+class IssueStatus(str, Enum):
+    OPEN = "open"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -73,6 +87,10 @@ class Rule(BaseModel):
     status: RuleStatus = RuleStatus.ACTIVE
     hit_count: int = 0
     last_hit_at: Optional[datetime] = None
+    avg_score: Optional[float] = None
+    eval_count: int = 0
+    zero_score_count: int = 0 # Count of 'already known / redundant' evaluations
+    one_score_count: int = 0  # Count of 'irrelevant noise' evaluations
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -100,6 +118,31 @@ class Proposal(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class RuleEvaluation(BaseModel):
+    id: str
+    project_id: str
+    rule_id: str
+    score: int = Field(ge=0, le=5) # 0=known/redundant, 1=irrelevant, 2=low quality, 3=neutral, 4=helpful, 5=essential
+    file_path: str
+    reason: Optional[str] = ""
+    session_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AgentIssue(BaseModel):
+    id: str
+    project_id: str
+    issue_type: IssueType = IssueType.OTHER
+    title: str
+    description: str
+    file_path: str
+    related_rule_ids: List[str] = Field(default_factory=list)
+    suggested_action: Optional[str] = ""
+    status: IssueStatus = IssueStatus.OPEN
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    resolved_at: Optional[datetime] = None
+
+
 class ContextResolution(BaseModel):
     file_path: str
     project_id: str
@@ -108,3 +151,4 @@ class ContextResolution(BaseModel):
     short_term_rules: List[Rule] = Field(default_factory=list)
     matched_findings: List[Finding] = Field(default_factory=list)
     rendered_markdown: str = ""
+    debug_mode: bool = False

@@ -14,14 +14,18 @@ from codeneuro.decomposer import Decomposer
 from codeneuro.exporter import RuleExporter
 from codeneuro.matcher import ScopeMatcher
 from codeneuro.models import (
+    AgentIssue,
     ContextResolution,
     Finding,
     FindingStatus,
+    IssueStatus,
+    IssueType,
     Lifecycle,
     Priority,
     Project,
     Proposal,
     Rule,
+    RuleEvaluation,
     RuleStatus,
     Task,
     TaskStatus,
@@ -235,6 +239,7 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         project_id: str,
         file_path: str,
         task_id: Optional[str] = None,
+        debug: bool = False,
     ):
         all_rules = storage.list_rules(project_id=project_id, status=RuleStatus.ACTIVE)
         long_term, short_term = matcher.filter_rules(
@@ -259,6 +264,7 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
             long_term_rules=long_term,
             short_term_rules=short_term,
             findings=matched_findings,
+            debug_mode=debug,
         )
 
     # --- Decompose Ingestion ---
@@ -520,6 +526,70 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         saved = storage.create_rule(new_rule)
         cur.execute("UPDATE proposals SET status = 'approved' WHERE id = ?", (proposal_id,))
         return saved
+
+    # --- Debug Mode Evaluation & Issue Endpoints ---
+
+    @app.post("/api/projects/{project_id}/evaluations", response_model=RuleEvaluation)
+    def record_evaluation(project_id: str, req: RuleEvaluation):
+        get_project(project_id)
+        return storage.record_evaluation(req)
+
+    @app.get("/api/projects/{project_id}/evaluations", response_model=List[RuleEvaluation])
+    def list_evaluations(project_id: str, rule_id: Optional[str] = None, limit: int = 100):
+        return storage.list_evaluations(project_id, rule_id=rule_id, limit=limit)
+
+    @app.post("/api/projects/{project_id}/issues", response_model=AgentIssue)
+    def record_issue(project_id: str, req: AgentIssue):
+        get_project(project_id)
+        return storage.record_issue(req)
+
+    @app.get("/api/projects/{project_id}/issues", response_model=List[AgentIssue])
+    def list_issues(project_id: str, status: Optional[IssueStatus] = None):
+        return storage.list_issues(project_id, status)
+
+    @app.post("/api/issues/{issue_id}/resolve")
+    def resolve_issue(issue_id: str, status: IssueStatus = IssueStatus.RESOLVED):
+        success = storage.resolve_issue(issue_id, status)
+        if not success:
+            raise HTTPException(status_code=404, detail="Issue not found")
+        return {"status": "ok", "issue_id": issue_id, "resolved_status": status.value}
+
+    @app.get("/api/projects/{project_id}/rule-quality")
+    def get_rule_quality_metrics(project_id: str):
+        rules = storage.list_rules(project_id=project_id, status=RuleStatus.ACTIVE)
+        evals = storage.list_evaluations(project_id=project_id, limit=500)
+        issues = storage.list_issues(project_id=project_id, status=IssueStatus.OPEN)
+
+        quality_report = []
+        for r in rules:
+            quality_report.append({
+                "rule_id": r.id,
+                "title": r.title,
+                "priority": r.priority.value,
+                "lifecycle": r.lifecycle.value,
+                "scope_patterns": r.scope_patterns,
+                "hit_count": r.hit_count,
+                "eval_count": r.eval_count,
+                "avg_score": r.avg_score,
+                "zero_score_count": r.zero_score_count,
+                "one_score_count": r.one_score_count,
+                "fatigue_alert": r.zero_score_count >= 2,
+                "noise_alert": r.one_score_count >= 2,
+            })
+
+        quality_report.sort(
+            key=lambda x: (x["eval_count"] > 0, x["avg_score"] if x["avg_score"] is not None else 0),
+            reverse=True
+        )
+
+        return {
+            "project_id": project_id,
+            "total_evaluations": len(evals),
+            "open_issues_count": len(issues),
+            "rules_quality": quality_report,
+            "recent_issues": issues[:10],
+            "recent_evaluations": evals[:20],
+        }
 
     # --- Static Exporter API ---
 

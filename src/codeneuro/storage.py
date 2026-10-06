@@ -7,13 +7,17 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from codeneuro.models import (
+    AgentIssue,
     Finding,
     FindingStatus,
+    IssueStatus,
+    IssueType,
     Lifecycle,
     Priority,
     Project,
     Proposal,
     Rule,
+    RuleEvaluation,
     RuleStatus,
     Task,
     TaskStatus,
@@ -68,6 +72,10 @@ class Storage:
             status TEXT NOT NULL,
             hit_count INTEGER DEFAULT 0,
             last_hit_at TEXT,
+            avg_score REAL,
+            eval_count INTEGER DEFAULT 0,
+            zero_score_count INTEGER DEFAULT 0,
+            one_score_count INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -95,10 +103,49 @@ class Storage:
             created_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS rule_evaluations (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            rule_id TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+            score INTEGER NOT NULL,
+            file_path TEXT NOT NULL,
+            reason TEXT,
+            session_id TEXT,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_issues (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            issue_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            related_rule_ids TEXT NOT NULL, -- JSON list
+            suggested_action TEXT,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            resolved_at TEXT
+        );
+
         CREATE INDEX IF NOT EXISTS idx_rules_project ON rules(project_id, status);
         CREATE INDEX IF NOT EXISTS idx_rules_task ON rules(task_id);
         CREATE INDEX IF NOT EXISTS idx_findings_project ON findings(project_id, status);
+        CREATE INDEX IF NOT EXISTS idx_evals_rule ON rule_evaluations(rule_id);
+        CREATE INDEX IF NOT EXISTS idx_issues_project ON agent_issues(project_id, status);
         """)
+
+        # Migration columns if rules table existed previously
+        for col_def in [
+            ("avg_score", "REAL"),
+            ("eval_count", "INTEGER DEFAULT 0"),
+            ("zero_score_count", "INTEGER DEFAULT 0"),
+            ("one_score_count", "INTEGER DEFAULT 0")
+        ]:
+            try:
+                cur.execute(f"ALTER TABLE rules ADD COLUMN {col_def[0]} {col_def[1]}")
+            except sqlite3.OperationalError:
+                pass
 
     # --- Project Operations ---
 
@@ -218,8 +265,9 @@ class Storage:
         cur.execute(
             """INSERT INTO rules (id, project_id, task_id, scope_patterns, priority,
                                   lifecycle, title, content_points, created_by, status,
-                                  hit_count, last_hit_at, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                  hit_count, last_hit_at, avg_score, eval_count,
+                                  zero_score_count, one_score_count, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 rule.id,
                 rule.project_id,
@@ -233,6 +281,10 @@ class Storage:
                 rule.status.value,
                 rule.hit_count,
                 rule.last_hit_at.isoformat() if rule.last_hit_at else None,
+                rule.avg_score,
+                rule.eval_count,
+                rule.zero_score_count,
+                rule.one_score_count,
                 rule.created_at.isoformat(),
                 rule.updated_at.isoformat(),
             ),
@@ -291,6 +343,151 @@ class Storage:
             f"UPDATE rules SET hit_count = hit_count + 1, last_hit_at = ? WHERE id IN ({placeholders})",
             [now_str] + rule_ids,
         )
+
+    # --- Rule Evaluation Operations (Debug Mode) ---
+
+    def record_evaluation(self, eval_item: RuleEvaluation) -> RuleEvaluation:
+        cur = self.conn.cursor()
+        cur.execute(
+            """INSERT INTO rule_evaluations (id, project_id, rule_id, score, file_path, reason, session_id, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                eval_item.id,
+                eval_item.project_id,
+                eval_item.rule_id,
+                eval_item.score,
+                eval_item.file_path,
+                eval_item.reason,
+                eval_item.session_id,
+                eval_item.created_at.isoformat(),
+            ),
+        )
+
+        # Update aggregated stats on the rule
+        cur.execute(
+            """SELECT AVG(score), COUNT(*),
+                      SUM(CASE WHEN score = 0 THEN 1 ELSE 0 END),
+                      SUM(CASE WHEN score = 1 THEN 1 ELSE 0 END)
+               FROM rule_evaluations WHERE rule_id = ?""",
+            (eval_item.rule_id,),
+        )
+        row = cur.fetchone()
+        avg_score = row[0]
+        total_evals = row[1]
+        zeros = row[2]
+        ones = row[3]
+
+        cur.execute(
+            """UPDATE rules SET avg_score = ?, eval_count = ?, zero_score_count = ?, one_score_count = ?, updated_at = ?
+               WHERE id = ?""",
+            (
+                round(avg_score, 2) if avg_score is not None else None,
+                total_evals or 0,
+                zeros or 0,
+                ones or 0,
+                datetime.utcnow().isoformat(),
+                eval_item.rule_id,
+            ),
+        )
+        return eval_item
+
+    def list_evaluations(
+        self, project_id: str, rule_id: Optional[str] = None, limit: int = 100
+    ) -> List[RuleEvaluation]:
+        query = "SELECT * FROM rule_evaluations WHERE project_id = ?"
+        params: List[Any] = [project_id]
+        if rule_id:
+            query += " AND rule_id = ?"
+            params.append(rule_id)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        cur = self.conn.cursor()
+        cur.execute(query, params)
+        res = []
+        for row in cur.fetchall():
+            res.append(
+                RuleEvaluation(
+                    id=row["id"],
+                    project_id=row["project_id"],
+                    rule_id=row["rule_id"],
+                    score=row["score"],
+                    file_path=row["file_path"],
+                    reason=row["reason"],
+                    session_id=row["session_id"],
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                )
+            )
+        return res
+
+    # --- Agent Issue Operations (Debug Mode) ---
+
+    def record_issue(self, issue: AgentIssue) -> AgentIssue:
+        cur = self.conn.cursor()
+        cur.execute(
+            """INSERT INTO agent_issues (id, project_id, issue_type, title, description,
+                                        file_path, related_rule_ids, suggested_action,
+                                        status, created_at, resolved_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                issue.id,
+                issue.project_id,
+                issue.issue_type.value,
+                issue.title,
+                issue.description,
+                issue.file_path,
+                json.dumps(issue.related_rule_ids),
+                issue.suggested_action,
+                issue.status.value,
+                issue.created_at.isoformat(),
+                issue.resolved_at.isoformat() if issue.resolved_at else None,
+            ),
+        )
+        return issue
+
+    def list_issues(
+        self, project_id: str, status: Optional[IssueStatus] = None
+    ) -> List[AgentIssue]:
+        query = "SELECT * FROM agent_issues WHERE project_id = ?"
+        params: List[Any] = [project_id]
+        if status:
+            query += " AND status = ?"
+            params.append(status.value)
+        query += " ORDER BY created_at DESC"
+
+        cur = self.conn.cursor()
+        cur.execute(query, params)
+        res = []
+        for row in cur.fetchall():
+            res.append(
+                AgentIssue(
+                    id=row["id"],
+                    project_id=row["project_id"],
+                    issue_type=IssueType(row["issue_type"]),
+                    title=row["title"],
+                    description=row["description"],
+                    file_path=row["file_path"],
+                    related_rule_ids=json.loads(row["related_rule_ids"]),
+                    suggested_action=row["suggested_action"],
+                    status=IssueStatus(row["status"]),
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                    resolved_at=(
+                        datetime.fromisoformat(row["resolved_at"])
+                        if row["resolved_at"]
+                        else None
+                    ),
+                )
+            )
+        return res
+
+    def resolve_issue(self, issue_id: str, status: IssueStatus = IssueStatus.RESOLVED) -> bool:
+        cur = self.conn.cursor()
+        now_str = datetime.utcnow().isoformat()
+        cur.execute(
+            "UPDATE agent_issues SET status = ?, resolved_at = ? WHERE id = ?",
+            (status.value, now_str, issue_id),
+        )
+        return cur.rowcount > 0
 
     # --- Finding Operations ---
 
@@ -398,6 +595,7 @@ class Storage:
         return res
 
     def _row_to_rule(self, row: sqlite3.Row) -> Rule:
+        row_keys = row.keys()
         return Rule(
             id=row["id"],
             project_id=row["project_id"],
@@ -415,6 +613,10 @@ class Storage:
                 if row["last_hit_at"]
                 else None
             ),
+            avg_score=row["avg_score"] if "avg_score" in row_keys else None,
+            eval_count=row["eval_count"] if "eval_count" in row_keys else 0,
+            zero_score_count=row["zero_score_count"] if "zero_score_count" in row_keys else 0,
+            one_score_count=row["one_score_count"] if "one_score_count" in row_keys else 0,
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )

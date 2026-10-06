@@ -25,10 +25,12 @@ def main():
     serve_parser.add_argument("--host", default="0.0.0.0", help="Binding host (default: 0.0.0.0)")
     serve_parser.add_argument("--port", type=int, default=8800, help="Port to listen on (default: 8800)")
     serve_parser.add_argument("--db", default="codeneuro.db", help="SQLite database path")
+    serve_parser.add_argument("--debug", action="store_true", help="Enable CodeNeuro Debug mode (feedback & issue tools)")
 
     # 2. MCP command (Stdio mode for agent clients)
     mcp_parser = subparsers.add_parser("mcp", help="Run MCP Server over stdio")
     mcp_parser.add_argument("--db", default="codeneuro.db", help="SQLite database path")
+    mcp_parser.add_argument("--debug", action="store_true", help="Enable CodeNeuro Debug mode (feedback & issue tools)")
 
     # 3. Export command (Generate .cursor/rules or CLAUDE.md)
     export_parser = subparsers.add_parser("export", help="Export rules to static .cursor/rules/*.mdc or CLAUDE.md")
@@ -43,12 +45,15 @@ def main():
     if args.command == "serve":
         storage = Storage(args.db)
         app = create_app(storage=storage)
-        print(f"🚀 CodeNeuro WebUI & API running at http://{args.host}:{args.port}")
+        debug_flag = args.debug or os.getenv("CODETOKEN_DEBUG", "0") in ["1", "true", "True"]
+        status = " [DEBUG MODE ACTIVE]" if debug_flag else ""
+        print(f"🚀 CodeNeuro WebUI & API running at http://{args.host}:{args.port}{status}")
         uvicorn.run(app, host=args.host, port=args.port)
     elif args.command == "mcp":
         import asyncio
         storage = Storage(args.db)
-        server = create_mcp_server(storage)
+        debug_flag = args.debug or os.getenv("CODETOKEN_DEBUG", "0") in ["1", "true", "True"]
+        server = create_mcp_server(storage, debug_mode=debug_flag)
         if hasattr(server, "run_stdio_async"):
             asyncio.run(server.run_stdio_async())
         else:

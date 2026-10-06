@@ -152,6 +152,10 @@
           <span>💎</span> 认知提炼实验室
           <span id="badge-distill-count" class="bg-purple-900/80 text-purple-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
         </button>
+        <button onclick="switchTab('debug')" id="tab-btn-debug" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2">
+          <span>🛠️</span> 质量调优与诊断 (Debug Studio)
+          <span id="badge-issues-count" class="bg-red-900/80 text-red-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold hidden">0</span>
+        </button>
         <button onclick="switchTab('jit')" id="tab-btn-jit" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2">
           <span>🎯</span> JIT 实时探针 & 导出
         </button>
@@ -309,6 +313,66 @@
 
         <div id="distill-proposals-list" class="flex-1 overflow-y-auto space-y-3 pr-1">
           <div class="text-slate-500 py-12 text-center text-xs">暂无待审提案</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB: DEBUG STUDIO (QUALITY & ISSUE REFLECTION) ==================== -->
+    <div id="tab-view-debug" class="hidden space-y-6">
+      <!-- Quality Analytics Top Bar -->
+      <div class="glass-card rounded-2xl p-5 border border-indigo-900/50 bg-gradient-to-r from-surface-900 via-surface-900 to-purple-950/30">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>🛠️</span> CodeNeuro Debug 模式诊断控制台 (RLHF Quality Studio)
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">
+              通过 <code class="code-font text-indigo-300">codeneuro_rate_rule</code> 收集 Agent 规则评分反馈，
+              通过 <code class="code-font text-indigo-300">codeneuro_report_issue</code> 捕获架构冲突与知识盲区，形成治理自愈闭环。
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-400 font-mono" id="debug-eval-total">总评分样本: 0</span>
+            <button onclick="loadDebugStudio()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-3.5 py-2 rounded-xl transition">
+              刷新诊断数据
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Columns: Rule Quality Table (Left) + Issue Work Orders (Right) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left: Rule Quality & Anti-Fatigue Matrix (7 cols) -->
+        <div class="lg:col-span-7 glass-card rounded-2xl p-5 flex flex-col max-h-[720px]">
+          <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-700/60">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>📊</span> 规则有效性与疲劳度透视 (Rule Ratings & Fatigue Matrix)
+              </h3>
+              <p class="text-[11px] text-slate-400 mt-0.5">识别 5分核心规则与 0分认知疲劳、1分不相关噪音</p>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-y-auto space-y-2.5 pr-1" id="debug-rules-quality-list">
+            <div class="text-slate-500 py-12 text-center text-xs">加载规则质量度量中...</div>
+          </div>
+        </div>
+
+        <!-- Right: Agent Active Issues & Reflection Stream (5 cols) -->
+        <div class="lg:col-span-5 glass-card rounded-2xl p-5 flex flex-col max-h-[720px]">
+          <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-700/60">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>🚨</span> Agent 架构与规则异常反馈流 (Active Issues)
+              </h3>
+              <p class="text-[11px] text-slate-400 mt-0.5">互斥冲突、过时规则与知识盲区申报工单</p>
+            </div>
+            <span id="debug-issues-badge" class="badge-p0 text-[10px] px-2 py-0.5 rounded font-mono">0 待处理</span>
+          </div>
+
+          <div class="flex-1 overflow-y-auto space-y-3 pr-1" id="debug-issues-list">
+            <div class="text-slate-500 py-12 text-center text-xs">暂无待处理的异常反馈工单</div>
+          </div>
         </div>
       </div>
     </div>
@@ -484,7 +548,7 @@
 
     // --- TAB SWITCHING ---
     function switchTab(tab) {
-      ['tree', 'kanban', 'distill', 'jit'].forEach(t => {
+      ['tree', 'kanban', 'distill', 'debug', 'jit'].forEach(t => {
         document.getElementById(`tab-view-${t}`).classList.add('hidden');
         const btn = document.getElementById(`tab-btn-${t}`);
         btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-surface-800 flex items-center gap-2";
@@ -496,6 +560,7 @@
 
       if (tab === 'kanban') loadKanban();
       if (tab === 'distill') { loadFindings(); loadProposals(); }
+      if (tab === 'debug') loadDebugStudio();
       if (tab === 'jit') simulateJitProbe();
     }
 
@@ -834,6 +899,105 @@
       loadProposals();
       loadGlobalStats();
       loadTree();
+    }
+
+    // --- TAB: DEBUG STUDIO ---
+    async function loadDebugStudio() {
+      if (!currentProjectId) return;
+      try {
+        const res = await fetch(`/api/projects/${currentProjectId}/rule-quality`);
+        const data = await res.json();
+
+        document.getElementById("debug-eval-total").textContent = `总评分样本: ${data.total_evaluations}`;
+        const issuesBadge = document.getElementById("debug-issues-badge");
+        issuesBadge.textContent = `${data.open_issues_count} 待处理`;
+        issuesBadge.className = data.open_issues_count > 0 ? "badge-p0 text-[10px] px-2 py-0.5 rounded font-mono pulse-p0" : "badge-long text-[10px] px-2 py-0.5 rounded font-mono";
+
+        const badgeNav = document.getElementById("badge-issues-count");
+        if (data.open_issues_count > 0) {
+          badgeNav.textContent = data.open_issues_count;
+          badgeNav.classList.remove("hidden");
+        } else {
+          badgeNav.classList.add("hidden");
+        }
+
+        // Render Rule Quality Matrix
+        const qList = document.getElementById("debug-rules-quality-list");
+        qList.innerHTML = "";
+
+        if (!data.rules_quality || data.rules_quality.length === 0) {
+          qList.innerHTML = `<div class="text-slate-500 py-12 text-center text-xs">当前项目暂无活跃规则</div>`;
+        } else {
+          data.rules_quality.forEach(rq => {
+            const row = document.createElement("div");
+            const isP0 = rq.priority === "P0";
+            const stars = rq.avg_score !== null ? `⭐ ${rq.avg_score} / 5.0` : "未评测";
+            
+            row.className = "p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 hover:border-slate-500 transition space-y-2";
+            row.innerHTML = `
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="${isP0 ? 'badge-p0' : 'badge-p1'} text-[10px] px-2 py-0.5 rounded font-bold">${rq.priority}</span>
+                  <span class="code-font text-xs font-bold text-white">${rq.title}</span>
+                  <span class="text-[10px] text-slate-500 font-mono">(${rq.rule_id})</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="code-font text-xs font-semibold ${rq.avg_score >= 4 ? 'text-emerald-400' : (rq.avg_score <= 2 && rq.avg_score !== null ? 'text-red-400' : 'text-amber-300')}">${stars}</span>
+                  <span class="text-[10px] text-slate-400 font-mono">(${rq.eval_count}次评分)</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-[11px] text-slate-400">
+                <span class="code-font truncate max-w-xs">作用域: ${rq.scope_patterns.join(", ")}</span>
+                <div class="flex items-center gap-2">
+                  ${rq.zero_score_count > 0 ? `<span class="text-amber-400 bg-amber-950/60 border border-amber-800/40 px-1.5 py-0.2 rounded text-[10px]">0分疲劳: ${rq.zero_score_count}次</span>` : ""}
+                  ${rq.one_score_count > 0 ? `<span class="text-red-400 bg-red-950/60 border border-red-800/40 px-1.5 py-0.2 rounded text-[10px]">1分噪音: ${rq.one_score_count}次</span>` : ""}
+                  ${rq.fatigue_alert ? `<span class="badge-p1 text-[9px] px-1 rounded animate-pulse">⚠️ 建议折叠</span>` : ""}
+                  ${rq.noise_alert ? `<span class="badge-p0 text-[9px] px-1 rounded animate-pulse">🛑 作用域过大</span>` : ""}
+                </div>
+              </div>
+            `;
+            qList.appendChild(row);
+          });
+        }
+
+        // Render Issue Stream
+        const iList = document.getElementById("debug-issues-list");
+        iList.innerHTML = "";
+
+        if (!data.recent_issues || data.recent_issues.length === 0) {
+          iList.innerHTML = `<div class="text-slate-500 py-12 text-center text-xs">当前无未决的异常工单，架构运行健康</div>`;
+        } else {
+          data.recent_issues.forEach(iss => {
+            const card = document.createElement("div");
+            card.className = "p-3.5 rounded-xl bg-surface-850 border border-surface-700/80 space-y-2";
+            card.innerHTML = `
+              <div class="flex items-center justify-between">
+                <span class="code-font text-[10px] font-bold text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-800/40">${iss.issue_type}</span>
+                <span class="text-[10px] text-slate-500">${new Date(iss.created_at).toLocaleTimeString()}</span>
+              </div>
+              <div class="text-xs font-bold text-white">${iss.title}</div>
+              <div class="text-[11px] text-slate-300 leading-relaxed">${iss.description}</div>
+              <div class="code-font text-[10px] text-indigo-300 truncate">文件: ${iss.file_path}</div>
+              ${iss.suggested_action ? `<div class="text-[11px] text-emerald-400 bg-emerald-950/40 p-1.5 rounded border border-emerald-800/40">💡 建议措施: ${iss.suggested_action}</div>` : ""}
+              <div class="pt-2 border-t border-surface-700/50 flex justify-end">
+                <button onclick="resolveAgentIssue('${iss.id}')" class="text-xs bg-surface-700 hover:bg-emerald-600 text-slate-200 hover:text-white font-medium px-2.5 py-1 rounded-lg transition">
+                  ✓ 标记已处理
+                </button>
+              </div>
+            `;
+            iList.appendChild(card);
+          });
+        }
+      } catch (e) {
+        console.error("加载 Debug Studio 失败", e);
+      }
+    }
+
+    async function resolveAgentIssue(issueId) {
+      await fetch(`/api/issues/${issueId}/resolve`, { method: "POST" });
+      loadDebugStudio();
+      loadGlobalStats();
     }
 
     // --- TAB 4: JIT & EXPORT ---
