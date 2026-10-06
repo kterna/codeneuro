@@ -1,7 +1,8 @@
-"""SQLite storage implementation with WAL mode and robust schema initialization."""
+"""SQLite storage implementation with WAL mode, rule versioning, worktree fleet, and health engine."""
 
 import json
 import sqlite3
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -10,6 +11,7 @@ from codeneuro.models import (
     AgentIssue,
     Finding,
     FindingStatus,
+    HealthCheckReport,
     IssueStatus,
     IssueType,
     Lifecycle,
@@ -17,10 +19,13 @@ from codeneuro.models import (
     Project,
     Proposal,
     Rule,
+    RuleConflict,
     RuleEvaluation,
     RuleStatus,
+    RuleVersion,
     Task,
     TaskStatus,
+    WorktreeInstance,
 )
 
 
@@ -70,6 +75,7 @@ class Storage:
             content_points TEXT NOT NULL, -- JSON list
             created_by TEXT NOT NULL,
             status TEXT NOT NULL,
+            version INTEGER DEFAULT 1,
             hit_count INTEGER DEFAULT 0,
             last_hit_at TEXT,
             avg_score REAL,
@@ -78,6 +84,35 @@ class Storage:
             one_score_count INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS rule_versions (
+            id TEXT PRIMARY KEY,
+            rule_id TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            version_number INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            scope_patterns TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            lifecycle TEXT NOT NULL,
+            content_points TEXT NOT NULL,
+            change_summary TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS worktree_instances (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            machine_name TEXT NOT NULL,
+            worktree_path TEXT NOT NULL,
+            git_branch TEXT NOT NULL,
+            git_commit TEXT,
+            active_task_id TEXT,
+            current_file TEXT,
+            agent_client TEXT NOT NULL,
+            last_heartbeat TEXT NOT NULL,
+            is_online INTEGER DEFAULT 1
         );
 
         CREATE TABLE IF NOT EXISTS findings (
@@ -128,15 +163,27 @@ class Storage:
             resolved_at TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS telemetry_events (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            event_type TEXT NOT NULL, -- jit_hit | finding | issue | rule_edit | heartbeat
+            summary TEXT NOT NULL,
+            details TEXT,
+            created_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_rules_project ON rules(project_id, status);
         CREATE INDEX IF NOT EXISTS idx_rules_task ON rules(task_id);
         CREATE INDEX IF NOT EXISTS idx_findings_project ON findings(project_id, status);
         CREATE INDEX IF NOT EXISTS idx_evals_rule ON rule_evaluations(rule_id);
         CREATE INDEX IF NOT EXISTS idx_issues_project ON agent_issues(project_id, status);
+        CREATE INDEX IF NOT EXISTS idx_worktrees_proj ON worktree_instances(project_id);
+        CREATE INDEX IF NOT EXISTS idx_events_proj ON telemetry_events(project_id, created_at DESC);
         """)
 
-        # Migration columns if rules table existed previously
+        # Alter migration for existing tables if columns missing
         for col_def in [
+            ("version", "INTEGER DEFAULT 1"),
             ("avg_score", "REAL"),
             ("eval_count", "INTEGER DEFAULT 0"),
             ("zero_score_count", "INTEGER DEFAULT 0"),
@@ -258,16 +305,17 @@ class Storage:
         )
         return cur.rowcount > 0
 
-    # --- Rule Operations ---
+    # --- Rule Operations with Full Versioning & Snapshots ---
 
     def create_rule(self, rule: Rule) -> Rule:
         cur = self.conn.cursor()
+        now_str = rule.created_at.isoformat()
         cur.execute(
             """INSERT INTO rules (id, project_id, task_id, scope_patterns, priority,
                                   lifecycle, title, content_points, created_by, status,
-                                  hit_count, last_hit_at, avg_score, eval_count,
+                                  version, hit_count, last_hit_at, avg_score, eval_count,
                                   zero_score_count, one_score_count, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 rule.id,
                 rule.project_id,
@@ -279,17 +327,144 @@ class Storage:
                 json.dumps(rule.content_points),
                 rule.created_by,
                 rule.status.value,
+                rule.version,
                 rule.hit_count,
                 rule.last_hit_at.isoformat() if rule.last_hit_at else None,
                 rule.avg_score,
                 rule.eval_count,
                 rule.zero_score_count,
                 rule.one_score_count,
-                rule.created_at.isoformat(),
+                now_str,
                 rule.updated_at.isoformat(),
             ),
         )
+
+        # Snapshot version 1
+        ver_id = f"ver_{uuid.uuid4().hex[:8]}"
+        cur.execute(
+            """INSERT INTO rule_versions (id, rule_id, project_id, version_number, title,
+                                          scope_patterns, priority, lifecycle, content_points,
+                                          change_summary, created_by, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                ver_id,
+                rule.id,
+                rule.project_id,
+                rule.version,
+                rule.title,
+                json.dumps(rule.scope_patterns),
+                rule.priority.value,
+                rule.lifecycle.value,
+                json.dumps(rule.content_points),
+                "初始创建 (Initial commit)",
+                rule.created_by,
+                now_str,
+            ),
+        )
         return rule
+
+    def update_rule_content(
+        self,
+        rule_id: str,
+        title: str,
+        content_points: List[str],
+        scope_patterns: List[str],
+        priority: Priority,
+        change_summary: str = "在线更新",
+        operator: str = "user"
+    ) -> Optional[Rule]:
+        rule = self.get_rule(rule_id)
+        if not rule:
+            return None
+
+        new_version = (rule.version or 1) + 1
+        now_str = datetime.utcnow().isoformat()
+        cur = self.conn.cursor()
+
+        cur.execute(
+            """UPDATE rules SET title = ?, content_points = ?, scope_patterns = ?, priority = ?,
+                                version = ?, updated_at = ? WHERE id = ?""",
+            (
+                title,
+                json.dumps(content_points),
+                json.dumps(scope_patterns),
+                priority.value,
+                new_version,
+                now_str,
+                rule_id,
+            ),
+        )
+
+        # Record version snapshot
+        ver_id = f"ver_{uuid.uuid4().hex[:8]}"
+        cur.execute(
+            """INSERT INTO rule_versions (id, rule_id, project_id, version_number, title,
+                                          scope_patterns, priority, lifecycle, content_points,
+                                          change_summary, created_by, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                ver_id,
+                rule.id,
+                rule.project_id,
+                new_version,
+                title,
+                json.dumps(scope_patterns),
+                priority.value,
+                rule.lifecycle.value,
+                json.dumps(content_points),
+                change_summary,
+                operator,
+                now_str,
+            ),
+        )
+        return self.get_rule(rule_id)
+
+    def rollback_rule_version(self, rule_id: str, target_version: int, operator: str = "user") -> Optional[Rule]:
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT * FROM rule_versions WHERE rule_id = ? AND version_number = ?",
+            (rule_id, target_version),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+
+        # Rollback
+        return self.update_rule_content(
+            rule_id=rule_id,
+            title=row["title"],
+            content_points=json.loads(row["content_points"]),
+            scope_patterns=json.loads(row["scope_patterns"]),
+            priority=Priority(row["priority"]),
+            change_summary=f"回滚至版本 v{target_version}",
+            operator=operator,
+        )
+
+    def list_rule_versions(self, rule_id: str) -> List[RuleVersion]:
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT * FROM rule_versions WHERE rule_id = ? ORDER BY version_number DESC",
+            (rule_id,),
+        )
+        res = []
+        for r in cur.fetchall():
+            res.append(
+                RuleVersion(
+                    id=r["id"],
+                    rule_id=r["rule_id"],
+                    project_id=r["project_id"],
+                    version_number=r["version_number"],
+                    title=r["title"],
+                    scope_patterns=json.loads(r["scope_patterns"]),
+                    priority=Priority(r["priority"]),
+                    lifecycle=Lifecycle(r["lifecycle"]),
+                    content_points=json.loads(r["content_points"]),
+                    change_summary=r["change_summary"],
+                    created_by=r["created_by"],
+                    created_at=datetime.fromisoformat(r["created_at"]),
+                )
+            )
+        return res
 
     def get_rule(self, rule_id: str) -> Optional[Rule]:
         cur = self.conn.cursor()
@@ -344,6 +519,181 @@ class Storage:
             [now_str] + rule_ids,
         )
 
+    # --- Worktree Fleet Management ---
+
+    def register_worktree_heartbeat(self, wt: WorktreeInstance) -> WorktreeInstance:
+        cur = self.conn.cursor()
+        now_str = datetime.utcnow().isoformat()
+        cur.execute(
+            """INSERT INTO worktree_instances (id, project_id, machine_name, worktree_path,
+                                               git_branch, git_commit, active_task_id,
+                                               current_file, agent_client, last_heartbeat, is_online)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+               ON CONFLICT(id) DO UPDATE SET
+                   git_branch = excluded.git_branch,
+                   git_commit = excluded.git_commit,
+                   active_task_id = excluded.active_task_id,
+                   current_file = excluded.current_file,
+                   agent_client = excluded.agent_client,
+                   last_heartbeat = excluded.last_heartbeat,
+                   is_online = 1""",
+            (
+                wt.id,
+                wt.project_id,
+                wt.machine_name,
+                wt.worktree_path,
+                wt.git_branch,
+                wt.git_commit,
+                wt.active_task_id,
+                wt.current_file,
+                wt.agent_client,
+                now_str,
+            ),
+        )
+        return wt
+
+    def list_worktrees(self, project_id: str) -> List[WorktreeInstance]:
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT * FROM worktree_instances WHERE project_id = ? ORDER BY last_heartbeat DESC",
+            (project_id,),
+        )
+        res = []
+        for r in cur.fetchall():
+            res.append(
+                WorktreeInstance(
+                    id=r["id"],
+                    project_id=r["project_id"],
+                    machine_name=r["machine_name"],
+                    worktree_path=r["worktree_path"],
+                    git_branch=r["git_branch"],
+                    git_commit=r["git_commit"],
+                    active_task_id=r["active_task_id"],
+                    current_file=r["current_file"],
+                    agent_client=r["agent_client"],
+                    last_heartbeat=datetime.fromisoformat(r["last_heartbeat"]),
+                    is_online=bool(r["is_online"]),
+                )
+            )
+        return res
+
+    def bind_worktree_task(self, worktree_id: str, task_id: Optional[str]) -> bool:
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE worktree_instances SET active_task_id = ? WHERE id = ?",
+            (task_id, worktree_id),
+        )
+        return cur.rowcount > 0
+
+    # --- Telemetry Events ---
+
+    def log_telemetry_event(self, project_id: str, event_type: str, summary: str, details: Optional[Dict[str, Any]] = None):
+        cur = self.conn.cursor()
+        eid = f"evt_{uuid.uuid4().hex[:8]}"
+        cur.execute(
+            """INSERT INTO telemetry_events (id, project_id, event_type, summary, details, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                eid,
+                project_id,
+                event_type,
+                summary,
+                json.dumps(details or {}),
+                datetime.utcnow().isoformat(),
+            ),
+        )
+
+    def list_telemetry_events(self, project_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT * FROM telemetry_events WHERE project_id = ? ORDER BY created_at DESC LIMIT ?",
+            (project_id, limit),
+        )
+        res = []
+        for r in cur.fetchall():
+            res.append({
+                "id": r["id"],
+                "project_id": r["project_id"],
+                "event_type": r["event_type"],
+                "summary": r["summary"],
+                "details": json.loads(r["details"]) if r["details"] else {},
+                "created_at": r["created_at"],
+            })
+        return res
+
+    # --- Intelligent Health Check & Conflict Detection Engine ---
+
+    def check_project_health(self, project_id: str) -> HealthCheckReport:
+        rules = self.list_rules(project_id=project_id, status=RuleStatus.ACTIVE)
+        tasks = self.list_tasks(project_id)
+        task_ids = {t.id: t.status for t in tasks}
+
+        conflicts: List[RuleConflict] = []
+        fatigued_rules: List[Rule] = []
+        noisy_rules: List[Rule] = []
+
+        penalty = 0
+
+        # 1. Detect Overlapping Scope Conflicts & Contradictions
+        for i in range(len(rules)):
+            r1 = rules[i]
+            if r1.zero_score_count >= 2:
+                fatigued_rules.append(r1)
+                penalty += 3
+            if r1.one_score_count >= 2:
+                noisy_rules.append(r1)
+                penalty += 4
+
+            # Orphan Task check
+            if r1.task_id and (r1.task_id not in task_ids or task_ids[r1.task_id] == TaskStatus.ARCHIVED):
+                conflicts.append(
+                    RuleConflict(
+                        id=f"conf_orphan_{r1.id}",
+                        conflict_type="orphan_task",
+                        severity="warning",
+                        title=f"孤儿规则: 所属任务已归档 ({r1.title})",
+                        description=f"规则 {r1.id} 绑定任务 {r1.task_id}，但该任务已被归档或不存在，规则仍在下发短期约束。",
+                        involved_rule_ids=[r1.id],
+                        suggested_fix="建议将有价值的条款结晶升华为长期骨骼，或归档废弃该规则。",
+                    )
+                )
+                penalty += 5
+
+            for j in range(i + 1, len(rules)):
+                r2 = rules[j]
+                # Check scope overlap
+                set1 = set(r1.scope_patterns)
+                set2 = set(r2.scope_patterns)
+                if set1.intersection(set2):
+                    # Check priority inversion: same scopes with different priorities
+                    if r1.priority != r2.priority and r1.lifecycle == r2.lifecycle:
+                        conflicts.append(
+                            RuleConflict(
+                                id=f"conf_prio_{r1.id}_{r2.id}",
+                                conflict_type="opposing_priority",
+                                severity="info",
+                                title=f"同作用域优先级差异: {r1.title} ({r1.priority.value}) vs {r2.title} ({r2.priority.value})",
+                                description=f"两条规则同时作用于 {', '.join(set1.intersection(set2))}，但被分别定义为不同优先级。",
+                                involved_rule_ids=[r1.id, r2.id],
+                                suggested_fix="核对规则职责，建议将核心约束提升为一致的优先级定级。",
+                            )
+                        )
+                        penalty += 2
+
+        score = max(0, 100 - penalty)
+        status_label = "healthy" if score >= 90 else ("needs_review" if score >= 70 else "degraded")
+
+        return HealthCheckReport(
+            project_id=project_id,
+            overall_score=score,
+            status_label=status_label,
+            total_rules=len(rules),
+            conflicts=conflicts,
+            fatigued_rules=fatigued_rules,
+            noisy_rules=noisy_rules,
+            checked_at=datetime.utcnow(),
+        )
+
     # --- Rule Evaluation Operations (Debug Mode) ---
 
     def record_evaluation(self, eval_item: RuleEvaluation) -> RuleEvaluation:
@@ -363,7 +713,6 @@ class Storage:
             ),
         )
 
-        # Update aggregated stats on the rule
         cur.execute(
             """SELECT AVG(score), COUNT(*),
                       SUM(CASE WHEN score = 0 THEN 1 ELSE 0 END),
@@ -607,6 +956,7 @@ class Storage:
             content_points=json.loads(row["content_points"]),
             created_by=row["created_by"],
             status=RuleStatus(row["status"]),
+            version=row["version"] if "version" in row_keys and row["version"] else 1,
             hit_count=row["hit_count"],
             last_hit_at=(
                 datetime.fromisoformat(row["last_hit_at"])

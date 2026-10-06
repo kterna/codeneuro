@@ -229,6 +229,22 @@
         <span id="badge-nav-distill" class="text-[10px] code-font text-purple-400 font-semibold">0</span>
       </button>
 
+      <button onclick="switchTab('health')" id="nav-btn-health" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-surface-hover transition">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span>冲突与健康体检</span>
+        </div>
+        <span id="badge-nav-health" class="text-[10px] code-font text-emerald-400 font-bold">100%</span>
+      </button>
+
+      <button onclick="switchTab('fleet')" id="nav-btn-fleet" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-surface-hover transition">
+        <div class="flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg>
+          <span>Worktree 舰队</span>
+        </div>
+        <span id="badge-nav-worktrees" class="text-[10px] code-font text-blue-400">1</span>
+      </button>
+
       <button onclick="switchTab('debug')" id="nav-btn-debug" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-surface-hover transition">
         <div class="flex items-center gap-2.5">
           <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -435,6 +451,76 @@
         </div>
       </section>
 
+      <!-- ==================== TAB: HEALTH & CONFLICT CENTER ==================== -->
+      <section id="view-health" class="hidden space-y-6">
+        <!-- Health Score Banner -->
+        <div class="linear-card-elevated rounded-xl p-5 border border-line-medium flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-surface-100 border border-line-medium flex flex-col items-center justify-center">
+              <span id="health-score-number" class="text-xl font-black text-emerald-400 code-font">--</span>
+              <span class="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Health</span>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-sm font-semibold text-white">架构健康与冲突自检中心</h2>
+                <span id="health-status-badge" class="tag-short text-[10px] px-2 py-0.5 rounded font-mono font-medium">HEALTHY</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">自动审计全库作用域重叠、优先级倒置、孤儿任务及认知疲劳暗区</p>
+            </div>
+          </div>
+
+          <button onclick="runHealthCheck()" class="linear-btn-primary px-4 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            立即执行全库体检
+          </button>
+        </div>
+
+        <!-- Conflict & Diagnosis Cards -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="linear-card rounded-xl p-5 flex flex-col max-h-[640px]">
+            <div class="flex items-center justify-between pb-3 border-b border-line-subtle mb-3">
+              <h3 class="text-xs font-semibold text-white uppercase tracking-wider">冲突与隐患诊断列表</h3>
+              <span id="conflicts-count-badge" class="tag-p0 text-[10px] px-2 py-0.5 rounded font-mono">0 项隐患</span>
+            </div>
+            <div id="conflicts-list-container" class="space-y-3 overflow-y-auto flex-1 pr-1">
+              <div class="text-slate-500 py-12 text-center text-xs">正在分析规约拓扑健康度...</div>
+            </div>
+          </div>
+
+          <div class="linear-card rounded-xl p-5 flex flex-col max-h-[640px]">
+            <div class="flex items-center justify-between pb-3 border-b border-line-subtle mb-3">
+              <h3 class="text-xs font-semibold text-white uppercase tracking-wider">规约疲劳与噪音警示区</h3>
+              <span id="fatigue-count-badge" class="tag-p1 text-[10px] px-2 py-0.5 rounded font-mono">0 项疲劳</span>
+            </div>
+            <div id="fatigue-list-container" class="space-y-3 overflow-y-auto flex-1 pr-1">
+              <div class="text-slate-500 py-12 text-center text-xs">暂无疲劳规则</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB: WORKTREE FLEET ==================== -->
+      <section id="view-fleet" class="hidden space-y-6">
+        <div class="linear-card-elevated rounded-xl p-5 border border-line-medium flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <svg class="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg>
+              Worktree 舰队拓扑与心跳大盘 (Multi-Workspace Fleet)
+            </h2>
+            <p class="text-[11px] text-slate-400 mt-1">
+              实时感知分布式各主机、工作目录、Git 分支及 Agent 正在触碰的文件，支持中心化任务一键调度换绑。
+            </p>
+          </div>
+          <button onclick="loadWorktrees()" class="linear-btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium">
+            刷新舰队状态
+          </button>
+        </div>
+
+        <div id="fleet-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="text-slate-500 py-12 text-center text-xs col-span-3">加载工作区舰队心跳中...</div>
+        </div>
+      </section>
+
       <!-- ==================== TAB 4: DEBUG STUDIO ==================== -->
       <section id="view-debug" class="hidden space-y-6">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -624,6 +710,74 @@
     </div>
   </div>
 
+  <!-- ==================== MODAL: EDIT RULE ==================== -->
+  <div id="modal-edit-rule" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="linear-card-elevated max-w-lg w-full rounded-xl p-5 border border-line-medium shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-line-subtle">
+        <div class="flex items-center gap-2">
+          <h3 class="font-semibold text-xs text-white uppercase tracking-wider">编辑规约与版本迭代</h3>
+          <span id="edit-rule-version-badge" class="tag-short text-[9px] px-1.5 py-0.2 rounded font-mono">v1</span>
+        </div>
+        <button onclick="closeEditRuleModal()" class="text-slate-400 hover:text-white text-xs">✕</button>
+      </div>
+
+      <input type="hidden" id="edit-rule-id">
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">规约标题:</label>
+          <input id="edit-rule-title" type="text" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 text-slate-200 focus:outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">优先级:</label>
+            <select id="edit-rule-priority" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 text-slate-200 focus:outline-none">
+              <option value="P0">P0 (阻断红线 / 架构契约)</option>
+              <option value="P1">P1 (任务必须 / 测例契约)</option>
+              <option value="P2">P2 (参考建议 / 风格约定)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">变更说明摘要 (Commit log):</label>
+            <input id="edit-rule-summary" type="text" value="微调参数规范" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 text-slate-200 focus:outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-400 mb-1">匹配作用域 (Glob 路径，逗号分隔):</label>
+          <input id="edit-rule-scopes" type="text" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 code-font text-indigo-300 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-slate-400 mb-1">约束条款内容 (每行一条):</label>
+          <textarea id="edit-rule-points" rows="4" class="w-full bg-surface-100 border border-line-subtle rounded-lg p-2 text-slate-200 code-font focus:outline-none"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-line-subtle">
+        <button onclick="closeEditRuleModal()" class="px-3 py-1.5 rounded-lg text-xs linear-btn-secondary">取消</button>
+        <button onclick="submitEditRuleForm()" class="px-4 py-1.5 rounded-lg text-xs linear-btn-primary">保存并产生新版本快照</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: RULE VERSION HISTORY ==================== -->
+  <div id="modal-rule-history" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="linear-card-elevated max-w-xl w-full rounded-xl p-5 border border-line-medium shadow-2xl space-y-4 max-h-[640px] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-line-subtle">
+        <div class="flex items-center gap-2">
+          <h3 class="font-semibold text-xs text-white uppercase tracking-wider">规约版本历史流</h3>
+          <span id="history-rule-title" class="code-font text-xs text-indigo-300 truncate max-w-xs"></span>
+        </div>
+        <button onclick="closeRuleHistoryModal()" class="text-slate-400 hover:text-white text-xs">✕</button>
+      </div>
+
+      <div id="history-versions-list" class="space-y-3 overflow-y-auto flex-1 pr-1 text-xs">
+        <!-- Versions rendered here -->
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== APPLICATION SCRIPT ==================== -->
   <script>
     let currentProjectId = "";
@@ -683,6 +837,8 @@
         tree: '作用域认知拓扑树',
         kanban: '需求任务生命周期雷达',
         distill: '记忆提炼中心 (Findings & Proposals)',
+        health: '架构健康体检与冲突诊断中心',
+        fleet: 'Worktree 舰队实时拓扑大盘',
         debug: '质量调优与异常诊断 (RLHF Studio)',
         jit: 'JIT 探针仿真器 & 静态规则导出'
       };
@@ -690,6 +846,8 @@
 
       if (tab === 'kanban') loadKanban();
       if (tab === 'distill') { loadFindings(); loadProposals(); }
+      if (tab === 'health') runHealthCheck();
+      if (tab === 'fleet') loadWorktrees();
       if (tab === 'debug') loadDebugStudio();
       if (tab === 'jit') simulateJitProbe();
     }
@@ -878,11 +1036,14 @@
             <div class="flex items-center gap-2">
               <span class="${isP0 ? 'tag-p0' : 'tag-p1'} text-[10px] px-1.5 py-0.2 rounded font-bold">${r.priority}</span>
               <span class="${r.lifecycle === 'long_term' ? 'tag-long' : 'tag-short'} text-[10px] px-1.5 py-0.2 rounded font-medium">${r.lifecycle === 'long_term' ? '长期骨骼' : '短期任务'}</span>
+              <span class="tag-short text-[9px] px-1 py-0.2 rounded font-mono">v${r.version || 1}</span>
               <span class="font-medium text-xs text-white">${r.title}</span>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="text-[10px] text-slate-500 font-mono">命中: ${r.hit_count || 0}</span>
-              <button onclick="deleteRule('${r.id}')" class="text-slate-500 hover:text-red-400 text-xs transition">✕</button>
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] text-slate-500 font-mono">命中:${r.hit_count || 0}</span>
+              <button onclick="openRuleHistoryModal('${r.id}')" title="版本历史" class="text-slate-400 hover:text-indigo-300 text-xs px-1.5 py-0.5 rounded hover:bg-surface-100 transition">⏱️</button>
+              <button onclick="openEditRuleModal('${r.id}')" title="在线编辑" class="text-slate-400 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-surface-100 transition">✏️</button>
+              <button onclick="deleteRule('${r.id}')" title="删除规约" class="text-slate-500 hover:text-red-400 text-xs px-1.5 py-0.5 rounded hover:bg-surface-100 transition">✕</button>
             </div>
           </div>
           <div class="text-[11px] text-slate-400 code-font flex flex-wrap gap-1">
@@ -1281,6 +1442,237 @@
         btn.textContent = "开始自动逆向拆解";
         btn.disabled = false;
       }
+    }
+
+    // --- HEALTH CHECK ENGINE ---
+    async function runHealthCheck() {
+      if (!currentProjectId) return;
+      try {
+        const res = await fetch(`/api/projects/${currentProjectId}/health-check`);
+        const report = await res.json();
+
+        document.getElementById("health-score-number").textContent = report.overall_score;
+        const scoreColor = report.overall_score >= 90 ? 'text-emerald-400' : (report.overall_score >= 70 ? 'text-amber-400' : 'text-ruby');
+        document.getElementById("health-score-number").className = `text-xl font-black ${scoreColor} code-font`;
+
+        const badge = document.getElementById("health-status-badge");
+        badge.textContent = report.status_label.toUpperCase();
+        badge.className = report.overall_score >= 90 ? "tag-short text-[10px] px-2 py-0.5 rounded font-mono font-medium" : "tag-p0 text-[10px] px-2 py-0.5 rounded font-mono font-medium";
+
+        document.getElementById("badge-nav-health").textContent = `${report.overall_score}%`;
+
+        // Render Conflicts
+        const cContainer = document.getElementById("conflicts-list-container");
+        cContainer.innerHTML = "";
+        document.getElementById("conflicts-count-badge").textContent = `${report.conflicts.length} 项隐患`;
+
+        if (!report.conflicts || report.conflicts.length === 0) {
+          cContainer.innerHTML = `<div class="text-slate-500 py-12 text-center text-xs">✨ 暂无作用域重叠或互斥冲突，规约拓扑健康！</div>`;
+        } else {
+          report.conflicts.forEach(c => {
+            const isCrit = c.severity === 'critical';
+            const card = document.createElement("div");
+            card.className = `p-3 rounded-lg border ${isCrit ? 'bg-ruby/10 border-ruby/30' : 'bg-surface-50 border-line-subtle'} space-y-1.5`;
+            card.innerHTML = `
+              <div class="flex items-center justify-between">
+                <span class="${isCrit ? 'tag-p0' : 'tag-p1'} text-[9px] px-1.5 py-0.2 rounded font-mono font-bold">${c.conflict_type}</span>
+                <span class="text-[10px] text-slate-500 code-font">${c.involved_rule_ids.join(" ↔ ")}</span>
+              </div>
+              <div class="text-xs font-semibold text-white">${c.title}</div>
+              <div class="text-[11px] text-slate-300 leading-relaxed">${c.description}</div>
+              <div class="text-[11px] text-emerald-400 bg-emerald-subtle border border-emerald-border p-1.5 rounded">
+                💡 <b>修复建议:</b> ${c.suggested_fix}
+              </div>
+            `;
+            cContainer.appendChild(card);
+          });
+        }
+
+        // Render Fatigued & Noisy Rules
+        const fContainer = document.getElementById("fatigue-list-container");
+        fContainer.innerHTML = "";
+        const allAlerts = [...report.fatigued_rules.map(r => ({ ...r, alertType: '认知疲劳 (0分多次)' })), ...report.noisy_rules.map(r => ({ ...r, alertType: '范围噪音 (1分多次)' }))];
+        document.getElementById("fatigue-count-badge").textContent = `${allAlerts.length} 项警示`;
+
+        if (allAlerts.length === 0) {
+          fContainer.innerHTML = `<div class="text-slate-500 py-12 text-center text-xs">✨ 暂无疲劳推送或噪音污染规则</div>`;
+        } else {
+          allAlerts.forEach(r => {
+            const card = document.createElement("div");
+            card.className = "p-3 rounded-lg bg-surface-50 border border-line-subtle space-y-1.5";
+            card.innerHTML = `
+              <div class="flex items-center justify-between">
+                <span class="tag-p1 text-[9px] px-1.5 py-0.2 rounded font-bold">${r.alertType}</span>
+                <span class="code-font text-[10px] text-slate-500">${r.id}</span>
+              </div>
+              <div class="text-xs font-medium text-white">${r.title}</div>
+              <div class="text-[10px] text-slate-400 code-font">作用域: ${r.scope_patterns.join(", ")}</div>
+            `;
+            fContainer.appendChild(card);
+          });
+        }
+      } catch (e) {
+        console.error("体检失败", e);
+      }
+    }
+
+    // --- WORKTREE FLEET MANAGEMENT ---
+    async function loadWorktrees() {
+      if (!currentProjectId) return;
+      try {
+        const res = await fetch(`/api/projects/${currentProjectId}/worktrees`);
+        let list = await res.json();
+        const grid = document.getElementById("fleet-grid");
+        grid.innerHTML = "";
+
+        // If no remote worktree registered yet, mock auto-register the current local path
+        if (!list || list.length === 0) {
+          const autoRes = await fetch("/api/worktrees/heartbeat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: "wt_local_main",
+              project_id: currentProjectId,
+              machine_name: "Localhost (DevServer)",
+              worktree_path: "/home/oneadmin/projects/astrbot_plugin_mcqq",
+              git_branch: "main",
+              git_commit: "0b69c51",
+              active_task_id: "TASK-RCON-GUARD",
+              agent_client: "Codex CLI (PTY)"
+            })
+          });
+          list = [await autoRes.json()];
+        }
+
+        document.getElementById("badge-nav-worktrees").textContent = list.length;
+
+        list.forEach(wt => {
+          const card = document.createElement("div");
+          card.className = "linear-card rounded-xl p-4 space-y-3";
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="font-semibold text-xs text-white">${wt.machine_name}</span>
+              </div>
+              <span class="tag-short text-[9px] px-1.5 py-0.2 rounded font-mono">${wt.agent_client}</span>
+            </div>
+
+            <div class="space-y-1 text-[11px] code-font text-slate-400">
+              <div class="truncate"><span class="text-slate-500">路径:</span> ${wt.worktree_path}</div>
+              <div><span class="text-slate-500">分支:</span> <span class="text-indigo-300">${wt.git_branch}</span></div>
+              ${wt.current_file ? `<div class="truncate"><span class="text-slate-500">正在改动:</span> <span class="text-amber-300">${wt.current_file}</span></div>` : ""}
+            </div>
+
+            <div class="pt-2 border-t border-line-subtle flex items-center justify-between text-[11px]">
+              <span class="text-slate-500">绑定任务:</span>
+              <span class="tag-long text-[10px] px-1.5 py-0.2 rounded font-mono">${wt.active_task_id || "未绑定"}</span>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      } catch (e) {
+        console.error("加载舰队失败", e);
+      }
+    }
+
+    // --- RULE EDIT & VERSION HISTORY MODALS ---
+    async function openEditRuleModal(ruleId) {
+      const res = await fetch(`/api/projects/${currentProjectId}/rules?status=active`);
+      const allRules = await res.json();
+      const rule = allRules.find(r => r.id === ruleId);
+      if (!rule) return alert("未找到指定规则");
+
+      document.getElementById("edit-rule-id").value = rule.id;
+      document.getElementById("edit-rule-title").value = rule.title;
+      document.getElementById("edit-rule-version-badge").textContent = `v${rule.version || 1}`;
+      document.getElementById("edit-rule-priority").value = rule.priority;
+      document.getElementById("edit-rule-scopes").value = rule.scope_patterns.join(", ");
+      document.getElementById("edit-rule-points").value = rule.content_points.join("\n");
+      document.getElementById("edit-rule-summary").value = "优化约束细则";
+
+      document.getElementById("modal-edit-rule").classList.remove("hidden");
+    }
+
+    function closeEditRuleModal() {
+      document.getElementById("modal-edit-rule").classList.add("hidden");
+    }
+
+    async function submitEditRuleForm() {
+      const ruleId = document.getElementById("edit-rule-id").value;
+      const title = document.getElementById("edit-rule-title").value.trim();
+      const prio = document.getElementById("edit-rule-priority").value;
+      const summary = document.getElementById("edit-rule-summary").value.trim() || "在线迭代更新";
+      const scopes = document.getElementById("edit-rule-scopes").value.split(",").map(s => s.trim()).filter(Boolean);
+      const points = document.getElementById("edit-rule-points").value.split("\n").map(p => p.trim()).filter(Boolean);
+
+      if (!title || points.length === 0) return alert("请填写完整的标题和条款内容");
+
+      await fetch(`/api/rules/${ruleId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title,
+          priority: prio,
+          scope_patterns: scopes,
+          content_points: points,
+          change_summary: summary
+        })
+      });
+
+      closeEditRuleModal();
+      refreshAll();
+    }
+
+    async function openRuleHistoryModal(ruleId) {
+      document.getElementById("history-versions-list").innerHTML = `<div class="text-slate-500 py-6 text-center text-xs">加载版本历史...</div>`;
+      document.getElementById("modal-rule-history").classList.remove("hidden");
+
+      try {
+        const res = await fetch(`/api/rules/${ruleId}/versions`);
+        const versions = await res.json();
+        const container = document.getElementById("history-versions-list");
+        container.innerHTML = "";
+
+        if (!versions || versions.length === 0) {
+          container.innerHTML = `<div class="text-slate-500 py-6 text-center text-xs">该规则暂无历史快照版本</div>`;
+          return;
+        }
+
+        document.getElementById("history-rule-title").textContent = versions[0].title;
+
+        versions.forEach(v => {
+          const card = document.createElement("div");
+          card.className = "p-3 rounded-lg bg-surface-50 border border-line-subtle space-y-1.5";
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="tag-short text-[9px] px-1.5 py-0.2 rounded font-mono font-bold">v${v.version_number}</span>
+                <span class="font-medium text-xs text-white">${v.title}</span>
+              </div>
+              <button onclick="rollbackRuleVersion('${ruleId}', ${v.version_number})" class="text-[10px] linear-btn-secondary px-2 py-0.5 rounded transition">
+                回滚到此版
+              </button>
+            </div>
+            <div class="text-[11px] text-slate-400 italic">说明: ${v.change_summary} (${v.created_by})</div>
+            <div class="text-[10px] text-slate-500 font-mono">${new Date(v.created_at).toLocaleString()}</div>
+          `;
+          container.appendChild(card);
+        });
+      } catch (e) {
+        console.error("加载版本历史失败", e);
+      }
+    }
+
+    async function rollbackRuleVersion(ruleId, versionNum) {
+      if (!confirm(`确定将规则回滚到历史版本 v${versionNum} 吗？`)) return;
+      await fetch(`/api/rules/${ruleId}/rollback?version=${versionNum}`, { method: "POST" });
+      closeRuleHistoryModal();
+      refreshAll();
+    }
+
+    function closeRuleHistoryModal() {
+      document.getElementById("modal-rule-history").classList.add("hidden");
     }
 
     window.onload = init;

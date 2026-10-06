@@ -77,7 +77,25 @@ def test_full_api_workflow(client: TestClient):
     assert del_res.status_code == 200
     assert del_res.json()["deleted_rule_id"] == rule_id
 
-    # 9. Check WebUI index response
+    # 9. Health Check API
+    res_health = client.get(f"/api/projects/{project_id}/health-check")
+    assert res_health.status_code == 200
+    assert "overall_score" in res_health.json()
+
+    # 10. Worktree Heartbeat API
+    res_wt = client.post("/api/worktrees/heartbeat", json={
+        "id": "wt_test_01",
+        "project_id": project_id,
+        "machine_name": "TestMacBook",
+        "worktree_path": "/tmp/worktree_01",
+        "git_branch": "feature/test",
+        "active_task_id": "TASK-PAY-V2",
+        "agent_client": "Cursor"
+    })
+    assert res_wt.status_code == 200
+    assert res_wt.json()["id"] == "wt_test_01"
+
+    # 11. Check WebUI index response
     res_ui = client.get("/")
     assert res_ui.status_code == 200
     assert "CodeNeuro" in res_ui.text

@@ -18,6 +18,7 @@ from codeneuro.models import (
     ContextResolution,
     Finding,
     FindingStatus,
+    HealthCheckReport,
     IssueStatus,
     IssueType,
     Lifecycle,
@@ -27,8 +28,10 @@ from codeneuro.models import (
     Rule,
     RuleEvaluation,
     RuleStatus,
+    RuleVersion,
     Task,
     TaskStatus,
+    WorktreeInstance,
 )
 from codeneuro.storage import Storage
 from codeneuro.synthesizer import ContextSynthesizer
@@ -57,6 +60,15 @@ class CreateRuleReq(BaseModel):
     created_by: str = "user"
 
 
+class UpdateRuleReq(BaseModel):
+    title: str
+    content_points: List[str]
+    scope_patterns: List[str]
+    priority: Priority
+    change_summary: str = "在线更新"
+    operator: str = "user"
+
+
 class DecomposeReq(BaseModel):
     task_id: str
     text: str
@@ -76,12 +88,28 @@ class ExportReq(BaseModel):
     task_id: Optional[str] = None
 
 
+class WorktreeHeartbeatReq(BaseModel):
+    id: str
+    project_id: str
+    machine_name: str = "local"
+    worktree_path: str
+    git_branch: str = "main"
+    git_commit: Optional[str] = None
+    active_task_id: Optional[str] = None
+    current_file: Optional[str] = None
+    agent_client: str = "Cursor"
+
+
+class BindTaskReq(BaseModel):
+    task_id: Optional[str] = None
+
+
 def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None) -> FastAPI:
     if storage is None:
         actual_path = db_path or os.getenv("CODETOKEN_DB", "codeneuro.db")
         storage = Storage(actual_path)
 
-    app = FastAPI(title="CodeNeuro Cognitive Context Hub", version="0.2.0")
+    app = FastAPI(title="CodeNeuro Cognitive Context Hub", version="0.3.0")
 
     app.add_middleware(
         CORSMiddleware,
@@ -118,6 +146,8 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         pending_findings = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM proposals WHERE status = 'pending'")
         pending_proposals = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM agent_issues WHERE status = 'open'")
+        open_issues = cur.fetchone()[0]
 
         return {
             "total_projects": len(projects),
@@ -131,6 +161,7 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
             "active_tasks": active_tasks,
             "pending_findings": pending_findings,
             "pending_proposals": pending_proposals,
+            "open_issues_count": open_issues,
         }
 
     # --- Project Endpoints ---
@@ -156,6 +187,13 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         if not p:
             raise HTTPException(status_code=404, detail="Project not found")
         return p
+
+    # --- Health Check & Conflict Detection Endpoint ---
+
+    @app.get("/api/projects/{project_id}/health-check", response_model=HealthCheckReport)
+    def check_health(project_id: str):
+        get_project(project_id)
+        return storage.check_project_health(project_id)
 
     # --- Task Endpoints ---
 
@@ -183,7 +221,7 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
             raise HTTPException(status_code=404, detail="Task not found")
         return {"status": "ok", "task_id": task_id, "new_status": status.value}
 
-    # --- Rule Endpoints ---
+    # --- Rule Endpoints & Version History ---
 
     @app.post("/api/projects/{project_id}/rules", response_model=Rule)
     def create_rule(project_id: str, req: CreateRuleReq):
@@ -201,7 +239,14 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
             created_by=req.created_by,
             status=RuleStatus.ACTIVE,
         )
-        return storage.create_rule(r)
+        saved = storage.create_rule(r)
+        storage.log_telemetry_event(
+            project_id=project_id,
+            event_type="rule_edit",
+            summary=f"创建新规约: {r.title} ({r.priority.value})",
+            details={"rule_id": r.id, "priority": r.priority.value, "scopes": r.scope_patterns}
+        )
+        return saved
 
     @app.get("/api/projects/{project_id}/rules", response_model=List[Rule])
     def list_rules(
@@ -217,6 +262,44 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
             status=status,
         )
 
+    @app.put("/api/rules/{rule_id}", response_model=Rule)
+    def update_rule_content(rule_id: str, req: UpdateRuleReq):
+        updated = storage.update_rule_content(
+            rule_id=rule_id,
+            title=req.title,
+            content_points=req.content_points,
+            scope_patterns=req.scope_patterns,
+            priority=req.priority,
+            change_summary=req.change_summary,
+            operator=req.operator
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Rule not found")
+        storage.log_telemetry_event(
+            project_id=updated.project_id,
+            event_type="rule_edit",
+            summary=f"更新规约至 v{updated.version}: {updated.title}",
+            details={"rule_id": updated.id, "version": updated.version, "summary": req.change_summary}
+        )
+        return updated
+
+    @app.get("/api/rules/{rule_id}/versions", response_model=List[RuleVersion])
+    def list_rule_versions(rule_id: str):
+        return storage.list_rule_versions(rule_id)
+
+    @app.post("/api/rules/{rule_id}/rollback", response_model=Rule)
+    def rollback_rule(rule_id: str, version: int = Query(...)):
+        rolled = storage.rollback_rule_version(rule_id=rule_id, target_version=version)
+        if not rolled:
+            raise HTTPException(status_code=404, detail=f"Target version v{version} not found for rule {rule_id}")
+        storage.log_telemetry_event(
+            project_id=rolled.project_id,
+            event_type="rule_edit",
+            summary=f"规约回滚至历史版本 v{version}: {rolled.title}",
+            details={"rule_id": rolled.id, "target_version": version}
+        )
+        return rolled
+
     @app.patch("/api/rules/{rule_id}/status")
     def update_rule_status(rule_id: str, status: RuleStatus):
         success = storage.update_rule_status(rule_id, status)
@@ -231,6 +314,47 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="Rule not found")
         return {"status": "ok", "deleted_rule_id": rule_id}
+
+    # --- Worktree Fleet Management Endpoints ---
+
+    @app.post("/api/worktrees/heartbeat", response_model=WorktreeInstance)
+    def worktree_heartbeat(req: WorktreeHeartbeatReq):
+        wt = WorktreeInstance(
+            id=req.id,
+            project_id=req.project_id,
+            machine_name=req.machine_name,
+            worktree_path=req.worktree_path,
+            git_branch=req.git_branch,
+            git_commit=req.git_commit,
+            active_task_id=req.active_task_id,
+            current_file=req.current_file,
+            agent_client=req.agent_client,
+        )
+        saved = storage.register_worktree_heartbeat(wt)
+        storage.log_telemetry_event(
+            project_id=req.project_id,
+            event_type="heartbeat",
+            summary=f"工作区心跳: {req.machine_name}:{req.worktree_path} (分支: {req.git_branch})",
+            details={"worktree_id": req.id, "task": req.active_task_id, "client": req.agent_client}
+        )
+        return saved
+
+    @app.get("/api/projects/{project_id}/worktrees", response_model=List[WorktreeInstance])
+    def list_worktrees(project_id: str):
+        return storage.list_worktrees(project_id)
+
+    @app.post("/api/worktrees/{worktree_id}/bind-task")
+    def bind_worktree_task(worktree_id: str, req: BindTaskReq):
+        success = storage.bind_worktree_task(worktree_id, req.task_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Worktree not found")
+        return {"status": "ok", "worktree_id": worktree_id, "bound_task_id": req.task_id}
+
+    # --- Telemetry & Live Stream ---
+
+    @app.get("/api/projects/{project_id}/telemetry")
+    def list_telemetry(project_id: str, limit: int = 50):
+        return {"project_id": project_id, "events": storage.list_telemetry_events(project_id, limit=limit)}
 
     # --- Context Resolution ---
 
@@ -256,6 +380,14 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         # Update hit counts
         hit_ids = [r.id for r in (long_term + short_term)]
         storage.increment_rule_hits(hit_ids)
+
+        # Log live JIT hit event
+        storage.log_telemetry_event(
+            project_id=project_id,
+            event_type="jit_hit",
+            summary=f"JIT 下发规则: 触达 `{file_path}` (命中 {len(hit_ids)} 条规则)",
+            details={"file_path": file_path, "task_id": task_id, "rule_ids": hit_ids}
+        )
 
         return ContextSynthesizer.synthesize(
             file_path=file_path,
@@ -294,23 +426,25 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         saved_rules = []
         for r in generated_rules:
             saved_rules.append(storage.create_rule(r))
+
+        storage.log_telemetry_event(
+            project_id=project_id,
+            event_type="rule_edit",
+            summary=f"PRD 自动拆解入库: 任务 {req.task_id} (生成 {len(saved_rules)} 条规则)",
+            details={"task_id": req.task_id, "rule_count": len(saved_rules)}
+        )
         return saved_rules
 
     # --- Cognitive Tree & Heatmap ---
 
     @app.get("/api/projects/{project_id}/tree")
     def get_project_cognitive_tree(project_id: str):
-        """
-        Builds a hierarchical tree of files and directories for the project,
-        annotating each node with aggregated P0, P1, P2, and task rules.
-        """
         proj = storage.get_project(project_id)
         if not proj:
             raise HTTPException(status_code=404, detail="Project not found")
 
         rules = storage.list_rules(project_id=project_id, status=RuleStatus.ACTIVE)
 
-        # Build paths from actual disk if directory exists, otherwise synthesize from rules
         known_files = set()
         for root in proj.root_paths:
             p = Path(root)
@@ -323,7 +457,6 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
                         except Exception:
                             pass
 
-        # Also add paths inferred from rules
         for r in rules:
             for pat in r.scope_patterns:
                 clean = pat.rstrip("/*").rstrip("?")
@@ -333,7 +466,6 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         if not known_files:
             known_files.add("src/index.ts")
 
-        # Tree root
         tree_root: Dict[str, Any] = {
             "name": proj.name,
             "path": "",
@@ -345,11 +477,9 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
             "children": {}
         }
 
-        # Match rules against each path
         for fpath in known_files:
             matched = [r for r in rules if matcher.matches_rule(r, fpath)]
 
-            # Insert into tree
             parts = fpath.split("/")
             curr = tree_root
             curr_path = ""
@@ -372,7 +502,6 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
                     }
                 node = curr["children"][part]
 
-                # Aggregate metrics
                 for r in matched:
                     if r.id not in [x["id"] for x in node["rules"]]:
                         node["rules"].append({"id": r.id, "title": r.title, "priority": r.priority.value, "lifecycle": r.lifecycle.value})
@@ -383,7 +512,6 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
 
                 curr = node
 
-        # Recursive dict to list
         def format_node(node: Dict[str, Any]) -> Dict[str, Any]:
             children_list = [format_node(c) for c in node["children"].values()]
             children_list.sort(key=lambda x: (0 if x["type"] == "directory" else 1, x["name"].lower()))
@@ -450,7 +578,14 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
 
     @app.post("/api/projects/{project_id}/findings", response_model=Finding)
     def create_finding(project_id: str, req: Finding):
-        return storage.create_finding(req)
+        saved = storage.create_finding(req)
+        storage.log_telemetry_event(
+            project_id=project_id,
+            event_type="finding",
+            summary=f"Agent 记录排坑事实: `{req.target_path}` ({req.suggested_priority.value})",
+            details={"finding_id": saved.id, "text": req.finding_text}
+        )
+        return saved
 
     @app.get("/api/projects/{project_id}/findings", response_model=List[Finding])
     def list_findings(project_id: str, status: Optional[FindingStatus] = None):
@@ -462,7 +597,6 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
 
     @app.post("/api/findings/{finding_id}/crystallize", response_model=Rule)
     def crystallize_finding(finding_id: str, req: CrystallizeFindingReq):
-        """Promote an in-flight finding into a formal rule."""
         cur = storage.conn.cursor()
         cur.execute("SELECT * FROM findings WHERE id = ?", (finding_id,))
         row = cur.fetchone()
@@ -496,6 +630,12 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         )
         saved = storage.create_rule(new_rule)
         storage.update_finding_status(finding_id, FindingStatus.CRYSTALLIZED)
+        storage.log_telemetry_event(
+            project_id=target_finding.project_id,
+            event_type="rule_edit",
+            summary=f"排坑事实结晶升华: {new_rule.title} (长期契约 P0)",
+            details={"rule_id": saved.id, "origin_finding": finding_id}
+        )
         return saved
 
     @app.get("/api/projects/{project_id}/proposals", response_model=List[Proposal])
@@ -525,6 +665,12 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         )
         saved = storage.create_rule(new_rule)
         cur.execute("UPDATE proposals SET status = 'approved' WHERE id = ?", (proposal_id,))
+        storage.log_telemetry_event(
+            project_id=row["project_id"],
+            event_type="rule_edit",
+            summary=f"审批通过架构提案: {new_rule.title}",
+            details={"proposal_id": proposal_id, "rule_id": saved.id}
+        )
         return saved
 
     # --- Debug Mode Evaluation & Issue Endpoints ---
@@ -532,7 +678,14 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
     @app.post("/api/projects/{project_id}/evaluations", response_model=RuleEvaluation)
     def record_evaluation(project_id: str, req: RuleEvaluation):
         get_project(project_id)
-        return storage.record_evaluation(req)
+        saved = storage.record_evaluation(req)
+        storage.log_telemetry_event(
+            project_id=project_id,
+            event_type="eval",
+            summary=f"Agent 规则评分: `{req.rule_id}` 打分 {req.score}/5 ({req.reason or '无说明'})",
+            details={"rule_id": req.rule_id, "score": req.score, "path": req.file_path}
+        )
+        return saved
 
     @app.get("/api/projects/{project_id}/evaluations", response_model=List[RuleEvaluation])
     def list_evaluations(project_id: str, rule_id: Optional[str] = None, limit: int = 100):
@@ -541,7 +694,14 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
     @app.post("/api/projects/{project_id}/issues", response_model=AgentIssue)
     def record_issue(project_id: str, req: AgentIssue):
         get_project(project_id)
-        return storage.record_issue(req)
+        saved = storage.record_issue(req)
+        storage.log_telemetry_event(
+            project_id=project_id,
+            event_type="issue",
+            summary=f"Agent 申报架构异常工单: {req.title} [{req.issue_type.value}]",
+            details={"issue_id": saved.id, "type": req.issue_type.value, "path": req.file_path}
+        )
+        return saved
 
     @app.get("/api/projects/{project_id}/issues", response_model=List[AgentIssue])
     def list_issues(project_id: str, status: Optional[IssueStatus] = None):
@@ -568,6 +728,7 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
                 "priority": r.priority.value,
                 "lifecycle": r.lifecycle.value,
                 "scope_patterns": r.scope_patterns,
+                "version": r.version,
                 "hit_count": r.hit_count,
                 "eval_count": r.eval_count,
                 "avg_score": r.avg_score,

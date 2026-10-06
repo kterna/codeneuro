@@ -1,4 +1,4 @@
-"""Core domain models and schema definitions for CodeNeuro."""
+"""Core domain models and schema definitions for CodeNeuro Enterprise."""
 
 from datetime import datetime
 from enum import Enum
@@ -85,6 +85,7 @@ class Rule(BaseModel):
     content_points: List[str] = Field(default_factory=list)
     created_by: str = "user" # "user" | "agent" | "decomposer"
     status: RuleStatus = RuleStatus.ACTIVE
+    version: int = 1
     hit_count: int = 0
     last_hit_at: Optional[datetime] = None
     avg_score: Optional[float] = None
@@ -93,6 +94,21 @@ class Rule(BaseModel):
     one_score_count: int = 0  # Count of 'irrelevant noise' evaluations
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class RuleVersion(BaseModel):
+    id: str
+    rule_id: str
+    project_id: str
+    version_number: int
+    title: str
+    scope_patterns: List[str]
+    priority: Priority
+    lifecycle: Lifecycle
+    content_points: List[str]
+    change_summary: str
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class Finding(BaseModel):
@@ -141,6 +157,41 @@ class AgentIssue(BaseModel):
     status: IssueStatus = IssueStatus.OPEN
     created_at: datetime = Field(default_factory=datetime.utcnow)
     resolved_at: Optional[datetime] = None
+
+
+class WorktreeInstance(BaseModel):
+    id: str
+    project_id: str
+    machine_name: str = "local"
+    worktree_path: str
+    git_branch: str = "main"
+    git_commit: Optional[str] = None
+    active_task_id: Optional[str] = None
+    current_file: Optional[str] = None
+    agent_client: str = "Cursor" # Cursor | Claude Code | Codex | Hermes
+    last_heartbeat: datetime = Field(default_factory=datetime.utcnow)
+    is_online: bool = True
+
+
+class RuleConflict(BaseModel):
+    id: str
+    conflict_type: str # overlap_redundancy | opposing_priority | logical_contradiction | orphan_task
+    severity: str # critical | warning | info
+    title: str
+    description: str
+    involved_rule_ids: List[str]
+    suggested_fix: str
+
+
+class HealthCheckReport(BaseModel):
+    project_id: str
+    overall_score: int # 0 - 100
+    status_label: str # healthy | needs_review | degraded
+    total_rules: int
+    conflicts: List[RuleConflict]
+    fatigued_rules: List[Rule]
+    noisy_rules: List[Rule]
+    checked_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class ContextResolution(BaseModel):
