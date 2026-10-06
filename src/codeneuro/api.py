@@ -283,9 +283,17 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
 
     # --- Findings & Proposals Management ---
 
+    @app.post("/api/projects/{project_id}/findings", response_model=Finding)
+    def create_finding(project_id: str, req: Finding):
+        return storage.create_finding(req)
+
     @app.get("/api/projects/{project_id}/findings", response_model=List[Finding])
     def list_findings(project_id: str, status: Optional[FindingStatus] = None):
         return storage.list_findings(project_id, status)
+
+    @app.post("/api/projects/{project_id}/proposals", response_model=Proposal)
+    def create_proposal(project_id: str, req: Proposal):
+        return storage.create_proposal(req)
 
     @app.post("/api/findings/{finding_id}/crystallize", response_model=Rule)
     def crystallize_finding(finding_id: str, req: CrystallizeFindingReq):
