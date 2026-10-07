@@ -1,0 +1,14 @@
+name: codeneuro_native
+version: 0.5.0
+description: "Scoped CodeNeuro context, preflight and actual terminal evidence for native Hermes tools. Uses a separate reviewed Python worker."
+author: CodeNeuro
+kind: backend
+provides_hooks:
+  - pre_tool_call
+  - post_tool_call
+  - transform_tool_result
+  - on_session_finalize
+  - on_session_reset
+requires_env:
+  - CODENEURO_PYTHON
+  - CODENEURO_WORKSPACE
