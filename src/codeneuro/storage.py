@@ -250,7 +250,7 @@ class Storage(Transactional):
     # --- Task Operations ---
 
     @atomic(write=True)
-    def create_task(self, task: Task) -> Task:
+    def create_task(self, task: Task, actor: str = 'human') -> Task:
         self.validate_scope(task.project_id)
         cur = self.conn.cursor()
         cur.execute(
@@ -266,6 +266,8 @@ class Storage(Transactional):
                 task.updated_at.isoformat(),
             ),
         )
+        self.audit(task.project_id, actor, 'task.created', task.id,
+                   {'status': task.status.value, 'source': actor})
         return task
 
     @atomic(write=False)

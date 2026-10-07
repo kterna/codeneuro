@@ -335,10 +335,8 @@ def test_cleanup_checkpoint_then_final_close_cleans_new_drafts(env):
 def test_http_contracts_pause_rule_observe_and_human_review(env):
     from fastapi.testclient import TestClient
     from codeneuro.api import create_app
-    from codeneuro.governance_api import create_governance_router
     store, ctx, gov, sid, _ = env
-    app = create_app(store)
-    app.include_router(create_governance_router(store, ctx, gov.intelligence))
+    app = create_app(store)  # The integrated app mounts governance itself.
     with TestClient(app) as client:
         assert client.patch('/api/tasks/task/pause', json={'reason': 'inspection'}).json()['status'] == 'paused'
         assert client.patch('/api/tasks/task/resume', json={'reason': 'done'}).json()['status'] == 'testing'
@@ -357,4 +355,4 @@ def test_http_contracts_pause_rule_observe_and_human_review(env):
         assert applied.json()['rule']['lifecycle'] == 'long_term'
         assert client.get('/api/projects/p/governance').json()['proposals'][0]['status'] == 'applied'
         assert client.post('/api/agent/preflight', json={'session_id': sid, 'request_id': 'http',
-            'files': ['src/unit.py'], 'plan': 'Retain the guarantee'}).json()['decision'] == 'allow'
+            'files': ['src/unit.py'], 'plan': 'Retain the guarantee'}).json()['decision'] == 'review'

@@ -1,5 +1,8 @@
 """Owned, atomic static snapshots. Human rules outside our manifest are preserved."""
-import fcntl
+try:
+    import fcntl
+except ImportError:  # Windows uses msvcrt.
+    fcntl = None
 import hashlib
 import json
 import os
@@ -33,9 +36,23 @@ def export_lock(root):
     lock = root / '.codeneuro-export.lock'
     if lock.is_symlink():
         raise DomainError('Export lock may not be a symlink.')
-    with lock.open('a') as stream:
-        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
-        yield
+    with lock.open('a+b') as stream:
+        if fcntl is None:
+            import msvcrt
+            if stream.tell() == 0:
+                stream.write(b'\0'); stream.flush()
+            stream.seek(0)
+            msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if fcntl is None:
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 def eligible(rules, task):

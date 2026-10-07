@@ -486,8 +486,7 @@ class RemoteRegistry:
             return self.storage.list_tasks(args['project_id'])
         if op == 'create_task':
             _text(args['title'],'title',500);_text(args.get('description',''),'description',30000,empty=True)
-            task = self.storage.create_task(Task(id=_id('task'),**args))
-            self.storage.audit(task.project_id,client_id,'task.created',task.id,{'source':'remote_client'})
+            task = self.storage.create_task(Task(id=_id('task'),**args), actor=client_id)
             return task
         if op in {'start_session','session_status','bind_task','start_operation','end_operation','reconcile_operation'}:
             return getattr(self,op)(client_id,**args)
@@ -595,6 +594,39 @@ def create_remote_router(registry: RemoteRegistry):
         op: str = Field(min_length=1,max_length=80)
         args: dict = Field(default_factory=dict)
     router = APIRouter()
+
+    @router.get('/api/client/events')
+    async def client_events(request: Request, project_id: str, last_event_id: str | None = None):
+        import asyncio
+        from fastapi.responses import StreamingResponse
+        authorization = request.headers.get('authorization', '')
+        token = authorization[7:] if authorization[:7].lower() == 'bearer ' else ''
+        client = registry.authenticate(token)
+        registry.authorize_project(client['id'], project_id)
+        cursor_text = request.headers.get('Last-Event-ID') or last_event_id or '0'
+        if not cursor_text.isdecimal():
+            raise DomainError('Event cursor must be a non-negative sequence.')
+        cursor = int(cursor_text)
+        async def stream():
+            nonlocal cursor
+            yield 'retry: 1500\n\n'
+            while not await request.is_disconnected():
+                # Check revocation on each batch without sending the bearer again.
+                with registry.storage.transaction(write=False):
+                    registry.authorize_project(client['id'], project_id)
+                    rows=[dict(row) for row in registry.storage.conn.execute(
+                        'SELECT sequence,project_id,action,entity_id,created_at FROM audit_events WHERE project_id=? AND sequence>? ORDER BY sequence LIMIT 100',
+                        (project_id,cursor))]
+                for row in rows:
+                    cursor=row['sequence']
+                    payload={'id':str(cursor),'kind':row['action'],'project_id':project_id,
+                             'entity_id':row['entity_id'],'created_at':row['created_at']}
+                    yield f'id: {cursor}\ndata: {json.dumps(payload,separators=(",",":"))}\n\n'
+                if not rows:
+                    yield ': keepalive\n\n'
+                    await asyncio.sleep(1)
+        return StreamingResponse(stream(), media_type='text/event-stream',
+                                 headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
 
     @router.post('/api/client/rpc')
     def client_rpc(request: Request, body: RPCRequest):

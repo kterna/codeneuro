@@ -28,6 +28,13 @@ class ContextService:
         self.storage = storage
         self.matcher = ScopeMatcher()
 
+    def _remote_worktree(self, worktree_id):
+        # A standalone local Storage instance need not load the optional
+        # remote extension. The Hub creates this table before remote sessions.
+        if not self.storage.conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='remote_workspaces'").fetchone():
+            return None
+        return self.storage.conn.execute("SELECT platform,canonical_path FROM remote_workspaces WHERE worktree_id=?", (worktree_id,)).fetchone()
+
     def _session(self, session_id, *, active=True):
         row = self.storage.conn.execute("SELECT * FROM agent_sessions WHERE id=?", (session_id,)).fetchone()
         if row is None:
@@ -109,7 +116,15 @@ class ContextService:
                 if not matches:
                     raise DomainError("Absolute file path is outside this project.")
                 root = max(matches, key=len)
-            path = workspace_file(file_path, root)
+            if session:
+                remote = self._remote_worktree(session['worktree_id'])
+                if remote:
+                    from .remote import normalize_remote_file
+                    path = normalize_remote_file(remote['canonical_path'], remote['platform'], file_path)
+                else:
+                    path = workspace_file(file_path, root)
+            else:
+                path = workspace_file(file_path, root)
             task = self.storage.get_task(task_id) if task_id else None
             effective_task = task_id if task and task.status in (TaskStatus.ACTIVE, TaskStatus.TESTING) else None
             request_json = json.dumps({'file': path, 'task': effective_task, 'max_chars': max_chars}, sort_keys=True)
@@ -214,7 +229,12 @@ class ContextService:
             if not session['task_id']:
                 raise DomainError("Discoveries require a task-bound session.")
             wt = self.storage.conn.execute("SELECT * FROM worktree_instances WHERE id=?", (session['worktree_id'],)).fetchone()
-            path = workspace_file(target_path, wt['worktree_path'])
+            remote = self._remote_worktree(session['worktree_id'])
+            if remote:
+                from .remote import normalize_remote_file
+                path = normalize_remote_file(remote['canonical_path'], remote['platform'], target_path)
+            else:
+                path = workspace_file(target_path, wt['worktree_path'])
             item = Finding(id=uid('finding'), project_id=session['project_id'], task_id=session['task_id'],
                            session_id=session_id, target_path=path, finding_text=text, suggested_priority=Priority(priority), source='agent')
             self.storage.create_finding(item)

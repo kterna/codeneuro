@@ -156,7 +156,7 @@ def main():
         assert api('/api/health')['verified_deliveries'] == 6
         issue = api(prefix+'/issues', 'POST', {'id':'browser_review_issue', 'project_id':pid, 'issue_type':'rule_outdated', 'title':'明确缓存契约的复制语义', 'description':'人工验收发现条款需要明确浅复制。', 'file_path':'src/cache.py', 'related_rule_ids':[contract['id']], 'suggested_action':'Review and clarify the existing rule. This text must never execute.', 'source':'human'})
         b.call('Page.navigate', {'url':origin})
-        b.ready("document.getElementById('health').textContent.includes('服务正常') && document.getElementById('content').getAttribute('aria-busy')==='false'")
+        b.ready("document.getElementById('health')?.textContent.includes('服务正常') && document.getElementById('content')?.getAttribute('aria-busy')==='false'")
         b.ready("document.getElementById('live-status').textContent.includes('已连接')")
         b.js(f"document.querySelector('[aria-label=目录任务范围]').value={json.dumps(task['id'])};document.querySelector('[aria-label=目录任务范围]').dispatchEvent(new Event('change'))")
         b.ready("document.querySelector('.tree-content details')!==null && document.getElementById('content').getAttribute('aria-busy')==='false'")

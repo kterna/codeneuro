@@ -1,6 +1,8 @@
 """FastAPI application providing REST endpoints, WebUI serving, and orchestration."""
 
 import os
+import json
+from datetime import datetime
 import uuid
 import sqlite3
 from functools import wraps
@@ -142,19 +144,62 @@ class AgentFindingReq(BaseModel):
     priority: str = "P1"
 
 
+class EnrollClientReq(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    project_ids: List[str] = Field(min_length=1, max_length=100)
+
+
+class BindSessionReq(BaseModel):
+    task_id: Optional[str] = None
+    expected_revision: int = Field(ge=0)
+
+
 def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None) -> FastAPI:
     owns_storage = storage is None
     if storage is None:
         actual_path = db_path or os.getenv("CODENEURO_DB", os.getenv("CODETOKEN_DB", "codeneuro.db"))
         storage = Storage(actual_path)
 
+    from .intelligence import create_intelligence_router
+    from .governance import GovernanceService
+    from .governance_api import create_governance_router
+    from .views import create_views_router
+    from .remote import RemoteRegistry, create_remote_router
+    from .remote_mcp import create_remote_mcp
+    service = ContextService(storage)
+    intelligence_router = create_intelligence_router(storage)
+    intelligence = intelligence_router.intelligence_service
+    governance = GovernanceService(storage, service, intelligence)
+    governance_router = create_governance_router(storage, service, intelligence)
+    views_router = create_views_router(storage, service)
+    remote = RemoteRegistry(storage, context_service=service, governance=governance, intelligence=intelligence)
+    remote_router = create_remote_router(remote)
+    remote_mcp = create_remote_mcp(remote)
+    remote_mcp_app = remote_mcp.streamable_http_app(streamable_http_path='/',
+        json_response=True, stateless_http=True, host='0.0.0.0')
+    with storage.transaction():
+        storage.conn.execute("CREATE TABLE IF NOT EXISTS local_session_bindings(session_id TEXT PRIMARY KEY REFERENCES agent_sessions(id),binding_revision INTEGER NOT NULL DEFAULT 0)")
+
     @asynccontextmanager
     async def lifespan(app):
-        yield
+        async with remote_mcp_app.router.lifespan_context(remote_mcp_app):
+            intelligence.start_worker()
+            governance.process_pending_distillations()
+            try:
+                yield
+            finally:
+                intelligence.stop_worker()
         if owns_storage:
             storage.close()
     app = FastAPI(title="CodeNeuro", version="0.4.0", lifespan=lifespan)
-    service = ContextService(storage)
+    app.include_router(intelligence_router)
+    app.include_router(governance_router)
+    app.include_router(views_router)
+    app.include_router(remote_router)
+    app.mount('/mcp', remote_mcp_app)
+    app.state.remote_registry = remote
+    app.state.intelligence = intelligence
+    app.state.governance = governance
     app.state.storage = storage
     app.state.context_service = service
 
@@ -178,11 +223,27 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
             if urlsplit(origin).netloc != request.headers.get('host'):
                 return JSONResponse(status_code=403, content={"detail": "Cross-origin writes are not allowed."})
         token = os.getenv('CODENEURO_API_TOKEN')
-        if token and request.url.path.startswith('/api/'):
+        path = request.url.path
+        if path.startswith('/api/client/') or path.startswith('/mcp'):
+            if not token:
+                return JSONResponse(status_code=503, content={'detail':'Configure administrator authentication before remote access.'})
+            if path.startswith('/mcp'):
+                authorization=request.headers.get('authorization','')
+                client_token=authorization[7:] if authorization[:7].lower()=='bearer ' else ''
+                try:
+                    request.state.codeneuro_remote_client=remote.authenticate(client_token)['id']
+                except DomainError:
+                    return JSONResponse(status_code=401, content={'detail':'A valid project-scoped client credential is required.'},
+                                        headers={'WWW-Authenticate':'Bearer'})
+            # Both RPC and streamable MCP recheck project-scoped credentials
+            # on each call. No remote credential can authorize a human review.
+        elif path.startswith('/api/clients') and not token:
+            return JSONResponse(status_code=403, content={'detail':'Configure administrator authentication before issuing clients.'})
+        elif token and path.startswith('/api/'):
             import hmac
             supplied = request.headers.get('authorization', '').removeprefix('Bearer ')
             if not hmac.compare_digest(supplied, token):
-                return JSONResponse(status_code=401, content={"detail": "API token required."})
+                return JSONResponse(status_code=401, content={"detail": "Administrator API token required."})
         return await call_next(request)
 
     def unit_of_work(*, write=False):
@@ -501,16 +562,22 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
 
     @app.get("/api/projects/{project_id}/tree")
     @unit_of_work(write=False)
-    def get_project_cognitive_tree(project_id: str):
+    def get_project_cognitive_tree(project_id: str, worktree_id: Optional[str] = None, task_id: Optional[str] = None):
         proj = storage.get_project(project_id)
         if not proj:
             raise HTTPException(status_code=404, detail="Project not found")
 
         rules = storage.list_rules(project_id=project_id, status=RuleStatus.ACTIVE)
 
-        known_files = set()
+        if worktree_id:
+            # A remote worktree uploads its own graph. The Hub does not pretend
+            # it can inspect a Windows C: path or a remote Linux directory.
+            graph = intelligence.graph(project_id, worktree_id=worktree_id)
+            known_files = {f['path'] for f in graph['files']}
+        else:
+            known_files = set()
         skipped = {'.git', '.venv', 'venv', 'node_modules', '__pycache__', '.codex', '.hermes'}
-        for root_path in proj.root_paths:
+        for root_path in ([] if worktree_id else proj.root_paths):
             root = Path(root_path).resolve()
             if not root.is_dir():
                 continue
@@ -864,7 +931,62 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
     @unit_of_work(write=False)
     def list_agent_sessions(project_id: str):
         storage.validate_scope(project_id)
-        return [dict(r) for r in storage.conn.execute("SELECT * FROM agent_sessions WHERE project_id=? ORDER BY created_at DESC LIMIT 100", (project_id,))]
+        results=[]
+        for row in storage.conn.execute("SELECT * FROM agent_sessions WHERE project_id=? ORDER BY last_seen_at DESC LIMIT 100", (project_id,)):
+            item=dict(row)
+            binding=storage.conn.execute('SELECT binding_revision FROM remote_session_bindings WHERE session_id=?', (item['id'],)).fetchone()
+            if not binding:
+                binding=storage.conn.execute('SELECT binding_revision FROM local_session_bindings WHERE session_id=?', (item['id'],)).fetchone()
+            item['binding_revision']=binding['binding_revision'] if binding else 0
+            latest=storage.conn.execute('SELECT id,file_path,created_at,response_json FROM context_deliveries WHERE session_id=? ORDER BY created_at DESC LIMIT 1', (item['id'],)).fetchone()
+            if latest:
+                data=json.loads(latest['response_json'])
+                item['latest_delivery']={'delivery_id':latest['id'],'file_path':latest['file_path'],
+                                         'created_at':latest['created_at'],'rendered_markdown':data.get('rendered_markdown','')}
+                item['current_file']=latest['file_path']
+            else:
+                item['latest_delivery']=None
+                item['current_file']=None
+            results.append(item)
+        return results
+
+    @app.post('/api/clients')
+    @unit_of_work(write=True)
+    def enroll_client(req: EnrollClientReq):
+        return remote.enroll(req.name, req.project_ids, admin_configured=bool(os.getenv('CODENEURO_API_TOKEN')))
+
+    @app.get('/api/clients')
+    @unit_of_work(write=False)
+    def list_clients():
+        return remote.list_clients()
+
+    @app.post('/api/clients/{client_id}/revoke')
+    @unit_of_work(write=True)
+    def revoke_client(client_id: str):
+        return remote.revoke(client_id)
+
+    @app.post('/api/agent/sessions/{session_id}/bind-task')
+    @unit_of_work(write=True)
+    def bind_session_task(session_id: str, req: BindSessionReq):
+        row=storage.conn.execute('SELECT * FROM agent_sessions WHERE id=?', (session_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail='Session not found')
+        owner=storage.conn.execute('SELECT client_id FROM remote_session_bindings WHERE session_id=?', (session_id,)).fetchone()
+        if owner:
+            return remote.bind_task(owner['client_id'], session_id, req.task_id, req.expected_revision)
+        storage.conn.execute('INSERT OR IGNORE INTO local_session_bindings(session_id) VALUES(?)',(session_id,))
+        current=storage.conn.execute('SELECT binding_revision FROM local_session_bindings WHERE session_id=?',(session_id,)).fetchone()['binding_revision']
+        if current!=req.expected_revision:
+            raise Conflict('Session task binding changed; reload its revision.')
+        storage.validate_scope(row['project_id'], req.task_id, require_active=True)
+        if req.task_id!=row['task_id']:
+            storage.conn.execute('UPDATE agent_sessions SET task_id=?,last_seen_at=? WHERE id=?',
+                                 (req.task_id,datetime.utcnow().isoformat(),session_id))
+            storage.conn.execute('UPDATE local_session_bindings SET binding_revision=binding_revision+1 WHERE session_id=?',(session_id,))
+            storage.audit(row['project_id'],'human','session.task_bound',session_id,
+                          {'old_task_id':row['task_id'],'task_id':req.task_id,'binding_revision':current+1})
+        updated=storage.conn.execute('SELECT * FROM agent_sessions WHERE id=?',(session_id,)).fetchone()
+        return {**dict(updated),'binding_revision':current+(req.task_id!=row['task_id'])}
 
     @app.post("/api/agent/context", response_model=ContextResolution)
     @unit_of_work(write=True)

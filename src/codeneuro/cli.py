@@ -22,6 +22,9 @@ def main():
         command.add_argument('--db',default=default_db)
         if name=='serve':
             command.add_argument('--host',default='127.0.0.1');command.add_argument('--port',type=int,default=8800)
+        if name=='mcp':
+            command.add_argument('--config', help='Workstation .codeneuro.json for pinned remote Hub sidecar')
+            command.add_argument('--workspace', help='Native Windows/Linux workspace path')
         if name in ('mcp','serve','session'):command.add_argument('--debug',action='store_true')
         if name in ('session','export'):
             command.add_argument('--project-id',required=True);command.add_argument('--task-id')
@@ -42,6 +45,21 @@ def main():
             version=connection.execute('PRAGMA user_version').fetchone()[0]
         print(json.dumps({'integrity':integrity,'foreign_key_errors':foreign_keys,'schema_version':version,'expected_schema_version':SCHEMA_VERSION}))
         return 0 if integrity=='ok' and not foreign_keys and version==SCHEMA_VERSION else 1
+    if args.command=='mcp' and args.config:
+        from pathlib import Path
+        from .client import discover_config, RemoteClient
+        from .client_mcp import create_client_mcp
+        try:
+            config=discover_config(config_path=args.config)
+            workspace=Path(args.workspace) if args.workspace else Path(config['config_path']).parent
+            with RemoteClient(config,workspace,debug=args.debug) as client:
+                server=create_client_mcp(client,debug_mode=args.debug)
+                if hasattr(server,'run_stdio_async'):asyncio.run(server.run_stdio_async())
+                else:server.run(transport='stdio')
+            return 0
+        except DomainError as exc:
+            print(json.dumps({'error':exc.code,'detail':str(exc)}),file=sys.stderr)
+            return 2
     storage=Storage(args.db)
     try:
         service=ContextService(storage)
