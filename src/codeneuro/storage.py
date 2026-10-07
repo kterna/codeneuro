@@ -3,9 +3,13 @@
 import json
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from codeneuro.database import Transactional, atomic, DomainError, Conflict
+from codeneuro.paths import relative_path
+from codeneuro.migrations import migrate
 
 from codeneuro.models import (
     AgentIssue,
@@ -29,16 +33,19 @@ from codeneuro.models import (
 )
 
 
-class Storage:
+class Storage(Transactional):
     def __init__(self, db_path: str = ":memory:"):
+        self._setup_transactions()
         self.db_path = db_path
         if db_path != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(
-            db_path, check_same_thread=False, isolation_level=None
+            db_path, check_same_thread=False, isolation_level=None, timeout=15
         )
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA busy_timeout=15000")
         self._init_db()
+        migrate(self)
 
     def _init_db(self):
         cur = self.conn.cursor()
@@ -181,21 +188,16 @@ class Storage:
         CREATE INDEX IF NOT EXISTS idx_events_proj ON telemetry_events(project_id, created_at DESC);
         """)
 
-        # Alter migration for existing tables if columns missing
-        for col_def in [
-            ("version", "INTEGER DEFAULT 1"),
-            ("avg_score", "REAL"),
-            ("eval_count", "INTEGER DEFAULT 0"),
-            ("zero_score_count", "INTEGER DEFAULT 0"),
-            ("one_score_count", "INTEGER DEFAULT 0")
-        ]:
-            try:
-                cur.execute(f"ALTER TABLE rules ADD COLUMN {col_def[0]} {col_def[1]}")
-            except sqlite3.OperationalError:
-                pass
+        columns = {r[1] for r in cur.execute("PRAGMA table_info(rules)")}
+        for name, declaration in [("version", "INTEGER DEFAULT 1"), ("avg_score", "REAL"),
+                                  ("eval_count", "INTEGER DEFAULT 0"), ("zero_score_count", "INTEGER DEFAULT 0"),
+                                  ("one_score_count", "INTEGER DEFAULT 0")]:
+            if name not in columns:
+                cur.execute(f"ALTER TABLE rules ADD COLUMN {name} {declaration}")
 
     # --- Project Operations ---
 
+    @atomic(write=True)
     def create_project(self, project: Project) -> Project:
         cur = self.conn.cursor()
         cur.execute(
@@ -211,6 +213,7 @@ class Storage:
         )
         return project
 
+    @atomic(write=False)
     def get_project(self, project_id: str) -> Optional[Project]:
         cur = self.conn.cursor()
         cur.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
@@ -225,6 +228,7 @@ class Storage:
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 
+    @atomic(write=False)
     def list_projects(self) -> List[Project]:
         cur = self.conn.cursor()
         cur.execute("SELECT * FROM projects ORDER BY created_at DESC")
@@ -243,7 +247,9 @@ class Storage:
 
     # --- Task Operations ---
 
+    @atomic(write=True)
     def create_task(self, task: Task) -> Task:
+        self.validate_scope(task.project_id)
         cur = self.conn.cursor()
         cur.execute(
             """INSERT INTO tasks (id, project_id, title, description, status, created_at, updated_at)
@@ -260,6 +266,7 @@ class Storage:
         )
         return task
 
+    @atomic(write=False)
     def get_task(self, task_id: str) -> Optional[Task]:
         cur = self.conn.cursor()
         cur.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
@@ -276,6 +283,7 @@ class Storage:
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )
 
+    @atomic(write=False)
     def list_tasks(self, project_id: str) -> List[Task]:
         cur = self.conn.cursor()
         cur.execute(
@@ -297,17 +305,29 @@ class Storage:
             )
         return tasks
 
+    @atomic(write=True)
     def update_task_status(self, task_id: str, status: TaskStatus) -> bool:
-        cur = self.conn.cursor()
-        cur.execute(
-            "UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?",
-            (status.value, datetime.utcnow().isoformat(), task_id),
-        )
-        return cur.rowcount > 0
+        task = self.get_task(task_id)
+        if task is None:
+            return False
+        self.conn.execute("UPDATE tasks SET status=?, updated_at=? WHERE id=?", (status.value, datetime.utcnow().isoformat(), task_id))
+        if status in (TaskStatus.RELEASED, TaskStatus.ARCHIVED):
+            for rule in self.list_rules(task.project_id, task_id=task_id):
+                if rule.lifecycle == Lifecycle.SHORT_TERM:
+                    self.update_rule_status(rule.id, RuleStatus.DEPRECATED)
+        self.audit(task.project_id, "human", "task.status", task_id, {"old": task.status.value, "new": status.value})
+        return True
 
     # --- Rule Operations with Full Versioning & Snapshots ---
 
+    @atomic(write=True)
     def create_rule(self, rule: Rule) -> Rule:
+        rule.scope_patterns = [relative_path(p, pattern=True) for p in rule.scope_patterns]
+        self.validate_scope(rule.project_id, rule.task_id, require_active=rule.status == RuleStatus.ACTIVE)
+        if rule.lifecycle == Lifecycle.SHORT_TERM and not rule.task_id:
+            raise DomainError("A short-term rule must belong to a task.")
+        if rule.lifecycle == Lifecycle.LONG_TERM and rule.task_id:
+            raise DomainError("A long-term rule cannot belong to a temporary task.")
         cur = self.conn.cursor()
         now_str = rule.created_at.isoformat()
         cur.execute(
@@ -340,7 +360,7 @@ class Storage:
         )
 
         # Snapshot version 1
-        ver_id = f"ver_{uuid.uuid4().hex[:8]}"
+        ver_id = f"ver_{uuid.uuid4().hex}"
         cur.execute(
             """INSERT INTO rule_versions (id, rule_id, project_id, version_number, title,
                                           scope_patterns, priority, lifecycle, content_points,
@@ -361,8 +381,11 @@ class Storage:
                 now_str,
             ),
         )
+        self.conn.execute("UPDATE rule_versions SET status=?,task_id=? WHERE id=?", (rule.status.value, rule.task_id, ver_id))
+        self.audit(rule.project_id, rule.created_by, "rule.created", rule.id, {"version": rule.version})
         return rule
 
+    @atomic(write=True)
     def update_rule_content(
         self,
         rule_id: str,
@@ -371,19 +394,23 @@ class Storage:
         scope_patterns: List[str],
         priority: Priority,
         change_summary: str = "在线更新",
-        operator: str = "user"
+        operator: str = "user",
+        expected_version: Optional[int] = None
     ) -> Optional[Rule]:
         rule = self.get_rule(rule_id)
         if not rule:
             return None
 
+        if expected_version is not None and rule.version != expected_version:
+            raise Conflict("Rule was changed by another client; reload before editing.")
+        scope_patterns = [relative_path(v, pattern=True) for v in scope_patterns]
         new_version = (rule.version or 1) + 1
         now_str = datetime.utcnow().isoformat()
         cur = self.conn.cursor()
 
         cur.execute(
             """UPDATE rules SET title = ?, content_points = ?, scope_patterns = ?, priority = ?,
-                                version = ?, updated_at = ? WHERE id = ?""",
+                                version = ?, updated_at = ?, avg_score=NULL, eval_count=0, zero_score_count=0, one_score_count=0 WHERE id = ?""",
             (
                 title,
                 json.dumps(content_points),
@@ -396,7 +423,7 @@ class Storage:
         )
 
         # Record version snapshot
-        ver_id = f"ver_{uuid.uuid4().hex[:8]}"
+        ver_id = f"ver_{uuid.uuid4().hex}"
         cur.execute(
             """INSERT INTO rule_versions (id, rule_id, project_id, version_number, title,
                                           scope_patterns, priority, lifecycle, content_points,
@@ -417,29 +444,26 @@ class Storage:
                 now_str,
             ),
         )
+        self.conn.execute("UPDATE rule_versions SET status=?,task_id=? WHERE id=?", (rule.status.value, rule.task_id, ver_id))
+        self.audit(rule.project_id, operator, "rule.updated", rule_id, {"version": new_version, "reason": change_summary})
         return self.get_rule(rule_id)
 
-    def rollback_rule_version(self, rule_id: str, target_version: int, operator: str = "user") -> Optional[Rule]:
-        cur = self.conn.cursor()
-        cur.execute(
-            "SELECT * FROM rule_versions WHERE rule_id = ? AND version_number = ?",
-            (rule_id, target_version),
-        )
-        row = cur.fetchone()
-        if not row:
+    @atomic(write=True)
+    def rollback_rule_version(self, rule_id: str, target_version: int, operator: str = "user", expected_version: Optional[int] = None) -> Optional[Rule]:
+        row = self.conn.execute("SELECT * FROM rule_versions WHERE rule_id=? AND version_number=?", (rule_id, target_version)).fetchone()
+        if row is None:
             return None
+        current = self.get_rule(rule_id)
+        self.validate_scope(current.project_id, row['task_id'])
+        if row['status'] == 'active' and row['task_id']:
+            if self.get_task(row['task_id']).status not in (TaskStatus.ACTIVE, TaskStatus.TESTING):
+                raise Conflict("A historical version cannot reactivate a rule for an inactive task.")
+        result = self.update_rule_content(rule_id, row['title'], json.loads(row['content_points']), json.loads(row['scope_patterns']), Priority(row['priority']), f"Rollback to version {target_version}", operator, expected_version)
+        self.conn.execute("UPDATE rules SET status=?,lifecycle=?,task_id=? WHERE id=?", (row['status'], row['lifecycle'], row['task_id'], rule_id))
+        self.conn.execute("UPDATE rule_versions SET status=?,lifecycle=?,task_id=? WHERE rule_id=? AND version_number=?", (row['status'], row['lifecycle'], row['task_id'], rule_id, result.version))
+        return self.get_rule(rule_id)
 
-        # Rollback
-        return self.update_rule_content(
-            rule_id=rule_id,
-            title=row["title"],
-            content_points=json.loads(row["content_points"]),
-            scope_patterns=json.loads(row["scope_patterns"]),
-            priority=Priority(row["priority"]),
-            change_summary=f"回滚至版本 v{target_version}",
-            operator=operator,
-        )
-
+    @atomic(write=False)
     def list_rule_versions(self, rule_id: str) -> List[RuleVersion]:
         cur = self.conn.cursor()
         cur.execute(
@@ -454,6 +478,7 @@ class Storage:
                     rule_id=r["rule_id"],
                     project_id=r["project_id"],
                     version_number=r["version_number"],
+                    status=RuleStatus(r["status"]), task_id=r["task_id"],
                     title=r["title"],
                     scope_patterns=json.loads(r["scope_patterns"]),
                     priority=Priority(r["priority"]),
@@ -466,6 +491,7 @@ class Storage:
             )
         return res
 
+    @atomic(write=False)
     def get_rule(self, rule_id: str) -> Optional[Rule]:
         cur = self.conn.cursor()
         cur.execute("SELECT * FROM rules WHERE id = ?", (rule_id,))
@@ -474,6 +500,7 @@ class Storage:
             return None
         return self._row_to_rule(row)
 
+    @atomic(write=False)
     def list_rules(
         self,
         project_id: str,
@@ -500,14 +527,24 @@ class Storage:
         cur.execute(query, params)
         return [self._row_to_rule(r) for r in cur.fetchall()]
 
-    def update_rule_status(self, rule_id: str, status: RuleStatus) -> bool:
-        cur = self.conn.cursor()
-        cur.execute(
-            "UPDATE rules SET status = ?, updated_at = ? WHERE id = ?",
-            (status.value, datetime.utcnow().isoformat(), rule_id),
-        )
-        return cur.rowcount > 0
+    @atomic(write=True)
+    def update_rule_status(self, rule_id: str, status: RuleStatus, expected_version: Optional[int] = None) -> bool:
+        rule = self.get_rule(rule_id)
+        if rule is None:
+            return False
+        if status == RuleStatus.ACTIVE and rule.task_id:
+            self.validate_scope(rule.project_id, rule.task_id, require_active=True)
+        if expected_version is not None and expected_version != rule.version:
+            raise Conflict("Rule version changed.")
+        if rule.status == status:
+            return True
+        updated = self.update_rule_content(rule_id, rule.title, rule.content_points, rule.scope_patterns, rule.priority,
+                                           f"Status: {rule.status.value} -> {status.value}", expected_version=rule.version)
+        self.conn.execute("UPDATE rules SET status=? WHERE id=?", (status.value, rule_id))
+        self.conn.execute("UPDATE rule_versions SET status=? WHERE rule_id=? AND version_number=?", (status.value, rule_id, updated.version))
+        return True
 
+    @atomic(write=True)
     def increment_rule_hits(self, rule_ids: List[str]):
         if not rule_ids:
             return
@@ -521,7 +558,12 @@ class Storage:
 
     # --- Worktree Fleet Management ---
 
+    @atomic(write=True)
     def register_worktree_heartbeat(self, wt: WorktreeInstance) -> WorktreeInstance:
+        self.validate_scope(wt.project_id, wt.active_task_id)
+        old = self.conn.execute("SELECT * FROM worktree_instances WHERE id=?", (wt.id,)).fetchone()
+        if old and (old['project_id'],old['machine_name'],old['worktree_path']) != (wt.project_id,wt.machine_name,wt.worktree_path):
+            raise Conflict("Worktree identity cannot be rebound to another project, machine or path.")
         cur = self.conn.cursor()
         now_str = datetime.utcnow().isoformat()
         cur.execute(
@@ -552,10 +594,11 @@ class Storage:
         )
         return wt
 
+    @atomic(write=False)
     def list_worktrees(self, project_id: str) -> List[WorktreeInstance]:
         cur = self.conn.cursor()
         cur.execute(
-            "SELECT * FROM worktree_instances WHERE project_id = ? ORDER BY last_heartbeat DESC",
+            "SELECT * FROM worktree_instances WHERE source != 'demo' AND project_id = ? ORDER BY last_heartbeat DESC",
             (project_id,),
         )
         res = []
@@ -572,12 +615,18 @@ class Storage:
                     current_file=r["current_file"],
                     agent_client=r["agent_client"],
                     last_heartbeat=datetime.fromisoformat(r["last_heartbeat"]),
-                    is_online=bool(r["is_online"]),
+                    source=r["source"],
+                    is_online=bool(r["is_online"]) and (datetime.utcnow() - datetime.fromisoformat(r["last_heartbeat"]).replace(tzinfo=None)).total_seconds() < 120,
                 )
             )
         return res
 
+    @atomic(write=True)
     def bind_worktree_task(self, worktree_id: str, task_id: Optional[str]) -> bool:
+        wt = self.conn.execute("SELECT * FROM worktree_instances WHERE id=?", (worktree_id,)).fetchone()
+        if wt is None:
+            return False
+        self.validate_scope(wt['project_id'], task_id, require_active=True)
         cur = self.conn.cursor()
         cur.execute(
             "UPDATE worktree_instances SET active_task_id = ? WHERE id = ?",
@@ -587,9 +636,10 @@ class Storage:
 
     # --- Telemetry Events ---
 
+    @atomic(write=True)
     def log_telemetry_event(self, project_id: str, event_type: str, summary: str, details: Optional[Dict[str, Any]] = None):
         cur = self.conn.cursor()
-        eid = f"evt_{uuid.uuid4().hex[:8]}"
+        eid = f"evt_{uuid.uuid4().hex}"
         cur.execute(
             """INSERT INTO telemetry_events (id, project_id, event_type, summary, details, created_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
@@ -603,10 +653,11 @@ class Storage:
             ),
         )
 
+    @atomic(write=False)
     def list_telemetry_events(self, project_id: str, limit: int = 50) -> List[Dict[str, Any]]:
         cur = self.conn.cursor()
         cur.execute(
-            "SELECT * FROM telemetry_events WHERE project_id = ? ORDER BY created_at DESC LIMIT ?",
+            "SELECT * FROM telemetry_events WHERE source != 'demo' AND project_id = ? ORDER BY created_at DESC LIMIT ?",
             (project_id, limit),
         )
         res = []
@@ -623,6 +674,7 @@ class Storage:
 
     # --- Intelligent Health Check & Conflict Detection Engine ---
 
+    @atomic(write=False)
     def check_project_health(self, project_id: str) -> HealthCheckReport:
         rules = self.list_rules(project_id=project_id, status=RuleStatus.ACTIVE)
         tasks = self.list_tasks(project_id)
@@ -639,7 +691,6 @@ class Storage:
             r1 = rules[i]
             if r1.zero_score_count >= 2:
                 fatigued_rules.append(r1)
-                penalty += 3
             if r1.one_score_count >= 2:
                 noisy_rules.append(r1)
                 penalty += 4
@@ -670,18 +721,17 @@ class Storage:
                         conflicts.append(
                             RuleConflict(
                                 id=f"conf_prio_{r1.id}_{r2.id}",
-                                conflict_type="opposing_priority",
+                                conflict_type="scope_overlap",
                                 severity="info",
-                                title=f"同作用域优先级差异: {r1.title} ({r1.priority.value}) vs {r2.title} ({r2.priority.value})",
-                                description=f"两条规则同时作用于 {', '.join(set1.intersection(set2))}，但被分别定义为不同优先级。",
+                                title=f"同作用域需人工核对: {r1.title} ({r1.priority.value}) vs {r2.title} ({r2.priority.value})",
+                                description=f"两条规则作用于相同范围 {', '.join(set1.intersection(set2))}；范围或优先级本身不能证明语义冲突。",
                                 involved_rule_ids=[r1.id, r2.id],
                                 suggested_fix="核对规则职责，建议将核心约束提升为一致的优先级定级。",
                             )
                         )
-                        penalty += 2
 
         score = max(0, 100 - penalty)
-        status_label = "healthy" if score >= 90 else ("needs_review" if score >= 70 else "degraded")
+        status_label = "needs_review" if conflicts or noisy_rules else "no_structural_findings"
 
         return HealthCheckReport(
             project_id=project_id,
@@ -696,7 +746,11 @@ class Storage:
 
     # --- Rule Evaluation Operations (Debug Mode) ---
 
+    @atomic(write=True)
     def record_evaluation(self, eval_item: RuleEvaluation) -> RuleEvaluation:
+        rule = self.get_rule(eval_item.rule_id)
+        if rule is None or rule.project_id != eval_item.project_id:
+            raise DomainError("Evaluation rule does not belong to this project.")
         cur = self.conn.cursor()
         cur.execute(
             """INSERT INTO rule_evaluations (id, project_id, rule_id, score, file_path, reason, session_id, created_at)
@@ -713,12 +767,15 @@ class Storage:
             ),
         )
 
+        self.conn.execute("UPDATE rule_evaluations SET source=? WHERE id=?", (eval_item.source, eval_item.id))
+        self.conn.execute("UPDATE rule_evaluations SET delivery_id=?,rule_version=? WHERE id=?", (eval_item.delivery_id, eval_item.rule_version, eval_item.id))
+
         cur.execute(
             """SELECT AVG(score), COUNT(*),
                       SUM(CASE WHEN score = 0 THEN 1 ELSE 0 END),
                       SUM(CASE WHEN score = 1 THEN 1 ELSE 0 END)
-               FROM rule_evaluations WHERE rule_id = ?""",
-            (eval_item.rule_id,),
+               FROM rule_evaluations WHERE rule_id = ? AND source = 'agent' AND rule_version = (SELECT version FROM rules WHERE id=?)""",
+            (eval_item.rule_id, eval_item.rule_id),
         )
         row = cur.fetchone()
         avg_score = row[0]
@@ -740,10 +797,11 @@ class Storage:
         )
         return eval_item
 
+    @atomic(write=False)
     def list_evaluations(
         self, project_id: str, rule_id: Optional[str] = None, limit: int = 100
     ) -> List[RuleEvaluation]:
-        query = "SELECT * FROM rule_evaluations WHERE project_id = ?"
+        query = "SELECT * FROM rule_evaluations WHERE source != 'demo' AND project_id = ?"
         params: List[Any] = [project_id]
         if rule_id:
             query += " AND rule_id = ?"
@@ -761,6 +819,7 @@ class Storage:
                     project_id=row["project_id"],
                     rule_id=row["rule_id"],
                     score=row["score"],
+                    source=row["source"], delivery_id=row["delivery_id"], rule_version=row["rule_version"],
                     file_path=row["file_path"],
                     reason=row["reason"],
                     session_id=row["session_id"],
@@ -771,7 +830,13 @@ class Storage:
 
     # --- Agent Issue Operations (Debug Mode) ---
 
+    @atomic(write=True)
     def record_issue(self, issue: AgentIssue) -> AgentIssue:
+        self.validate_scope(issue.project_id)
+        for rule_id in issue.related_rule_ids:
+            rule = self.get_rule(rule_id)
+            if rule is None or rule.project_id != issue.project_id:
+                raise DomainError("Issue references a rule from another project.")
         cur = self.conn.cursor()
         cur.execute(
             """INSERT INTO agent_issues (id, project_id, issue_type, title, description,
@@ -792,12 +857,15 @@ class Storage:
                 issue.resolved_at.isoformat() if issue.resolved_at else None,
             ),
         )
+        self.conn.execute("UPDATE agent_issues SET source=? WHERE id=?", (issue.source, issue.id))
+        self.conn.execute("UPDATE agent_issues SET session_id=? WHERE id=?", (issue.session_id, issue.id))
         return issue
 
+    @atomic(write=False)
     def list_issues(
         self, project_id: str, status: Optional[IssueStatus] = None
     ) -> List[AgentIssue]:
-        query = "SELECT * FROM agent_issues WHERE project_id = ?"
+        query = "SELECT * FROM agent_issues WHERE source != 'demo' AND project_id = ?"
         params: List[Any] = [project_id]
         if status:
             query += " AND status = ?"
@@ -813,6 +881,7 @@ class Storage:
                     id=row["id"],
                     project_id=row["project_id"],
                     issue_type=IssueType(row["issue_type"]),
+                    source=row["source"], session_id=row["session_id"],
                     title=row["title"],
                     description=row["description"],
                     file_path=row["file_path"],
@@ -829,6 +898,7 @@ class Storage:
             )
         return res
 
+    @atomic(write=True)
     def resolve_issue(self, issue_id: str, status: IssueStatus = IssueStatus.RESOLVED) -> bool:
         cur = self.conn.cursor()
         now_str = datetime.utcnow().isoformat()
@@ -840,7 +910,10 @@ class Storage:
 
     # --- Finding Operations ---
 
+    @atomic(write=True)
     def create_finding(self, finding: Finding) -> Finding:
+        self.validate_scope(finding.project_id, finding.task_id)
+        finding.target_path = relative_path(finding.target_path, pattern=True)
         cur = self.conn.cursor()
         cur.execute(
             """INSERT INTO findings (id, project_id, task_id, session_id, target_path,
@@ -858,12 +931,14 @@ class Storage:
                 finding.created_at.isoformat(),
             ),
         )
+        self.conn.execute("UPDATE findings SET source=? WHERE id=?", (finding.source, finding.id))
         return finding
 
+    @atomic(write=False)
     def list_findings(
         self, project_id: str, status: Optional[FindingStatus] = None
     ) -> List[Finding]:
-        query = "SELECT * FROM findings WHERE project_id = ?"
+        query = "SELECT * FROM findings WHERE source != 'demo' AND project_id = ?"
         params: List[Any] = [project_id]
         if status:
             query += " AND status = ?"
@@ -882,6 +957,7 @@ class Storage:
                     session_id=row["session_id"],
                     target_path=row["target_path"],
                     finding_text=row["finding_text"],
+                    source=row["source"],
                     suggested_priority=Priority(row["suggested_priority"]),
                     status=FindingStatus(row["status"]),
                     created_at=datetime.fromisoformat(row["created_at"]),
@@ -889,6 +965,7 @@ class Storage:
             )
         return res
 
+    @atomic(write=True)
     def update_finding_status(self, finding_id: str, status: FindingStatus) -> bool:
         cur = self.conn.cursor()
         cur.execute(
@@ -899,7 +976,9 @@ class Storage:
 
     # --- Proposal Operations ---
 
+    @atomic(write=True)
     def create_proposal(self, proposal: Proposal) -> Proposal:
+        self.validate_scope(proposal.project_id, proposal.task_id)
         cur = self.conn.cursor()
         cur.execute(
             """INSERT INTO proposals (id, project_id, task_id, target_component,
@@ -918,6 +997,7 @@ class Storage:
         )
         return proposal
 
+    @atomic(write=False)
     def list_proposals(self, project_id: str, status: Optional[str] = None) -> List[Proposal]:
         query = "SELECT * FROM proposals WHERE project_id = ?"
         params: List[Any] = [project_id]
@@ -958,6 +1038,7 @@ class Storage:
             status=RuleStatus(row["status"]),
             version=row["version"] if "version" in row_keys and row["version"] else 1,
             hit_count=row["hit_count"],
+            legacy_hit_count=row["legacy_hit_count"],
             last_hit_at=(
                 datetime.fromisoformat(row["last_hit_at"])
                 if row["last_hit_at"]
@@ -970,3 +1051,23 @@ class Storage:
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )
+
+    @atomic(write=False)
+    def validate_scope(self, project_id: str, task_id: Optional[str] = None, require_active: bool = False):
+        if self.get_project(project_id) is None:
+            raise DomainError("Project not found.", "not_found", 404)
+        if task_id:
+            task = self.get_task(task_id)
+            if task is None or task.project_id != project_id:
+                raise DomainError("Task does not belong to this project.")
+            if require_active and task.status not in (TaskStatus.ACTIVE, TaskStatus.TESTING):
+                raise Conflict("Task is not active; its short-term rules cannot be activated.")
+
+    @atomic(write=True)
+    def audit(self, project_id, actor, action, entity_id, details):
+        self.conn.execute("INSERT INTO audit_events(project_id,actor,action,entity_id,details,created_at) VALUES(?,?,?,?,?,?)", (project_id, actor, action, entity_id, json.dumps(details, ensure_ascii=False), datetime.utcnow().isoformat()))
+
+    @atomic(write=True)
+    def delete_rule(self, rule_id, expected_version=None):
+        # Preserve deliveries, feedback and version history for an auditable deletion.
+        return self.update_rule_status(rule_id, RuleStatus.REVOKED, expected_version)

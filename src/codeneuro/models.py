@@ -1,9 +1,10 @@
-"""Core domain models and schema definitions for CodeNeuro Enterprise."""
+"""Domain records for scoped context, versions and provenance."""
 
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from codeneuro.paths import relative_path
 
 
 class Lifecycle(str, Enum):
@@ -23,6 +24,7 @@ class Priority(str, Enum):
 
 
 class RuleStatus(str, Enum):
+    DRAFT = "draft"
     ACTIVE = "active"
     REVOKED = "revoked"
     DEPRECATED = "deprecated"
@@ -57,7 +59,7 @@ class IssueStatus(str, Enum):
 
 
 class Project(BaseModel):
-    id: str
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     name: str
     description: Optional[str] = ""
     root_paths: List[str] = Field(default_factory=list)
@@ -65,7 +67,7 @@ class Project(BaseModel):
 
 
 class Task(BaseModel):
-    id: str
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     project_id: str
     title: str
     description: Optional[str] = ""
@@ -75,7 +77,7 @@ class Task(BaseModel):
 
 
 class Rule(BaseModel):
-    id: str
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     project_id: str
     task_id: Optional[str] = None  # None indicates project-wide long-term rule
     scope_patterns: List[str] = Field(default_factory=lambda: ["**"]) # Globs like ["src/services/pay/**"]
@@ -86,6 +88,7 @@ class Rule(BaseModel):
     created_by: str = "user" # "user" | "agent" | "decomposer"
     status: RuleStatus = RuleStatus.ACTIVE
     version: int = 1
+    legacy_hit_count: int = 0
     hit_count: int = 0
     last_hit_at: Optional[datetime] = None
     avg_score: Optional[float] = None
@@ -96,11 +99,21 @@ class Rule(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+    @field_validator("scope_patterns")
+    @classmethod
+    def validate_scopes(cls, values):
+        if not values:
+            raise ValueError("At least one scope pattern is required")
+        return list(dict.fromkeys(relative_path(v, pattern=True) for v in values))
+
+
 class RuleVersion(BaseModel):
-    id: str
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     rule_id: str
     project_id: str
     version_number: int
+    status: RuleStatus = RuleStatus.ACTIVE
+    task_id: Optional[str] = None
     title: str
     scope_patterns: List[str]
     priority: Priority
@@ -112,7 +125,8 @@ class RuleVersion(BaseModel):
 
 
 class Finding(BaseModel):
-    id: str
+    source: str = "human"
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     project_id: str
     task_id: Optional[str] = None
     session_id: Optional[str] = None
@@ -124,7 +138,7 @@ class Finding(BaseModel):
 
 
 class Proposal(BaseModel):
-    id: str
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     project_id: str
     task_id: Optional[str] = None
     target_component: str
@@ -135,7 +149,10 @@ class Proposal(BaseModel):
 
 
 class RuleEvaluation(BaseModel):
-    id: str
+    source: str = "human"
+    delivery_id: Optional[str] = None
+    rule_version: Optional[int] = None
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     project_id: str
     rule_id: str
     score: int = Field(ge=0, le=5) # 0=known/redundant, 1=irrelevant, 2=low quality, 3=neutral, 4=helpful, 5=essential
@@ -146,7 +163,9 @@ class RuleEvaluation(BaseModel):
 
 
 class AgentIssue(BaseModel):
-    id: str
+    source: str = "human"
+    session_id: Optional[str] = None
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     project_id: str
     issue_type: IssueType = IssueType.OTHER
     title: str
@@ -160,7 +179,8 @@ class AgentIssue(BaseModel):
 
 
 class WorktreeInstance(BaseModel):
-    id: str
+    source: str = "client"
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     project_id: str
     machine_name: str = "local"
     worktree_path: str
@@ -174,7 +194,7 @@ class WorktreeInstance(BaseModel):
 
 
 class RuleConflict(BaseModel):
-    id: str
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     conflict_type: str # overlap_redundancy | opposing_priority | logical_contradiction | orphan_task
     severity: str # critical | warning | info
     title: str
@@ -184,6 +204,7 @@ class RuleConflict(BaseModel):
 
 
 class HealthCheckReport(BaseModel):
+    assessment_scope: str = "Structural hints only; this does not prove semantic consistency or code correctness."
     project_id: str
     overall_score: int # 0 - 100
     status_label: str # healthy | needs_review | degraded
@@ -195,6 +216,12 @@ class HealthCheckReport(BaseModel):
 
 
 class ContextResolution(BaseModel):
+    session_id: Optional[str] = None
+    delivery_id: Optional[str] = None
+    mode: str = "preview"
+    reminders: List[Dict[str, Any]] = Field(default_factory=list)
+    omitted_rules: List[Dict[str, Any]] = Field(default_factory=list)
+    budget_exceeded: bool = False
     file_path: str
     project_id: str
     task_id: Optional[str] = None

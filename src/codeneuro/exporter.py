@@ -1,105 +1,112 @@
-"""Static exporter for converting CodeNeuro dynamic rules into Cursor MDC and Claude.md."""
-
+"""Owned, atomic static snapshots. Human rules outside our manifest are preserved."""
+import fcntl
+import hashlib
+import json
+import os
 import re
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import List, Optional
-from codeneuro.models import Lifecycle, Priority, Rule, RuleStatus
+from .database import DomainError
+from .models import Lifecycle, Priority, RuleStatus
 
 
-def slugify(text: str) -> str:
-    """Convert text to safe lowercase filename slug."""
-    text = re.sub(r'[^\w\s-]', '', text).strip().lower()
-    return re.sub(r'[-\s]+', '-', text) or "rule"
+def slugify(text):
+    return re.sub(r'[^\w-]+', '-', text.lower()).strip('-')[:32] or 'rule'
+
+
+def atomic_text(path, text):
+    fd, temporary = tempfile.mkstemp(prefix='.codeneuro-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+@contextmanager
+def export_lock(root):
+    lock = root / '.codeneuro-export.lock'
+    if lock.is_symlink():
+        raise DomainError('Export lock may not be a symlink.')
+    with lock.open('a') as stream:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        yield
+
+
+def eligible(rules, task):
+    return sorted([r for r in rules if r.status == RuleStatus.ACTIVE and
+        (r.lifecycle == Lifecycle.LONG_TERM or (task and r.task_id == task))], key=lambda r: (r.priority.rank, r.id))
 
 
 class RuleExporter:
-    """Exports in-memory / database rules into static config files."""
-
     @staticmethod
-    def rule_to_mdc(rule: Rule) -> str:
-        """Render a single rule into Cursor .mdc format with YAML frontmatter."""
-        globs_str = ", ".join(rule.scope_patterns)
-        always_apply = "true" if "**" in rule.scope_patterns and rule.priority == Priority.P0 else "false"
-
-        lines = [
-            "---",
-            f"description: {rule.title}",
-            f"globs: {globs_str}",
-            f"alwaysApply: {always_apply}",
-            "---",
-            "",
-            f"# [{rule.priority.value}] {rule.title}",
-            f"<!-- Lifecycle: {rule.lifecycle.value} | Created by: {rule.created_by} -->",
-            "",
-        ]
-        for pt in rule.content_points:
-            lines.append(f"- {pt}")
-
-        return "\n".join(lines)
+    def rule_to_mdc(rule):
+        return '\n'.join(['---', 'description: ' + json.dumps(rule.title, ensure_ascii=False),
+            'globs: ' + json.dumps(', '.join(rule.scope_patterns), ensure_ascii=False),
+            'alwaysApply: ' + ('true' if '**' in rule.scope_patterns and rule.priority == Priority.P0 else 'false'),
+            '---', '', f'# [{rule.priority.value}] {rule.title}',
+            f'<!-- CodeNeuro {rule.id} v{rule.version} -->', '', *['- '+p for p in rule.content_points], ''])
 
     @classmethod
-    def export_cursor_rules(
-        cls,
-        rules: List[Rule],
-        out_dir: Path,
-        active_task_id: Optional[str] = None
-    ) -> List[Path]:
-        """Export active rules to .cursor/rules/*.mdc directory."""
-        cursor_dir = out_dir / ".cursor" / "rules"
-        cursor_dir.mkdir(parents=True, exist_ok=True)
-
-        exported_paths = []
-        for r in rules:
-            if r.status != RuleStatus.ACTIVE:
-                continue
-            if r.lifecycle == Lifecycle.SHORT_TERM and active_task_id and r.task_id != active_task_id:
-                continue
-
-            slug = f"{r.priority.value.lower()}-{slugify(r.title)[:30]}-{r.id[:8]}.mdc"
-            file_path = cursor_dir / slug
-            content = cls.rule_to_mdc(r)
-            file_path.write_text(content, encoding="utf-8")
-            exported_paths.append(file_path)
-
-        return exported_paths
+    def export_cursor_rules(cls, rules, out_dir, active_task_id=None):
+        root = Path(out_dir).resolve()
+        root.mkdir(parents=True, exist_ok=True)
+        directory = root / '.cursor' / 'rules'
+        if not directory.resolve().is_relative_to(root):
+            raise DomainError('Export directory escapes the workspace through a symlink.')
+        directory.mkdir(parents=True, exist_ok=True)
+        manifest = directory / '.codeneuro-manifest.json'
+        if manifest.is_symlink():
+            raise DomainError('Export manifest may not be a symlink.')
+        with export_lock(root):
+            previous = json.loads(manifest.read_text()) if manifest.exists() else {'files': []}
+            paths = []
+            for rule in eligible(rules, active_task_id):
+                identity = hashlib.sha256(rule.id.encode()).hexdigest()[:24]
+                dest = directory / f'codeneuro-{slugify(rule.title)}-{identity}.mdc'
+                if dest.is_symlink():
+                    raise DomainError('Refusing to replace a symlinked rule file.')
+                atomic_text(dest, cls.rule_to_mdc(rule))
+                paths.append(dest)
+            names = [p.name for p in paths]
+            for name in previous['files']:
+                if Path(name).name != name or not name.startswith('codeneuro-') or not name.endswith('.mdc'):
+                    raise DomainError('Invalid managed export manifest.')
+                if name not in names:
+                    old = directory / name
+                    if old.is_symlink():
+                        raise DomainError('Refusing to remove a symlinked rule file.')
+                    old.unlink(missing_ok=True)
+            atomic_text(manifest, json.dumps({'task_id': active_task_id, 'files': names}, ensure_ascii=False, indent=2))
+            return paths
 
     @classmethod
-    def export_claude_md(
-        cls,
-        rules: List[Rule],
-        out_file: Path,
-        active_task_id: Optional[str] = None
-    ) -> Path:
-        """Export active rules into a combined CLAUDE.md / AGENTS.md document."""
-        out_file.parent.mkdir(parents=True, exist_ok=True)
-        lines = [
-            "# Project Cognitive Rules & Scoped Constraints",
-            "> Auto-generated by CodeNeuro Hub. Do not edit manually.",
-            "",
-            "## 🏛️ Persistent Architecture Contracts (P0 / Redlines)",
-        ]
-
-        p0_rules = [r for r in rules if r.priority == Priority.P0 and r.status == RuleStatus.ACTIVE]
-        for r in p0_rules:
-            scopes = ", ".join(f"`{s}`" for s in r.scope_patterns)
-            lines.append(f"### [P0] {r.title} (Scopes: {scopes})")
-            for pt in r.content_points:
-                lines.append(f"- {pt}")
-            lines.append("")
-
-        lines.append("## ⚡ Active Iteration Constraints & Guidelines")
-        other_rules = [
-            r for r in rules
-            if r.priority != Priority.P0
-            and r.status == RuleStatus.ACTIVE
-            and (r.lifecycle == Lifecycle.LONG_TERM or (active_task_id and r.task_id == active_task_id))
-        ]
-        for r in other_rules:
-            scopes = ", ".join(f"`{s}`" for s in r.scope_patterns)
-            lines.append(f"### [{r.priority.value}] {r.title} (Scopes: {scopes})")
-            for pt in r.content_points:
-                lines.append(f"- {pt}")
-            lines.append("")
-
-        out_file.write_text("\n".join(lines), encoding="utf-8")
-        return out_file
+    def export_claude_md(cls, rules, out_file, active_task_id=None):
+        path = Path(out_file)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_symlink():
+            raise DomainError('Refusing to overwrite symlinked instructions.')
+        start, end = '<!-- codeneuro:start -->', '<!-- codeneuro:end -->'
+        with export_lock(path.parent):
+            previous = path.read_text() if path.exists() else ''
+            lines = [start, '# CodeNeuro scoped rules', '> Generated snapshot; regenerate after rule/task changes.']
+            for rule in eligible(rules, active_task_id):
+                lines.extend([f'\n## [{rule.priority.value}] {rule.title}',
+                              'Scopes: ' + ', '.join(rule.scope_patterns),
+                              *['- '+p for p in rule.content_points]])
+            lines.append(end)
+            block = '\n'.join(lines)
+            if start in previous or end in previous:
+                if previous.count(start) != 1 or previous.count(end) != 1 or previous.index(start) > previous.index(end):
+                    raise DomainError('Instruction file contains malformed managed markers.')
+                a, b = previous.index(start), previous.index(end)+len(end)
+                content = previous[:a] + block + previous[b:]
+            else:
+                content = previous.rstrip() + ('\n\n' if previous.strip() else '') + block + '\n'
+            atomic_text(path, content)
+        return path

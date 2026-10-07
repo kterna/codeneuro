@@ -1,102 +1,82 @@
-"""Integration tests for FastAPI REST endpoints and WebUI serving."""
-
+"""Exercise the HTTP boundary: complete lifecycle and invalid requests."""
 import pytest
 from fastapi.testclient import TestClient
-
 from codeneuro.api import create_app
 from codeneuro.storage import Storage
 
 
 @pytest.fixture
-def client():
-    storage = Storage(":memory:")
-    app = create_app(storage=storage)
-    return TestClient(app)
+def client(tmp_path):
+    storage=Storage(':memory:')
+    with TestClient(create_app(storage=storage)) as client:yield client,tmp_path
+    storage.close()
 
 
-def test_full_api_workflow(client: TestClient):
-    # 1. Create Project
-    res = client.post("/api/projects", json={"name": "Test Core Project", "description": "Test Desc"})
-    assert res.status_code == 200
-    p = res.json()
-    project_id = p["id"]
+def test_real_lifecycle_from_prd_to_feedback_and_archive(client):
+    c,root=client
+    pid=c.post('/api/projects',json={'name':'test','root_paths':[str(root)]}).json()['id']
+    task=c.post(f'/api/projects/{pid}/tasks',json={'title':'requirement'}).json()['id']
+    response=c.post(f'/api/projects/{pid}/decompose',json={'task_id':task,'text':'# Update cache\n- src/cache.py\n- Set TTL to 60 seconds'})
+    assert response.status_code==200
+    rule=response.json()[0];assert rule['status']=='draft'
+    query={'project_id':pid,'file_path':'src/cache.py','task_id':task}
+    assert not c.get('/api/context',params=query).json()['short_term_rules']
+    activated=c.patch(f"/api/rules/{rule['id']}/status",params={'status':'active','expected_version':rule['version']})
+    assert activated.status_code==200
+    session=c.post('/api/agent/sessions',json={'project_id':pid,'workspace_path':str(root),'task_id':task,'debug':True}).json()['id']
+    delivered=c.post('/api/agent/context',json={'session_id':session,'file_path':'src/cache.py','request_id':'call-1'})
+    assert delivered.status_code==200
+    payload=delivered.json();assert 'Set TTL to 60 seconds' in payload['rendered_markdown']
+    receipt=payload['delivery_id'];assert receipt
+    repeated=c.post('/api/agent/context',json={'session_id':session,'file_path':'src/cache.py','request_id':'call-1'}).json()
+    assert repeated['delivery_id']==receipt
+    assert c.get('/api/stats').json()['total_hits']==1
+    c.get('/api/context',params=query)
+    assert c.get('/api/stats').json()['total_hits']==1
+    feedback=c.post('/api/agent/feedback',json={'session_id':session,'delivery_id':receipt,'rule_id':rule['id'],'score':0})
+    assert feedback.status_code==200
+    reduced=c.post('/api/agent/context',json={'session_id':session,'file_path':'src/cache.py'}).json()
+    assert reduced['reminders']
+    assert 'Set TTL to 60 seconds' not in reduced['rendered_markdown']
+    archived=c.patch(f'/api/tasks/{task}/status',params={'status':'archived'})
+    assert archived.status_code==200
+    assert not c.get('/api/context',params=query).json()['short_term_rules']
+    assert c.get(f'/api/projects/{pid}/audit').json()
+    assert c.get('/').status_code==200
+    assert c.get('/static/app.js').status_code==200
+    assert c.get('/api/health').json()['status']=='ok'
 
-    # 2. Decompose a Requirement into Scoped Rules
-    prd_text = """
-    # 支付结算重构
-    - 涉及路径 src/services/pay/** 与 src/api/pay.py
-    - 严禁在日志中输出未脱敏的银行卡号 (P0安全红线)
-    - 增加 split_tag 参数
-    """
-    res = client.post(
-        f"/api/projects/{project_id}/decompose",
-        json={"task_id": "TASK-PAY-V2", "text": prd_text},
-    )
-    assert res.status_code == 200
-    rules = res.json()
-    assert len(rules) > 0
-    rule_id = rules[0]["id"]
 
-    # 3. Query Global Stats
-    res_stats = client.get("/api/stats")
-    assert res_stats.status_code == 200
-    stats = res_stats.json()
-    assert stats["total_projects"] == 1
-    assert stats["active_rules"] > 0
-    assert stats["p0_count"] > 0
+def test_http_validation_conflicts_and_export_boundary(client):
+    c,root=client
+    pid=c.post('/api/projects',json={'name':'test','root_paths':[str(root)]}).json()['id']
+    req={'title':'contract','scope_patterns':['src/**'],'lifecycle':'long_term','content_points':['first']}
+    rule=c.post(f'/api/projects/{pid}/rules',json=req).json()
+    body={**req,'priority':'P0','expected_version':1,'content_points':['second']}
+    assert c.put('/api/rules/'+rule['id'],json=body).status_code==200
+    assert c.put('/api/rules/'+rule['id'],json=body).status_code==409
+    assert c.post(f'/api/projects/{pid}/export',json={'format':'cursor','out_dir':str(root.parent)}).status_code==422
+    assert c.post(f'/api/projects/{pid}/export',json={'format':'cursor','out_dir':str(root)}).status_code==200
+    assert c.post(f'/api/projects/{pid}/rules',json={**req,'scope_patterns':['../escape']}).status_code==422
+    assert c.post('/api/projects',json={'name':'csrf'},headers={'Origin':'http://attacker.invalid'}).status_code==403
+    invalid=c.post(f'/api/projects/{pid}/findings',json={'id':'fake','project_id':pid,'target_path':'src/a.py','finding_text':'fake agent','source':'agent','session_id':'made-up'})
+    assert invalid.status_code==422
 
-    # 4. Query Cognitive Tree
-    res_tree = client.get(f"/api/projects/{project_id}/tree")
-    assert res_tree.status_code == 200
-    tree_data = res_tree.json()["tree"]
-    assert tree_data["name"] == "Test Core Project"
-    assert len(tree_data["children"]) > 0
 
-    # 5. Query Heatmap
-    res = client.get(f"/api/projects/{project_id}/heatmap")
-    assert res.status_code == 200
-    heatmap_data = res.json()["heatmap"]
-    assert len(heatmap_data) > 0
-    assert any(item["p0_count"] > 0 for item in heatmap_data)
+def test_promotion_is_idempotent_and_deletion_preserves_history(client):
+    c,root=client
+    pid=c.post('/api/projects',json={'name':'test','root_paths':[str(root)]}).json()['id']
+    finding={'id':'f','project_id':pid,'target_path':'src/a.py','finding_text':'observed'}
+    assert c.post(f'/api/projects/{pid}/findings',json=finding).status_code==200
+    r1=c.post('/api/findings/f/crystallize',json={'title':'reviewed'}).json()
+    r2=c.post('/api/findings/f/crystallize',json={'title':'reviewed'}).json()
+    assert r1['id']==r2['id']
+    assert c.delete('/api/rules/'+r1['id'],params={'expected_version':r1['version']}).status_code==200
+    assert len(c.get('/api/rules/'+r1['id']+'/versions').json())==2
 
-    # 6. Resolve Context for a matching file
-    res = client.get(f"/api/context?project_id={project_id}&file_path=src/services/pay/checkout.ts&task_id=TASK-PAY-V2")
-    assert res.status_code == 200
-    context_data = res.json()
-    assert "src/services/pay/checkout.ts" in context_data["rendered_markdown"]
-    assert "严禁在日志中输出未脱敏的银行卡号" in context_data["rendered_markdown"]
 
-    # 7. Test Export API
-    res_export = client.post(f"/api/projects/{project_id}/export", json={"format": "cursor", "out_dir": "/tmp/test_export"})
-    assert res_export.status_code == 200
-    export_data = res_export.json()
-    assert export_data["files_count"] > 0
-
-    # 8. Delete Rule API
-    del_res = client.delete(f"/api/rules/{rule_id}")
-    assert del_res.status_code == 200
-    assert del_res.json()["deleted_rule_id"] == rule_id
-
-    # 9. Health Check API
-    res_health = client.get(f"/api/projects/{project_id}/health-check")
-    assert res_health.status_code == 200
-    assert "overall_score" in res_health.json()
-
-    # 10. Worktree Heartbeat API
-    res_wt = client.post("/api/worktrees/heartbeat", json={
-        "id": "wt_test_01",
-        "project_id": project_id,
-        "machine_name": "TestMacBook",
-        "worktree_path": "/tmp/worktree_01",
-        "git_branch": "feature/test",
-        "active_task_id": "TASK-PAY-V2",
-        "agent_client": "Cursor"
-    })
-    assert res_wt.status_code == 200
-    assert res_wt.json()["id"] == "wt_test_01"
-
-    # 11. Check WebUI index response
-    res_ui = client.get("/")
-    assert res_ui.status_code == 200
-    assert "CodeNeuro" in res_ui.text
-    assert "作用域认知拓扑树" in res_ui.text
+def test_optional_token_protects_api(client,monkeypatch):
+    c,_=client
+    monkeypatch.setenv('CODENEURO_API_TOKEN','test-only-token')
+    assert c.get('/api/stats').status_code==401
+    assert c.get('/api/stats',headers={'Authorization':'Bearer test-only-token'}).status_code==200

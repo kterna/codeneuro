@@ -65,14 +65,6 @@ class ScopeMatcher:
         if reg.match(norm_path):
             return True
 
-        # PurePosixPath fallback
-        try:
-            p = PurePosixPath(norm_path)
-            if p.match(pattern):
-                return True
-        except Exception:
-            pass
-
         return False
 
     def matches_rule(self, rule: Rule, file_path: str) -> bool:

@@ -1,0 +1,21 @@
+[Unit]
+Description=CodeNeuro scoped context service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/codeneuro
+Environment=CODENEURO_HOST=127.0.0.1
+Environment=CODENEURO_PORT=8800
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-%h/.config/codeneuro/server.env
+ExecStart=%h/codeneuro/.venv/bin/python -m codeneuro.cli serve --host ${CODENEURO_HOST} --port ${CODENEURO_PORT} --db %h/codeneuro/codeneuro.db
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

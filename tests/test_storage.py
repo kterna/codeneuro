@@ -177,10 +177,11 @@ def test_health_check_and_conflict_engine(storage: Storage):
         content_points=["Allow Float"],
     )
     storage.create_rule(r1)
+    baseline = storage.check_project_health("p1").overall_score
     storage.create_rule(r2)
 
     report = storage.check_project_health("p1")
     assert report.total_rules == 2
     assert len(report.conflicts) >= 1
-    assert any(c.conflict_type == "opposing_priority" for c in report.conflicts)
-    assert report.overall_score < 100
+    assert any(c.conflict_type == "scope_overlap" for c in report.conflicts)
+    assert report.overall_score == baseline  # Different priorities are legitimate, not a failure.

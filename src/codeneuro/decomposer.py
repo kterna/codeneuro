@@ -8,11 +8,12 @@ from codeneuro.models import Lifecycle, Priority, Rule, RuleStatus
 
 
 class Decomposer:
-    """Heuristic and LLM-assisted decomposer for transforming requirements into scoped rules."""
+    """Offline candidate extractor for transforming requirements into scoped rules."""
 
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        # No implicit provider credentials or network calls. Model-backed analysis
+        # can submit structured drafts through codeneuro_propose_rules.
+        pass
 
     def heuristic_decompose(
         self,
@@ -52,7 +53,7 @@ class Decomposer:
                 if current_points:
                     rules.append(
                         Rule(
-                            id=f"rule_{uuid.uuid4().hex[:8]}",
+                            id=f"rule_{uuid.uuid4().hex}",
                             project_id=project_id,
                             task_id=task_id,
                             scope_patterns=current_scopes,
@@ -61,7 +62,7 @@ class Decomposer:
                             title=current_title,
                             content_points=current_points,
                             created_by="decomposer_heuristic",
-                            status=RuleStatus.ACTIVE,
+                            status=RuleStatus.DRAFT,
                         )
                     )
                     current_points = []
@@ -93,7 +94,7 @@ class Decomposer:
         if current_points:
             rules.append(
                 Rule(
-                    id=f"rule_{uuid.uuid4().hex[:8]}",
+                    id=f"rule_{uuid.uuid4().hex}",
                     project_id=project_id,
                     task_id=task_id,
                     scope_patterns=current_scopes,
@@ -102,8 +103,16 @@ class Decomposer:
                     title=current_title,
                     content_points=current_points,
                     created_by="decomposer_heuristic",
-                    status=RuleStatus.ACTIVE,
+                    status=RuleStatus.DRAFT,
                 )
             )
 
+        if known_paths:
+            for rule in rules:
+                if rule.scope_patterns == ["**"]:
+                    text_lower = " ".join(rule.content_points).lower()
+                    candidates = [p for p in known_paths if len(p.rsplit('/', 1)[-1].split('.')[0]) >= 3
+                                  and p.rsplit('/', 1)[-1].split('.')[0].lower() in text_lower]
+                    if candidates:
+                        rule.scope_patterns = candidates[:20]
         return rules
