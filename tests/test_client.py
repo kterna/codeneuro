@@ -111,8 +111,11 @@ def test_file_tools_refuse_private_paths_before_any_rpc(client,path):
 
 def test_symlink_and_ancestor_escape_are_refused(client,tmp_path):
     c,transport,root=client
-    (root/'link').symlink_to(root/'src',target_is_directory=True)
-    (root/'src/link.py').symlink_to(root/'src/cache.py')
+    try:
+        (root/'link').symlink_to(root/'src',target_is_directory=True)
+        (root/'src/link.py').symlink_to(root/'src/cache.py')
+    except OSError:
+        pytest.skip('This OS account cannot create symlinks for the boundary test.')
     for name in ('link/cache.py','src/link.py'):
         with pytest.raises(DomainError,match='Symlinks'):
             c.read_file(name)
@@ -127,7 +130,8 @@ def test_read_injects_context_and_edit_preserves_mode_with_real_diff(client):
     assert [op for op,_ in transport.calls]==['start_session','start_operation','context','end_operation']
     edited=c.edit_file('src/cache.py','value = 2\n',result['sha256'],'Update cache value')
     assert edited['written'] and path.read_text()=='value = 2\n'
-    assert path.stat().st_mode & 0o777==0o755
+    if os.name != 'nt':
+        assert path.stat().st_mode & 0o777==0o755
     preflight=next(args for op,args in transport.calls if op=='preflight')
     assert '-value = 1' in preflight['diff'] and '+value = 2' in preflight['diff']
     assert preflight['files']==['src/cache.py']
@@ -173,7 +177,9 @@ def test_actual_test_result_and_token_environment_are_recorded(client,monkeypatc
     recorded=next(args for op,args in transport.calls if op=='test_run')
     assert recorded['exit_code']==3 and recorded['stdout']==result['stdout']
     artifact=Path(result['artifact'])
-    assert artifact.exists() and artifact.stat().st_mode & 0o777==0o600
+    assert artifact.exists()
+    if os.name != 'nt':
+        assert artifact.stat().st_mode & 0o777==0o600
     assert 'test-client-secret' not in artifact.read_text()
 
 

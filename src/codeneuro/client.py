@@ -259,6 +259,8 @@ class RemoteClient:
             except ValueError:
                 raise DomainError('File path is outside the workspace.') from None
         rel = relative_path(value)
+        if os.name == 'nt' and any(':' in part or part.endswith(('.', ' ')) or re.fullmatch(r'(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?', part) for part in rel.split('/')):
+            raise DomainError('Windows device names, alternate data streams and normalized aliases are excluded.')
         if is_private_path(rel):
             raise DomainError('Credential and client-private locations are excluded from file tools and indexing.', 'private_path', 403)
         current = self.workspace
@@ -301,7 +303,7 @@ class RemoteClient:
                     self.path(rel, allow_missing=allow_missing)
                     stream = path.open('rb')
                 else:
-                    fd = os.open(path.name, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0), dir_fd=parent)
+                    fd = os.open(path.name, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0), dir_fd=parent)
                     stream = os.fdopen(fd, 'rb')
             except FileNotFoundError:
                 if allow_missing:
@@ -422,7 +424,7 @@ class RemoteClient:
 
     @staticmethod
     def _kill_tree(process):
-        if process.poll() is not None:
+        if process.poll() is not None and os.name == 'nt':
             return
         if os.name == 'nt':
             # taskkill /T terminates descendants even when they opened their own handles.
@@ -498,6 +500,8 @@ class RemoteClient:
                             output_limited = True;self._kill_tree(process);break
                         time.sleep(.05)
                     exit_code = process.wait()
+                    if os.name != 'nt':
+                        self._kill_tree(process)  # Reap leftover same-group descendants after launcher exits.
                 except BaseException:
                     self._kill_tree(process)
                     raise

@@ -91,7 +91,7 @@ async function versions(rule){
 function ruleCard(r,focus=false){
   return node('article',{class:focus?'focus-rule '+r.priority.toLowerCase():'card','data-rule-id':r.id},
     node('div',{class:'card-top'},node('h3',{},r.title),tag(r.priority,r.priority.toLowerCase())),
-    node('div',{class:'tags'},tag(r.status,r.status),tag(r.lifecycle==='long_term'?'长期契约':'任务约束'),tag('v'+r.version)),
+    node('div',{class:'tags'},tag(r.status,r.status),tag(r.lifecycle==='long_term'?'长期契约':'任务约束'),tag('v'+r.version),r.task_id&&r.status==='active'&&!['active','testing'].includes(state.tasks.find(t=>t.id===r.task_id)?.status)?tag('任务未激活 · 不参与上下文','warning'):null),
     code(r.scope_patterns.join(' · ')),node('p',{class:'muted'},taskName(r.task_id)),
     node('ul',{},r.content_points.map(p=>node('li',{},p))),
     node('div',{class:'muted'},`实际下发 ${r.hit_count??0} 次 · 来源 ${r.created_by||'—'}`),
@@ -120,7 +120,7 @@ function tasksView(content){
       if(status==='testing')actions.append(button('返回开发',()=>taskStatus(task,'active')),button('已发布',()=>taskStatus(task,'released')));
       if(!['released','archived'].includes(status))actions.append(button('已归档',()=>taskStatus(task,'archived')));
       if(['released','archived'].includes(status))actions.append(button('提炼长期记忆',()=>startDistill(task.id)));
-      lane.append(node('article',{class:'card','data-task-id':task.id},tag(label,status),node('h3',{style:'margin-top:10px'},task.title),node('p',{class:'task-description'},task.description||'尚未填写需求说明。'),node('div',{class:'tags'},tag(`${active.length} 活跃 / ${rules.length} 规则`),tag(`${scopes.length} 文件范围`)),scopes.length?code(scopes.slice(0,3).join(' · ')):null,button('查看范围与规则',()=>details(task.title,node('p',{},task.description),code(task.id),rules.length?rules.map(r=>ruleCard(r)):empty('尚无绑定规则。可在 PRD 分析页生成候选。')),'link'),actions));
+      lane.append(node('article',{class:'card','data-task-id':task.id},tag(label,status),node('h3',{style:'margin-top:10px'},task.title),node('p',{class:'task-description'},task.description||'尚未填写需求说明。'),node('div',{class:'tags'},tag(`${active.length} 已启用 / ${rules.length} 规则`),tag(`${scopes.length} 文件范围`)),scopes.length?code(scopes.slice(0,3).join(' · ')):null,button('查看范围与规则',()=>details(task.title,node('p',{},task.description),code(task.id),rules.length?rules.map(r=>ruleCard(r)):empty('尚无绑定规则。可在 PRD 分析页生成候选。')),'link'),actions));
     }
     if(!tasks.length)lane.append(empty('此泳道暂无需求',true));lanes.append(lane);
   }
@@ -380,7 +380,7 @@ async function refresh({quiet=false}={}){
     $('export').disabled=false;
     const [rules,tasks,workspaces,sessions]=await Promise.all([Promise.all(['active','draft','revoked','deprecated'].map(status=>api(projectPath('rules')+'?status='+status))).then(v=>v.flat()),api(projectPath('tasks')),api(projectPath('worktrees')),api(projectPath('sessions'))]);
     if(generation!==state.request)return;state.rules=rules;state.tasks=tasks;state.workspaces=workspaces;state.sessions=sessions;
-    const metrics=[['项目活跃规则',rules.filter(r=>r.status==='active').length],['待审规则候选',rules.filter(r=>r.status==='draft').length],['项目规则实际下发',rules.reduce((a,r)=>a+(r.hit_count||0),0)],['最近在线工作区',workspaces.filter(w=>w.is_online).length]];
+    const metrics=[['可参与上下文规则',rules.filter(r=>r.status==='active'&&(r.lifecycle==='long_term'||['active','testing'].includes(tasks.find(t=>t.id===r.task_id)?.status))).length],['待审规则候选',rules.filter(r=>r.status==='draft').length],['项目规则实际下发',rules.reduce((a,r)=>a+(r.hit_count||0),0)],['最近在线工作区',workspaces.filter(w=>w.is_online).length]];
     $('metrics').replaceChildren(...metrics.map(([label,value])=>node('div',{class:'metric'},node('span',{},label),node('strong',{},value))));
     const content=node('div');const render={explorer:explorerView,rules:rulesView,tasks:tasksView,analysis:analysisView,context:contextView,workspaces:workspaceView,review:reviewView,debug:debugView,activity:activityView}[state.tab];
     await render(content);if(generation===state.request){const previousScroll=window.scrollY;$('content').replaceChildren(content);if(quiet)window.scrollTo(0,previousScroll);if(viewRevision===state.liveRevision){state.dirty=false;$('live-update').hidden=true;}else scheduleLiveRefresh();}
