@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codeneuro.local/schemas/benchmark-context-v1.json",
+  "title": "CodeNeuro isolated HTTP benchmark result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "created_at", "environment", "workload", "metrics", "resources", "validation", "errors", "latency_samples_ms"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "synthetic_isolated_http_benchmark"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "environment": {
+      "type": "object",
+      "required": ["python", "os", "architecture", "cpu_count", "sqlite", "git_commit", "git_dirty", "benchmark_script_sha256", "transport", "database"],
+      "properties": {
+        "python": {"type": "string"},
+        "os": {"type": "string"},
+        "os_release": {"type": "string"},
+        "architecture": {"type": "string"},
+        "cpu_count": {"type": ["integer", "null"], "minimum": 1},
+        "cpu_model": {"type": ["string", "null"]},
+        "memory_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "sqlite": {"type": "string"},
+        "git_commit": {"type": ["string", "null"]},
+        "git_dirty": {"type": ["boolean", "null"]},
+        "benchmark_script_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "transport": {"const": "HTTP over loopback TCP"},
+        "database": {"const": "temporary SQLite WAL fixture"}
+      }
+    },
+    "workload": {
+      "type": "object",
+      "required": ["rules", "requests", "configured_concurrency", "sessions", "tasks", "projects", "scope_buckets", "matched_rules_per_path_min", "matched_rules_per_path_max", "debug", "context_max_chars", "synthetic"],
+      "properties": {
+        "rules": {"type": "integer", "minimum": 1},
+        "requests": {"type": "integer", "minimum": 1},
+        "configured_concurrency": {"type": "integer", "minimum": 1},
+        "sessions": {"type": "integer", "minimum": 1},
+        "tasks": {"const": 2},
+        "projects": {"const": 1},
+        "scope_buckets": {"const": 50},
+        "matched_rules_per_path_min": {"type": "integer", "minimum": 1},
+        "matched_rules_per_path_max": {"type": "integer", "minimum": 1},
+        "debug": {"const": false},
+        "context_max_chars": {"const": 200000},
+        "synthetic": {"const": true}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["duration_seconds", "requests_completed", "requests_succeeded", "request_errors", "http_statuses", "throughput_requests_per_second", "successful_throughput_per_second", "latency_ms", "percentile_method", "client_peak_inflight", "server_peak_inflight", "server_requests_seen", "mean_response_bytes", "unique_receipts_observed"],
+      "properties": {
+        "duration_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "requests_completed": {"type": "integer", "minimum": 0},
+        "requests_succeeded": {"type": "integer", "minimum": 0},
+        "request_errors": {"type": "integer", "minimum": 0},
+        "http_statuses": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "throughput_requests_per_second": {"type": "number", "minimum": 0},
+        "successful_throughput_per_second": {"type": "number", "minimum": 0},
+        "latency_ms": {
+          "type": "object",
+          "required": ["p50", "p90", "p95", "p99", "min", "max", "mean"],
+          "additionalProperties": {"type": ["number", "null"], "minimum": 0}
+        },
+        "percentile_method": {"const": "nearest_rank"},
+        "client_peak_inflight": {"type": "integer", "minimum": 0},
+        "server_peak_inflight": {"type": "integer", "minimum": 0},
+        "server_requests_seen": {"type": "integer", "minimum": 0},
+        "mean_response_bytes": {"type": ["number", "null"], "minimum": 0},
+        "unique_receipts_observed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": ["server_cpu_seconds_during_requests", "server_peak_rss_bytes", "client_cpu_seconds_during_requests"],
+      "properties": {
+        "server_cpu_seconds_during_requests": {"type": "number", "minimum": 0},
+        "server_peak_rss_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "client_cpu_seconds_during_requests": {"type": "number", "minimum": 0}
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["durable_receipts", "expected_receipts", "integrity_check", "foreign_key_violations", "rule_and_task_isolation_checked_on_every_response", "fixture_database_bytes", "passed"],
+      "properties": {
+        "durable_receipts": {"type": "integer", "minimum": 0},
+        "expected_receipts": {"type": "integer", "minimum": 1},
+        "integrity_check": {"type": "string"},
+        "foreign_key_violations": {"type": "integer", "minimum": 0},
+        "rule_and_task_isolation_checked_on_every_response": {"const": true},
+        "fixture_database_bytes": {"type": "integer", "minimum": 0},
+        "passed": {"type": "boolean"}
+      }
+    },
+    "errors": {"type": "array", "items": {"type": "object", "required": ["request", "kind"], "properties": {"request": {"type": "integer", "minimum": 0}, "kind": {"type": "string"}}}},
+    "latency_samples_ms": {"type": "array", "items": {"type": "number", "minimum": 0}}
+  }
+}
