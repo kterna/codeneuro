@@ -21,6 +21,7 @@ class HubTransport:
         self.before_preflight = None
         self.sessions = {}
         self.fail_status = False
+        self.operation_status = 'active'
 
     def __call__(self, request):
         assert request.url.host == 'hub.test'
@@ -37,7 +38,7 @@ class HubTransport:
                 return httpx.Response(503, json={'detail':'Temporary observation failure'})
             result = self.sessions[args['session_id']]
         elif op == 'start_operation':
-            result = {'id':args['request_id']}
+            result = {'id':args['request_id'], 'status':self.operation_status}
         elif op == 'context':
             result = {'delivery_id':'receipt-'+str(len(self.calls)), 'session_id':args['session_id'],
                       'file_path':args['file_path'], 'rendered_markdown':'Actual test-double context contract.'}
@@ -250,3 +251,15 @@ async def test_mcp_tools_auto_inject_and_do_not_automatically_rate(client):
     plain=create_client_mcp(c,debug_mode=False)
     plain_names={t.name for t in await plain.list_tools()}
     assert 'codeneuro_rate_rule' not in plain_names and 'codeneuro_report_issue' not in plain_names
+
+
+def test_finished_operation_response_cannot_authorize_side_effect(client):
+    c,hub,root=client
+    hub.operation_status='completed'
+    with pytest.raises(DomainError,match='active operation boundary'):
+        c.read_file('src/cache.py')
+    assert not any(op=='context' for op,_ in hub.calls)
+    assert (root/'src/cache.py').read_text()=='value = 1\n'
+    bridge=NativeBridge(c)
+    with pytest.raises(Conflict,match='already finished'):
+        bridge.start_operation('read',['src/cache.py'],'completed-native-request')

@@ -332,8 +332,8 @@ class RemoteClient:
         result = self.rpc('start_operation', {'session_id': session_id, 'kind': kind,
                           'paths': paths, 'request_id': _uid('operation')})
         operation_id = result.get('operation_id') or result.get('id')
-        if not operation_id:
-            raise DomainError('Hub did not establish a safe operation boundary.', 'hub_response_invalid', 502)
+        if not operation_id or result.get('status') != 'active':
+            raise DomainError('Hub did not establish an active operation boundary; a finished request must use a new request ID.', 'hub_response_invalid', 502)
         status = 'failed'
         try:
             yield operation_id
@@ -677,8 +677,11 @@ class NativeBridge:
 
     def start_operation(self, kind, paths, request_id):
         paths = [self.client.path(path, allow_missing=True)[0] for path in paths]
-        return self.client.rpc('start_operation', {'session_id': self.client.session_id, 'kind': kind,
-                               'paths': paths, 'request_id': request_id})
+        result = self.client.rpc('start_operation', {'session_id': self.client.session_id, 'kind': kind,
+                                 'paths': paths, 'request_id': request_id})
+        if result.get('status') != 'active':
+            raise Conflict('The native operation request already finished; do not repeat its side effect.')
+        return result
 
     def end_operation(self, operation_id, status):
         return self.client.rpc('end_operation', {'session_id': self.client.session_id,
