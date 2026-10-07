@@ -35,6 +35,36 @@ def create_client_mcp(client: RemoteClient, debug_mode: Optional[bool] = None):
         return output(client.rpc('list_tasks', {'project_id': client.project_id}))
 
     @server.tool()
+    def codeneuro_create_task(title: str, description: str = '') -> str:
+        """Create a real task in the configured project; bind the session explicitly before coding."""
+        return output(client.rpc('create_task', {'project_id': client.project_id, 'title': title, 'description': description}))
+
+    @server.tool()
+    def codeneuro_bind_task(task_id: Optional[str], expected_revision: int) -> str:
+        """Change this session task at a safe operation boundary with the current binding revision."""
+        sid = client.session_id
+        result = client.rpc('bind_task', {'session_id': sid, 'task_id': task_id, 'expected_revision': expected_revision})
+        client.session = client.rpc('session_status', {'session_id': sid})
+        return output(result)
+
+    @server.tool()
+    def codeneuro_list_active_rules() -> str:
+        """List effective project contracts and current-session task rules, preserving actual versions."""
+        return output(client.rpc('list_rules', {'session_id': client.session_id}))
+
+    @server.tool()
+    def codeneuro_get_graph() -> str:
+        """Inspect actual code entities and dependencies indexed from this workspace."""
+        session = client.start_session()
+        return output(client.rpc('graph', {'project_id': client.project_id, 'worktree_id': session['worktree_id']}))
+
+    @server.tool()
+    def codeneuro_propose_contract(target_component: str, proposed_contract: str, justification: str) -> str:
+        """Submit a long-term architecture contract for human review without activating it."""
+        return output(client.rpc('propose_contract', {'session_id': client.session_id,
+            'target_component': target_component, 'proposed_contract': proposed_contract, 'justification': justification}))
+
+    @server.tool()
     def codeneuro_start_session() -> str:
         """Register native workspace, machine, OS and actual Git identity automatically."""
         return output(client.start_session())
