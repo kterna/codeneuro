@@ -223,11 +223,12 @@ def create_app(storage: Optional[Storage] = None, db_path: Optional[str] = None)
         pending_findings = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM proposals WHERE status = 'pending'")
         pending_proposals = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM agent_issues WHERE status = 'open'")
+        cur.execute("SELECT COUNT(*) FROM agent_issues WHERE status = 'open' AND source != 'demo'")
         open_issues = cur.fetchone()[0]
 
         return {
             "total_projects": len(projects),
+            "total_rules": len(all_rules),
             "active_rules": len([r for r in all_rules if r.status == RuleStatus.ACTIVE]),
             "p0_count": p0,
             "p1_count": p1,

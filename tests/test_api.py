@@ -80,3 +80,13 @@ def test_optional_token_protects_api(client,monkeypatch):
     monkeypatch.setenv('CODENEURO_API_TOKEN','test-only-token')
     assert c.get('/api/stats').status_code==401
     assert c.get('/api/stats',headers={'Authorization':'Bearer test-only-token'}).status_code==200
+
+
+def test_stats_and_lists_consistently_exclude_quarantined_demo_records(client):
+    from codeneuro.models import AgentIssue
+    c,root=client
+    pid=c.post('/api/projects',json={'name':'test','root_paths':[str(root)]}).json()['id']
+    c.app.state.storage.record_issue(AgentIssue(id='sample',project_id=pid,title='sample',description='demo',file_path='src/a.py',source='demo'))
+    assert c.get('/api/stats').json()['open_issues_count']==0
+    assert c.get(f'/api/projects/{pid}/issues').json()==[]
+    assert c.get('/api/stats').json()['total_rules']==0
