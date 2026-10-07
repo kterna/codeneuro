@@ -37,6 +37,7 @@ def main():
     processes=[]
     with tempfile.TemporaryDirectory(prefix='codeneuro-browser-') as temp:
         root=Path(temp);http,debug=port(),port()
+        workspace=root/'workspace';(workspace/'src').mkdir(parents=True);(workspace/'src/cache.py').write_text('def cache(value):\n    return value\n')
         env={**os.environ,'PYTHONPATH':str(repo/'src'),'PYTHONDONTWRITEBYTECODE':'1'}
         env.pop('CODENEURO_API_TOKEN',None)
         log=(root/'process.log').open('w+')
@@ -61,8 +62,8 @@ def main():
                 if 'exceptionDetails' in result:raise RuntimeError(result['exceptionDetails'])
                 return result.get('result',{}).get('value')
             def click(text,scope='document'):
-                wait(lambda:js(f"Array.from({scope}.querySelectorAll('button')).some(b=>b.textContent.trim()==={json.dumps(text)} && !b.disabled)"))
-                js(f"Array.from({scope}.querySelectorAll('button')).find(b=>b.textContent.trim()==={json.dumps(text)}).click()")
+                wait(lambda:js(f"Array.from({scope}.querySelectorAll('button')).some(b=>(b.textContent.trim()==={json.dumps(text)} || b.getAttribute('aria-label')==={json.dumps(text)}) && !b.disabled)"))
+                js(f"Array.from({scope}.querySelectorAll('button')).find(b=>(b.textContent.trim()==={json.dumps(text)} || b.getAttribute('aria-label')==={json.dumps(text)})).click()")
             def fill(values):
                 for name,value in values.items():js(f"document.querySelector('#editor-fields [name={name}]').value={json.dumps(value)}")
                 js("document.querySelector('#editor-form button[type=submit]').click()")
@@ -70,7 +71,7 @@ def main():
             cdp('Runtime.enable');cdp('Page.enable');cdp('Emulation.setDeviceMetricsOverride',{'width':1440,'height':1080,'deviceScaleFactor':1,'mobile':False})
             cdp('Page.navigate',{'url':f'http://127.0.0.1:{http}/'})
             wait(lambda:js("document.getElementById('health')?.textContent.includes('服务正常')"))
-            click('＋ 注册项目');fill({'name':'真实浏览器验收','roots':str(root),'description':'isolated browser acceptance'})
+            click('＋ 注册项目');fill({'name':'真实浏览器验收','roots':str(workspace),'description':'isolated browser acceptance'})
             wait(lambda:js("document.getElementById('project').options.length===1"))
             click('需求与生命周期');wait(lambda:js("document.getElementById('title').textContent==='需求与生命周期'"))
             click('＋ 新建任务');fill({'title':'缓存需求','description':'Verify a real temporary rule lifecycle'})
