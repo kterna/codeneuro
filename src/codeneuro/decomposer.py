@@ -1,19 +1,28 @@
-"""Decomposer module for breaking down PRDs / requirements into scoped rules."""
+"""PRD entry points: durable graph-grounded analysis and explicit offline extraction."""
 
-import os
 import re
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from codeneuro.models import Lifecycle, Priority, Rule, RuleStatus
 
 
 class Decomposer:
-    """Offline candidate extractor for transforming requirements into scoped rules."""
+    """Candidate extraction with explicit separation of model jobs and offline hints."""
 
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        # No implicit provider credentials or network calls. Model-backed analysis
-        # can submit structured drafts through codeneuro_propose_rules.
+        # Legacy constructor is kept for callers; credentials are configured only
+        # on the Hub environment, never sent in UI requests or stored in jobs.
         pass
+
+    def enqueue_analysis(self, storage, *, project_id, task_id, text, request_id, worktree_id=None, provider=None):
+        """Queue a real LLM job. Caller runs the IntelligenceService durable worker.
+
+        Failure or unavailable provider remains an explicit failed job. The
+        offline extractor is never used as a fallback for model-backed analysis.
+        """
+        from .intelligence import IntelligenceService
+        return IntelligenceService(storage, provider).enqueue(
+            'analysis', project_id, task_id, request_id, worktree_id, text)
 
     def heuristic_decompose(
         self,
