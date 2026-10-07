@@ -95,7 +95,7 @@ function ruleCard(r,focus=false){
     code(r.scope_patterns.join(' · ')),node('p',{class:'muted'},taskName(r.task_id)),
     node('ul',{},r.content_points.map(p=>node('li',{},p))),
     node('div',{class:'muted'},`实际下发 ${r.hit_count??0} 次 · 来源 ${r.created_by||'—'}`),
-    node('div',{class:'actions'},button('编辑',()=>ruleForm(r)),button('版本记录',()=>versions(r)),
+    node('div',{class:'actions'},button('编辑',()=>ruleForm(r)),button('版本记录',()=>versions(r)),r.priority==='P0'?button('配置检查策略',()=>policyForm(r)):null,
       r.status==='draft'?button('审阅通过并启用',()=>send(`/api/rules/${id(r.id)}/status?status=active&expected_version=${r.version}`,'PATCH').then(refresh)):null,
       r.status==='active'?button('停用',async()=>{if(!confirm('停用后，此规则将退出后续上下文。确认停用？'))return;await send(`/api/rules/${id(r.id)}/status?status=revoked&expected_version=${r.version}`,'PATCH');await refresh();}):null));
 }
@@ -142,9 +142,9 @@ async function explorerView(content){
   treePane.append(node('div',{class:'pane-title'},node('h2',{},'Repository scopes'),tag('真实文件')),node('div',{class:'tree-filter'},search),treeContent,node('div',{class:'tree-legend'},node('span',{},'P0 / P1 约束'),node('span',{},'L 长期契约'),node('span',{},'T 活跃需求')));
   content.append(node('div',{class:'split-view'},treePane,focus));
   const query=new URLSearchParams();if(state.task)query.set('task_id',state.task);if(state.worktree)query.set('worktree_id',state.worktree);
-  const data=await api(projectPath('tree')+(query.size?'?'+query:''));const root=data.tree;state.files=[];
+  const viewProject=state.project;const data=await api(projectPath('tree')+(query.size?'?'+query:''));if(state.project!==viewProject)return;const root=data.tree;state.files=[];
   const collect=n=>{if(n.type==='file')state.files.push(n.path);for(const c of n.children||[])collect(c);};if(root)collect(root);
-  function counts(n){const rules=n.rules||[];const long=rules.filter(r=>r.lifecycle==='long_term').length;const tasks=new Set(rules.filter(r=>r.lifecycle==='short_term').map(r=>r.task_id||r.id)).size;return node('span',{class:'tree-counts'},n.p0_count?node('span',{class:'p0'},'P0 '+n.p0_count):null,n.p1_count?node('span',{class:'p1'},'P1 '+n.p1_count):null,long?node('span',{class:'long'},'L '+long):null,tasks?node('span',{class:'task'},'T '+tasks):null);}
+  function counts(n){const activeTask=state.tasks.find(t=>t.id===state.task);const rules=(n.rules||[]).map(r=>state.rules.find(full=>full.id===r.id)||r).filter(r=>r.status==='active'&&(r.lifecycle==='long_term'||(r.task_id===state.task&&['active','testing'].includes(activeTask?.status))));const long=rules.filter(r=>r.lifecycle==='long_term').length,tasks=new Set(rules.filter(r=>r.lifecycle==='short_term'&&r.task_id).map(r=>r.task_id)).size,p0=rules.filter(r=>r.priority==='P0').length,p1=rules.filter(r=>r.priority==='P1').length;return node('span',{class:'tree-counts'},p0?node('span',{class:'p0'},'P0 '+p0):null,p1?node('span',{class:'p1'},'P1 '+p1):null,long?node('span',{class:'long'},'L '+long):null,tasks?node('span',{class:'task'},'T '+tasks):null);}
   function renderTree(n,term,depth=0){
     const children=(n.children||[]).map(c=>renderTree(c,term,depth+1)).filter(Boolean),matches=n.path.toLowerCase().includes(term);
     if(term&&!matches&&!children.length)return null;
@@ -220,6 +220,7 @@ function reviewCandidate(c){
 }
 async function workspaceView(content){
   const workspaces=state.workspaces,sessions=state.sessions;
+  content.append(node('div',{class:'toolbar'},button('连接办公机 / Agent',connectionForm,'primary'),button('管理客户端授权',clientAccess)));
   content.append(node('p',{class:'muted'},'最近在线按服务端心跳窗口判断。工作区默认任务与已运行会话的任务分别显示；会话换绑需要匹配当前绑定版本。'));
   if(!workspaces.length)content.append(empty('尚无工作区客户端注册。连接 MCP / 客户端后，实际机器、路径、分支与心跳会显示在这里。'));
   const grid=node('div',{class:'grid'});
@@ -227,6 +228,21 @@ async function workspaceView(content){
   content.append(grid,section('运行会话',`${sessions.length} 个真实会话`));
   if(!sessions.length){content.append(empty('尚无会话记录。客户端注册会话后才会产生上下文凭据。',true));return;}
   for(const s of sessions){const latest=s.latest_delivery;content.append(node('article',{class:'card section','data-session-id':s.id},node('div',{class:'card-top'},node('h3',{},s.agent_client),tag(s.state,s.state)),code(s.id),definition([['任务',taskName(s.task_id)],['绑定版本',s.binding_revision??0],['最近活动',time(s.last_seen_at)],['当前文件',s.current_file?fileButton(s.current_file):latest?.file_path?fileButton(latest.file_path):'尚无下发'],['工作区',s.worktree_id]]),latest?node('details',{},node('summary',{},'最近一次上下文下发'),code(latest.delivery_id||latest.id),node('pre',{},latest.rendered_markdown||json(latest))):node('p',{class:'muted'},'此会话尚无已记录的上下文下发。'),s.state==='active'?button('安全换绑任务',()=>form('会话任务换绑',[{note:`在下一次上下文获取前生效；当前绑定版本为 ${s.binding_revision??0}。如果客户端同时修改绑定，服务将拒绝覆盖。`},{key:'task_id',label:'新任务',options:taskOptions(),value:s.task_id||''}],d=>send(`/api/agent/sessions/${id(s.id)}/bind-task`,'POST',{task_id:d.task_id||null,expected_revision:s.binding_revision??0}))):null));}
+}
+function policyForm(rule){
+  form('检查策略 · '+rule.title,[{note:'策略绑定此规则的当前版本。以下为明确、可执行的检查条件；自然语言契约由语义检查另行评估。规则更新后需重新审阅策略。'},
+    {key:'kind',label:'检查条件',options:[['forbid_path_changes','禁止修改匹配文件'],['forbid_added_literal','禁止新增指定文本'],['require_added_literal','匹配变更需包含指定新增文本']]},
+    {key:'paths',label:'检查文件范围 · 每行一项',multiline:true,value:rule.scope_patterns.join('\n')},
+    {key:'literal',label:'指定文本（文件修改禁令可留空）',multiline:true,required:false}
+  ],d=>send(`/api/rules/${id(rule.id)}/policy`,'POST',{expected_version:rule.version,reviewed:true,reviewer:'human',spec:{kind:d.kind,paths:lines(d.paths),...(d.kind==='forbid_path_changes'?{}:{literal:d.literal})}}),'审阅并绑定策略');
+}
+async function semanticPanel(content){
+  content.append(section('语义冲突审阅','模型判断与结构事实分开保留'));
+  const output=node('div');content.append(node('div',{class:'toolbar'},button('分析当前规则语义',async()=>{notice('正在根据代码证据和现有条款审阅语义冲突…');await send(projectPath('diagnostics/semantic'),'POST',state.worktree?{worktree_id:state.worktree}:{});notice('语义审阅完成。结果是带证据的模型判断，需结合实际需求复核。');await refresh();})),output);
+  try{const response=await api(projectPath('diagnostics/semantic'));const results=Array.isArray(response)?response:response.results||[];
+    if(!results.length){output.append(empty('尚无语义审阅记录。点击分析后，将核对可同时生效且范围重叠的条款。',true));return;}
+    for(const result of results)output.append(node('details',{},node('summary',{},`${time(result.created_at)} · ${(result.conflicts||[]).length} 项模型提示`),node('p',{},result.summary),code('提供方 '+json(result.provider)+' · 索引 '+(result.snapshot_id||'—')),node('p',{class:'muted'},(result.limitations||[]).join('；')),(result.conflicts||[]).map(c=>node('article',{class:'card section'},node('div',{class:'card-top'},node('h3',{},c.title),tag(c.severity,'warning')),node('p',{},c.reasoning),(c.clauses||[]).map(clause=>node('blockquote',{},code(clause.rule_id+' · v'+clause.rule_version),node('p',{},clause.excerpt))),node('div',{class:'evidence'},(c.evidence||[]).map(e=>fileButton(e.path,e.line))),node('p',{},c.suggested_resolution)))));
+  }catch(error){output.append(errorPanel(error,refresh));}
 }
 async function reviewView(content){
   const results=await Promise.allSettled([api(projectPath('governance')),api(projectPath('findings')),api(projectPath('proposals')),api(projectPath('health-check'))]);
@@ -241,7 +257,7 @@ async function reviewView(content){
     content.append(section('结构化变更提案','批准前核对目标版本、变更内容和来源'));
     const proposals=gov.proposals||[];
     if(!proposals.length)content.append(empty('暂无治理提案。',true));
-    for(const p of proposals)content.append(node('article',{class:'card section'},node('div',{class:'card-top'},node('h3',{},p.reason||p.id),tag(p.status,p.status)),code(time(p.created_at)),node('pre',{},json(p.change)),node('details',{},node('summary',{},'来源证据'),node('pre',{},json(p.source_refs||[]))),p.status==='pending'?button('审阅并应用变更',()=>form('批准结构化提案',[{note:'将原子地执行上方提案中的具体变更；目标版本不一致时会拒绝应用。'},{key:'reason',label:'审阅意见',value:'已核对规则范围与来源证据'}],d=>send(`/api/governance/proposals/${id(p.id)}/apply`,'POST',{reviewed:true,reviewer:'human',reason:d.reason})), 'primary'):null));
+    for(const p of proposals)content.append(node('article',{class:'card section'},node('div',{class:'card-top'},node('h3',{},p.reason||p.id),tag(p.status,p.status)),code(time(p.created_at)),node('pre',{},json(p.change)),node('details',{},node('summary',{},'来源证据'),node('pre',{},json(p.source_refs||[]))),p.status==='pending'?node('div',{class:'actions'},button('审阅并应用变更',()=>form('批准结构化提案',[{note:'将原子地执行上方提案中的具体变更；目标版本不一致时会拒绝应用。'},{key:'reason',label:'审阅意见',value:'已核对规则范围与来源证据'}],d=>send(`/api/governance/proposals/${id(p.id)}/apply`,'POST',{reviewed:true,reviewer:'human',reason:d.reason})), 'primary'),button('拒绝提案',()=>form('拒绝治理提案',[{key:'reason',label:'拒绝原因'}],d=>send(`/api/governance/proposals/${id(p.id)}/reject`,'POST',{reviewer:'human',reason:d.reason}),'确认拒绝'))):null));
     content.append(section('失败反射与会话整理'));
     const reflections=gov.reflections||[];
     if(reflections.length)content.append(reflections.map(r=>node('details',{},node('summary',{},r.title||r.summary||r.reason||r.id),node('pre',{},json(r)))));else content.append(empty('尚无真实测试失败触发的反射记录。',true));
@@ -255,6 +271,7 @@ async function reviewView(content){
     if(!health.conflicts?.length)content.append(empty('本次结构检查没有报告问题。语义矛盾和代码正确性仍需结合具体证据验证。',true));
     for(const c of health.conflicts||[])content.append(node('article',{class:'card section'},node('div',{class:'card-top'},node('h3',{},c.title),tag(c.severity,c.severity==='critical'?'noise':'warning')),tag(c.conflict_type),node('p',{},c.description),code((c.involved_rule_ids||[]).join(' · ')),node('p',{},c.suggested_fix)));
   }
+  await semanticPanel(content);
 }
 function changeFields(initial={}){return [
   {key:'action',label:'具体操作',options:[['update','更新规则'],['revoke','停用规则'],['create','新增长期契约'],['merge','合并规则']],value:initial.action||'update'},
@@ -296,7 +313,36 @@ async function activityView(content){
   const items=await api(projectPath('audit')+`?limit=500&after=${activityAfter}`);
   content.append(node('div',{class:'toolbar'},tag('持久化审计'),node('span',{class:'muted'},`当前页 ${items.length} 条 · 序号大于 ${activityAfter}`),activityAfter?button('回到起始记录',()=>{activityAfter=0;return refresh();}):null,items.length===500?button('后续 500 条',()=>{activityAfter=items.at(-1).sequence;return refresh();}):null));
   if(!items.length){content.append(empty('此范围尚无审计记录。真实规则变更、生命周期和下发事件会显示在这里。'));return;}
-  content.append(node('div',{class:'timeline'},items.slice().reverse().map(e=>node('div',{class:'row','data-event-id':e.sequence},node('div',{class:'tags'},tag(e.action),tag('#'+e.sequence)),code(time(e.created_at)+' · '+e.actor),code(e.entity_type+' · '+e.entity_id),node('details',{},node('summary',{},'查看事件详情'),node('pre',{},typeof e.details==='string'?prettyJSON(e.details):json(e.details)))))));
+  content.append(node('div',{class:'timeline'},items.slice().reverse().map(e=>node('div',{class:'row','data-event-id':e.sequence},node('div',{class:'tags'},tag(e.action),tag('#'+e.sequence)),code(time(e.created_at)+' · '+e.actor),code((e.entity_type?e.entity_type+' · ':'')+e.entity_id),node('details',{},node('summary',{},'查看事件详情'),node('pre',{},typeof e.details==='string'?prettyJSON(e.details):json(e.details)))))));
+}
+function shellQuote(value){return "'"+value.replaceAll("'", "'\"'\"'")+"'";}
+function connectionForm(){
+  if(!state.project){showError(new Error('请先选择项目。'));return;}
+  form('连接办公机 / Agent',[
+    {note:'为当前项目签发独立客户端凭据。工作区保留在办公机，Hub 不会读取 Windows 本地路径。需要 Hub 已启用管理 API Token。'},
+    {key:'name',label:'客户端名称',placeholder:'填写可识别的办公机 / Agent 名称'},
+    {key:'platform',label:'办公机系统',options:[['windows','Windows · PowerShell'],['linux','Linux / macOS · shell']]},
+    {key:'agent',label:'Agent',options:[['Codex','Codex'],['Hermes','Hermes'],['Claude Code','Claude Code'],['pi','pi']]},
+    {key:'workspace',label:'该机器的真实工作区绝对路径',help:'例如 Windows 盘符路径或 Linux 绝对路径。此字段只用于生成客户端配置。'},
+    {key:'hub',label:'办公机可访问的 Hub 地址',value:location.origin},
+    {key:'task',label:'默认需求',options:taskOptions(),value:state.task}
+  ],async d=>{let hub;try{hub=new URL(d.hub);if(!['http:','https:'].includes(hub.protocol))throw Error();}catch{throw new Error('Hub 地址必须为 http 或 https URL。');}
+    if(d.platform==='windows'&&!/^[A-Za-z]:[\\/]/.test(d.workspace))throw new Error('请输入含盘符的 Windows 工作区绝对路径。');
+    if(d.platform!=='windows'&&!d.workspace.startsWith('/'))throw new Error('请输入工作区绝对路径。');
+    const client=await send('/api/clients','POST',{name:d.name,project_ids:[state.project]});
+    const separator=d.platform==='windows'?'\\':'/',configPath=d.workspace.replace(/[\\/]+$/,'')+separator+'.codeneuro.json';
+    const config={hub_url:hub.href.replace(/\/$/,''),project_id:state.project,active_task:d.task||null,token_env:'CODENEURO_TOKEN'};
+    const args=['-m','codeneuro.cli','mcp','--config',configPath,'--workspace',d.workspace,'--debug'];
+    const cmd='python '+args.map(a=>d.platform==='windows'?"'"+a.replaceAll("'","''")+"'":shellQuote(a)).join(' ');
+    const envExample=d.platform==='windows'?"$env:CODENEURO_TOKEN = '<本次客户端 Token>'":"export CODENEURO_TOKEN='<本次客户端 Token>'";
+    details('连接 '+d.agent+' · '+client.name,node('p',{},'客户端凭据仅在此显示一次。保存到办公机的环境变量或安全凭据管理器；关闭此窗口后将清除显示内容。'),node('pre',{'data-sensitive':'true'},client.token),node('p',{},'1. 在办公机安装与 Hub 同版本的 CodeNeuro，并将下列内容保存为：'),code(configPath),node('pre',{},json(config)),node('p',{},'2. 在启动 Agent 的环境中设置凭据（不要把 Token 写入项目配置或提交到 Git）。'),node('pre',{},envExample),node('p',{},'3. 在 Agent 的 MCP 配置中将下列命令作为本地 stdio 服务。配置字段因宿主而异；python 必须指向安装了 CodeNeuro 的环境。'),node('pre',{},cmd),node('details',{},node('summary',{},'MCP 标准启动参数'),node('pre',{},json({command:'python',args}))),d.agent==='pi'?node('p',{},'pi 若未提供原生 MCP 支持，需要先安装并配置 MCP 适配器，再使用上述标准启动参数。'):null,node('p',{class:'muted'},'Sidecar 在办公机解析本地文件与 Git 身份，通过受认证通道与 Hub 同步。连接后，本页将显示真实会话和下发记录。'),button('我已保存，关闭凭据',()=>$('detail').close()));
+    $('detail').dataset.sensitive='true';
+  },'签发凭据并生成配置');
+}
+async function clientAccess(){
+  const response=await api('/api/clients'),clients=Array.isArray(response)?response:response.clients||[];
+  const own=clients.filter(c=>(c.project_ids||[]).includes(state.project));
+  details('当前项目的客户端授权',own.length?own.map(c=>node('div',{class:'row'},node('strong',{},c.name),code(c.id),tag(c.revoked_at||c.revoked?'已撤销':'已授权'),code('创建 '+time(c.created_at)),!c.revoked_at&&!c.revoked?button('撤销此客户端',async()=>{if(!confirm('撤销后此客户端无法继续访问 Hub。确认撤销？'))return;await send('/api/clients/'+id(c.id)+'/revoke','POST');await clientAccess();}):null)):empty('当前项目尚无已签发的客户端凭据。',true));
 }
 function prettyJSON(text){try{return JSON.stringify(JSON.parse(text),null,2);}catch{return text;}}
 function exportForm(){
@@ -314,7 +360,7 @@ function updateShell(){
   $('navigation').replaceChildren(...Object.entries(tabs).map(([key,[title,,symbol]])=>button([node('span',{class:'nav-icon','aria-hidden':'true'},symbol),node('span',{},title)],()=>navigate(key),state.tab===key?'active':'',{'aria-current':state.tab===key?'page':'false','aria-label':title})));
 }
 async function refresh({quiet=false}={}){
-  const generation=++state.request;$('refresh').disabled=true;$('content').setAttribute('aria-busy','true');
+  const generation=++state.request;++inspectGeneration;$('refresh').disabled=true;$('content').setAttribute('aria-busy','true');
   if(!quiet)$('content').replaceChildren(node('div',{class:'skeleton','aria-label':'正在加载工作台'}));
   try{
     const [health,projects]=await Promise.all([api('/api/health'),api('/api/projects')]);if(generation!==state.request)return;
@@ -381,6 +427,7 @@ $('project').onchange=e=>{state.project=e.target.value;state.path='';state.task=
 $('new-project').onclick=()=>form('注册项目',[{key:'name',label:'项目名称'},{key:'roots',label:'Hub 本机仓库根目录 · 每行一个绝对路径',multiline:true,required:false,help:'远程项目可留空，随后由客户端注册实际工作区。'},{key:'description',label:'说明',required:false}],d=>send('/api/projects','POST',{name:d.name,root_paths:lines(d.roots),description:d.description}).then(p=>{state.project=p.id;state.path='';state.task='';}));
 $('refresh').onclick=()=>refresh();$('export').onclick=exportForm;$('open-palette').onclick=openPalette;$('live-update').onclick=()=>refresh({quiet:true});
 $('close-editor').onclick=$('cancel-editor').onclick=()=>$('editor').close();$('close-detail').onclick=()=>$('detail').close();
+$('detail').addEventListener('close',()=>{if($('detail').dataset.sensitive){$('detail-content').replaceChildren();delete $('detail').dataset.sensitive;}});
 for(const dialog of [$('editor'),$('detail'),$('palette')])dialog.addEventListener('close',()=>{if(state.dirty)scheduleLiveRefresh();});
 window.addEventListener('beforeunload',stopLive);window.addEventListener('hashchange',()=>{const tab=location.hash.slice(1);if(tabs[tab]&&tab!==state.tab){state.tab=tab;refresh();}});
 if(tabs[location.hash.slice(1)])state.tab=location.hash.slice(1);
