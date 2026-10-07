@@ -46,6 +46,8 @@ class Storage(Transactional):
         self.conn.execute("PRAGMA busy_timeout=15000")
         self._init_db()
         migrate(self)
+        from .governance import ensure_schema
+        ensure_schema(self)
 
     def _init_db(self):
         cur = self.conn.cursor()
@@ -310,6 +312,8 @@ class Storage(Transactional):
         task = self.get_task(task_id)
         if task is None:
             return False
+        from .governance import task_transition
+        task_transition(self, task, status)
         self.conn.execute("UPDATE tasks SET status=?, updated_at=? WHERE id=?", (status.value, datetime.utcnow().isoformat(), task_id))
         if status in (TaskStatus.RELEASED, TaskStatus.ARCHIVED):
             for rule in self.list_rules(task.project_id, task_id=task_id):
@@ -445,6 +449,8 @@ class Storage(Transactional):
             ),
         )
         self.conn.execute("UPDATE rule_versions SET status=?,task_id=? WHERE id=?", (rule.status.value, rule.task_id, ver_id))
+        from .governance import rule_revision
+        rule_revision(self, rule, new_version, title, content_points, scope_patterns, priority)
         self.audit(rule.project_id, operator, "rule.updated", rule_id, {"version": new_version, "reason": change_summary})
         return self.get_rule(rule_id)
 
@@ -528,7 +534,8 @@ class Storage(Transactional):
         return [self._row_to_rule(r) for r in cur.fetchall()]
 
     @atomic(write=True)
-    def update_rule_status(self, rule_id: str, status: RuleStatus, expected_version: Optional[int] = None) -> bool:
+    def update_rule_status(self, rule_id: str, status: RuleStatus, expected_version: Optional[int] = None,
+                           operator: str = "user", reason: Optional[str] = None) -> bool:
         rule = self.get_rule(rule_id)
         if rule is None:
             return False
@@ -539,7 +546,8 @@ class Storage(Transactional):
         if rule.status == status:
             return True
         updated = self.update_rule_content(rule_id, rule.title, rule.content_points, rule.scope_patterns, rule.priority,
-                                           f"Status: {rule.status.value} -> {status.value}", expected_version=rule.version)
+                                           reason or f"Status: {rule.status.value} -> {status.value}",
+                                           operator=operator, expected_version=rule.version)
         self.conn.execute("UPDATE rules SET status=? WHERE id=?", (status.value, rule_id))
         self.conn.execute("UPDATE rule_versions SET status=? WHERE rule_id=? AND version_number=?", (status.value, rule_id, updated.version))
         return True

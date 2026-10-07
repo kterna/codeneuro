@@ -34,6 +34,7 @@ class TaskStatus(str, Enum):
     DRAFT = "draft"
     ACTIVE = "active"
     TESTING = "testing"
+    PAUSED = "paused"
     RELEASED = "released"
     ARCHIVED = "archived"
 
