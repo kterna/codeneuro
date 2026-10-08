@@ -17,9 +17,22 @@ def main():
     for name,help_text in [('serve','Serve WebUI and HTTP API'),('mcp','Serve MCP over stdio'),
                            ('export','Export a managed static rule snapshot'),('doctor','Read-only database checks'),
                            ('session','Register a real workspace session'),('context','Resolve context for a session'),
-                           ('close-session','Close an agent session'),('sync','Synchronize task-scoped static rules to a native worktree')]:
+                           ('close-session','Close an agent session'),('sync','Synchronize task-scoped static rules to a native worktree'),
+                           ('evidence-export','Export receipt-backed experiment evidence'),
+                           ('evidence-verify','Verify a portable experiment bundle')]:
         command=sub.add_parser(name,help=help_text)
         command.add_argument('--db',default=default_db)
+        if name=='evidence-export':
+            command.add_argument('--project-id',required=True)
+            command.add_argument('--task-id')
+            command.add_argument('--session-id')
+            command.add_argument('--since')
+            command.add_argument('--until')
+            command.add_argument('--classification')
+            command.add_argument('--private',action='store_true')
+            command.add_argument('--out',required=True)
+        if name=='evidence-verify':
+            command.add_argument('--bundle',required=True)
         if name=='serve':
             command.add_argument('--host',default='127.0.0.1');command.add_argument('--port',type=int,default=8800)
         if name in ('mcp','sync'):
@@ -40,6 +53,20 @@ def main():
         if name=='context':
             command.add_argument('--file',required=True);command.add_argument('--request-id');command.add_argument('--json',action='store_true');command.add_argument('--max-chars',type=int,default=24000)
     args=parser.parse_args()
+    if args.command in ('evidence-export','evidence-verify'):
+        from .evidence import EvidenceError, export_bundle, verify_bundle
+        try:
+            if args.command=='evidence-export':
+                result=export_bundle(args.db,args.project_id,args.out,task_id=args.task_id,
+                    session_id=args.session_id,since=args.since,until=args.until,
+                    classification_path=args.classification,private=args.private)
+            else:
+                result=verify_bundle(args.bundle)
+            print(json.dumps(result,ensure_ascii=False))
+            return 0
+        except (EvidenceError, OSError, sqlite3.Error, ValueError) as exc:
+            print(json.dumps({'error':'evidence_error','detail':str(exc)},ensure_ascii=False),file=sys.stderr)
+            return 2
     if args.command=='doctor':
         from pathlib import Path
         from .migrations import SCHEMA_VERSION

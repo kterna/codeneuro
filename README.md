@@ -72,6 +72,10 @@ codeneuro export --db /path/state.db --project-id PROJECT --task-id TASK --out /
 
 静态文件是快照，规则变更或任务结束后应重新导出。旧版生成但没有 manifest 的规则不会被自动删除；升级前应单独备份、审阅这些旧文件，避免与新规则重复。
 
+## 实验与证据
+
+`codeneuro evidence-export` 从只读 SQLite 快照生成可独立校验的下发、规则版本、评分和测试证据；`codeneuro evidence-verify` 校验便携束。自然编码样本需要显式会话分类，默认导出隐藏私有内容。用法和可信边界见 [证据导出说明](docs/evidence.md)。
+
 ## 验证和维护
 
 ```sh
