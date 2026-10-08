@@ -16,7 +16,7 @@ import sqlite3
 import tempfile
 
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 MAX_ROWS = 50000
 MAX_BUNDLE_BYTES = 50_000_000
 CATEGORIES = {'natural', 'diagnostic', 'synthetic', 'demo', 'legacy', 'unknown'}
@@ -42,6 +42,19 @@ def timestamp(value):
         return (result if result.tzinfo else result.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
     except (TypeError, ValueError) as exc:
         raise EvidenceError(f'invalid timestamp: {value!r}') from exc
+
+
+def date_prefix(table, column, lower, upper, *, extra=''):
+    conditions, args = [], []
+    if lower:
+        conditions.append(f'julianday({column}) >= julianday(?)')
+        args.append(lower.isoformat())
+    if upper:
+        conditions.append(f'julianday({column}) <= julianday(?)')
+        args.append(upper.isoformat())
+    if extra:
+        conditions.append(extra)
+    return f'SELECT * FROM {table} WHERE ' + (' AND '.join(conditions) + ' AND ' if conditions else ''), tuple(args)
 
 
 def _ids(values, prefix):
@@ -111,6 +124,9 @@ def collect(db, project_id, *, task_id=None, session_id=None, since=None, until=
             classification_path=None, private=False):
     """Collect one bounded, consistent read snapshot without opening Storage."""
     labels, labels_hash = _classification(classification_path)
+    lower, upper = timestamp(since), timestamp(until)
+    if lower and upper and lower > upper:
+        raise EvidenceError('since must precede until')
     db_path = Path(db).expanduser().resolve(strict=True)
     source = sqlite3.connect(db_path.as_uri() + '?mode=ro', uri=True, timeout=10)
     source.row_factory = sqlite3.Row
@@ -130,14 +146,9 @@ def collect(db, project_id, *, task_id=None, session_id=None, since=None, until=
                          (' AND id=?' if session_id else '') + ' ORDER BY id',
                          (project_id, session_id) if session_id else (project_id,))
         session_ids = [row['id'] for row in sessions]
-        deliveries = _rows_for_ids(source, 'SELECT * FROM context_deliveries WHERE ',
-                                   'session_id', session_ids, order='session_id,id')
-        if since or until:
-            lower, upper = timestamp(since), timestamp(until)
-            if lower and upper and lower > upper:
-                raise EvidenceError('since must precede until')
-            deliveries = [d for d in deliveries if (not lower or timestamp(d['created_at']) >= lower)
-                          and (not upper or timestamp(d['created_at']) <= upper)]
+        prefix, date_args = date_prefix('context_deliveries', 'created_at', lower, upper)
+        deliveries = _rows_for_ids(source, prefix, 'session_id', session_ids,
+                                   fixed=date_args, order='session_id,id')
         response = {}
         for row in deliveries:
             try:
@@ -152,8 +163,10 @@ def collect(db, project_id, *, task_id=None, session_id=None, since=None, until=
         delivery_ids = [d['id'] for d in deliveries]
         refs = _rows_for_ids(source, 'SELECT * FROM delivery_rules WHERE ',
                              'delivery_id', delivery_ids, order='delivery_id,rule_id')
-        ratings = _rows_for_ids(source, 'SELECT * FROM rule_evaluations WHERE project_id=? AND ',
-                                'session_id', session_ids, fixed=(project_id,), order='session_id,id')
+        prefix, date_args = date_prefix('rule_evaluations', 'created_at', lower, upper,
+                                        extra='project_id=?')
+        ratings = _rows_for_ids(source, prefix, 'session_id', session_ids,
+                                fixed=(*date_args, project_id), order='session_id,id')
         if task_id or since or until:
             ratings = [r for r in ratings if r['delivery_id'] in delivery_ids or not r['delivery_id']]
         rule_ids = {r['rule_id'] for r in refs} | {r['rule_id'] for r in ratings}
@@ -170,24 +183,47 @@ def collect(db, project_id, *, task_id=None, session_id=None, since=None, until=
                 source, 'SELECT worktree_id,repo_identity FROM remote_workspaces WHERE ',
                 'worktree_id', worktree_ids, order='worktree_id')}
         if 'governance_test_runs' in tables:
-            tests = _rows_for_ids(source, 'SELECT * FROM governance_test_runs WHERE ',
-                                  'session_id', session_ids, order='session_id,id')
+            prefix, date_args = date_prefix('governance_test_runs', 'created_at', lower, upper)
+            tests = _rows_for_ids(source, prefix, 'session_id', session_ids,
+                                  fixed=date_args, order='session_id,id')
         if 'findings' in tables:
-            findings = _rows_for_ids(source, 'SELECT * FROM findings WHERE ',
-                                     'session_id', session_ids, order='session_id,id')
+            prefix, date_args = date_prefix('findings', 'created_at', lower, upper)
+            findings = _rows_for_ids(source, prefix, 'session_id', session_ids,
+                                     fixed=date_args, order='session_id,id')
         if 'agent_issues' in tables:
-            issues = _rows_for_ids(source, 'SELECT * FROM agent_issues WHERE ',
-                                   'session_id', session_ids, order='session_id,id')
+            prefix, date_args = date_prefix('agent_issues', 'created_at', lower, upper)
+            issues = _rows_for_ids(source, prefix, 'session_id', session_ids,
+                                   fixed=date_args, order='session_id,id')
         if 'governance_preflights' in tables:
-            preflights = _rows_for_ids(source, 'SELECT * FROM governance_preflights WHERE ',
-                                       'session_id', session_ids, order='session_id,id')
+            prefix, date_args = date_prefix('governance_preflights', 'created_at', lower, upper)
+            preflights = _rows_for_ids(source, prefix, 'session_id', session_ids,
+                                       fixed=date_args, order='session_id,id')
+        preflight_tasks = {}
+        for row in preflights:
+            try:
+                preflight_tasks[row['id']] = json.loads(row['result_json']).get('task_id')
+            except (TypeError, ValueError, AttributeError) as exc:
+                raise EvidenceError('preflight result is invalid JSON: ' + row['id']) from exc
+        excluded_unattributed_issues = 0
+        if task_id:
+            tests = [row for row in tests if row['task_id'] == task_id]
+            findings = [row for row in findings if row['task_id'] == task_id]
+            preflights = [row for row in preflights if preflight_tasks[row['id']] == task_id]
+            # agent_issues has no historical task ID. A rebound session's
+            # current task cannot safely attribute its older issue records.
+            excluded_unattributed_issues = len(issues)
+            issues = []
+        task_refs = {task_id} | {row['task_id'] for row in sessions} | {
+            response[row['id']].get('task_id') for row in deliveries} | {
+            row['task_id'] for row in versions} | {row['task_id'] for row in tests} | {
+            row['task_id'] for row in findings} | {preflight_tasks[row['id']] for row in preflights}
+        task_refs.discard(None)
+        tasks = _rows_for_ids(source, 'SELECT * FROM tasks WHERE ', 'id', task_refs, order='id')
         source.execute('COMMIT')
     finally:
         source.close()
 
-    alias = {'project': {project_id: 'p1'}, 'task': _ids(
-        [task_id] + [s['task_id'] for s in sessions] + [response[d['id']].get('task_id') for d in deliveries] +
-        [r['task_id'] for r in versions], 't'),
+    alias = {'project': {project_id: 'p1'}, 'task': _ids(task_refs, 't'),
         'session': _ids(session_ids, 's'), 'worktree': _ids(worktree_ids, 'w'),
         'delivery': _ids(delivery_ids, 'd'), 'rule': _ids(rule_ids, 'r'),
         'rating': _ids([r['id'] for r in ratings], 'f'), 'test': _ids([r['id'] for r in tests], 'x'),
@@ -199,14 +235,19 @@ def collect(db, project_id, *, task_id=None, session_id=None, since=None, until=
             'scope': {'project': 'p1', 'task': a('task', task_id),
                       'session': a('session', session_id), 'since': since, 'until': until},
             'classification_file_sha256': labels_hash,
+            'issues_excluded_unattributed': excluded_unattributed_issues,
+            'tasks': [{'id': a('task', row['id']), 'project': a('project', row['project_id']),
+                       'status': row['status']} for row in tasks],
             'worktrees': [{'id': a('worktree', w['id']), 'project': 'p1', 'source': w['source'],
                            'branch_sha256': sha(w['git_branch']), 'git_commit': w['git_commit'],
-                           'repo_identity_sha256': remote_identity.get(w['id'])} for w in worktrees],
+                           'repo_identity_sha256': sha(remote_identity[w['id']]) if remote_identity.get(w['id']) else None}
+                          for w in worktrees],
             'sessions': [], 'deliveries': [], 'delivery_rules': [], 'rule_versions': [],
             'ratings': [], 'tests': [], 'findings': [], 'issues': [], 'preflights': [],
             'artifacts': [], 'limitations': [
                 'Session categories and coding-agent identity are operator declared; a database label does not prove external agent execution.',
                 'Repository identities are client reported; inspect Git artifacts before claiming distinct completed repositories.',
+                'Task-filtered issue records lacking a historical task ID are excluded and counted separately.',
                 'Receipt and test rows prove recording, not that a model used a rule or that a deployed service passed.',
                 'Bundle SHA-256 checksums detect edits but are not signatures or proof of database provenance.']}
     source_by_worktree = {w['id']: w['source'] for w in worktrees}
@@ -259,14 +300,16 @@ def collect(db, project_id, *, task_id=None, session_id=None, since=None, until=
             record['reason'] = r['reason'] or ''
         data['ratings'].append(record)
     for t in tests:
-        data['tests'].append({'id': a('test', t['id']), 'session': a('session', t['session_id']),
+        data['tests'].append({'id': a('test', t['id']), 'project': a('project', t['project_id']),
+            'session': a('session', t['session_id']),
             'task': a('task', t['task_id']), 'exit_code': t['exit_code'],
             'command_hash': t['command_hash'], 'stdout_sha256': sha(t['stdout']),
             'stderr_sha256': sha(t['stderr']), 'created_at': t['created_at'],
             'source': t['source']})
     for kind, rows, target in (('finding', findings, 'findings'), ('issue', issues, 'issues')):
         for r in rows:
-            data[target].append({'id': a(kind, r['id']), 'session': a('session', r['session_id']),
+            data[target].append({'id': a(kind, r['id']), 'project': a('project', r['project_id']),
+                'session': a('session', r['session_id']),
                 'task': a('task', r.get('task_id')), 'source': r['source'],
                 'status': r['status'], 'content_sha256': sha(r.get('finding_text', r.get('description', ''))),
                 'created_at': r['created_at']})
@@ -275,7 +318,9 @@ def collect(db, project_id, *, task_id=None, session_id=None, since=None, until=
             result = json.loads(p['result_json'])
         except (TypeError, ValueError):
             result = {}
-        data['preflights'].append({'id': a('preflight', p['id']), 'session': a('session', p['session_id']),
+        data['preflights'].append({'id': a('preflight', p['id']), 'project': a('project', p['project_id']),
+            'session': a('session', p['session_id']),
+            'task': a('task', preflight_tasks[p['id']]),
             'decision': result.get('decision'), 'model': (result.get('semantic') or {}).get('provider', {}).get('model'),
             'input_sha256': p['input_hash'], 'result_sha256': sha(p['result_json']),
             'created_at': p['created_at']})
@@ -304,14 +349,31 @@ def _validate(data):
     if data.get('format_version') != FORMAT_VERSION:
         raise EvidenceError('unsupported evidence format')
     for kind, field in [('sessions', 'id'), ('deliveries', 'id'), ('ratings', 'id'),
-                        ('worktrees', 'id'), ('tests', 'id'), ('findings', 'id'),
+                        ('tasks', 'id'), ('worktrees', 'id'), ('tests', 'id'), ('findings', 'id'),
                         ('issues', 'id'), ('preflights', 'id')]:
         values = [row[field] for row in data[kind]]
         if len(values) != len(set(values)):
             raise EvidenceError('duplicate ' + kind + ' identifier')
     sessions = {r['id']: r for r in data['sessions']}
+    tasks = {r['id']: r for r in data['tasks']}
     worktrees = {r['id']: r for r in data['worktrees']}
     deliveries = {r['id']: r for r in data['deliveries']}
+    scope = data.get('scope')
+    if not isinstance(scope, dict) or scope.get('project') != 'p1':
+        raise EvidenceError('bundle has an invalid project scope')
+    lower, upper = timestamp(scope.get('since')), timestamp(scope.get('until'))
+    if lower and upper and lower > upper:
+        raise EvidenceError('bundle time bounds are reversed')
+    def within(row):
+        at = timestamp(row['created_at'])
+        return (not lower or at >= lower) and (not upper or at <= upper)
+    for w in worktrees.values():
+        if w['project'] != scope['project'] or (w['repo_identity_sha256'] is not None and
+                not re.fullmatch('[0-9a-f]{64}', w['repo_identity_sha256'])):
+            raise EvidenceError('worktree crosses project or has raw repository identity: ' + w['id'])
+    for t in tasks.values():
+        if t['project'] != scope['project']:
+            raise EvidenceError('task crosses project: ' + t['id'])
     versions = {(r['rule'], r['version']): r for r in data['rule_versions']}
     refs = {(r['delivery'], r['rule']): r for r in data['delivery_rules']}
     if len(versions) != len(data['rule_versions']) or len(refs) != len(data['delivery_rules']):
@@ -319,12 +381,24 @@ def _validate(data):
     for s in sessions.values():
         if s['category'] not in CATEGORIES or s['worktree'] not in worktrees:
             raise EvidenceError('session classification or worktree is invalid: ' + s['id'])
+        if s['project'] != scope['project'] or worktrees[s['worktree']]['project'] != s['project']:
+            raise EvidenceError('session crosses project/worktree: ' + s['id'])
+        if s['task'] is not None and s['task'] not in tasks:
+            raise EvidenceError('session task is missing or foreign: ' + s['id'])
+        if scope.get('session') and s['id'] != scope['session']:
+            raise EvidenceError('session escapes selected session scope: ' + s['id'])
+        if worktrees[s['worktree']]['source'] in {'demo', 'legacy'} and s['category'] != worktrees[s['worktree']]['source']:
+            raise EvidenceError('demo/legacy worktree was relabelled: ' + s['id'])
         if s['category'] == 'natural' and not re.fullmatch('[0-9a-f]{64}', s.get('tool_log_sha256') or ''):
             raise EvidenceError('natural session lacks tool log evidence: ' + s['id'])
     for d in deliveries.values():
         s = sessions.get(d['session'])
-        if not s or d['project'] != s['project']:
+        if not s or d['project'] != s['project'] or (d['task'] is not None and d['task'] not in tasks):
             raise EvidenceError('delivery has missing or cross-project session: ' + d['id'])
+        if scope.get('task') and d['task'] != scope['task']:
+            raise EvidenceError('delivery crosses selected task scope: ' + d['id'])
+        if not within(d):
+            raise EvidenceError('delivery escapes selected time scope: ' + d['id'])
         if timestamp(d['created_at']) < timestamp(s['created_at']):
             raise EvidenceError('delivery predates session: ' + d['id'])
     for ref in refs.values():
@@ -343,6 +417,8 @@ def _validate(data):
     seen_feedback = set()
     for r in data['ratings']:
         d = deliveries.get(r['delivery'])
+        if r['project'] != scope['project'] or r['session'] not in sessions or not within(r):
+            raise EvidenceError('rating crosses selected project/session/time scope: ' + r['id'])
         if r['source'] != 'agent' and not d:
             continue  # legacy/manual rows are visible but excluded from natural counts
         if not d or r['session'] != d['session'] or r['project'] != d['project']:
@@ -361,11 +437,18 @@ def _validate(data):
         if 'reason' in r and sha(r['reason']) != r['reason_sha256']:
             raise EvidenceError('rating reason hash mismatch: ' + r['id'])
     for v in data['rule_versions']:
+        if v['project'] != scope['project'] or (v['task'] is not None and v['task'] not in tasks):
+            raise EvidenceError('historical rule version crosses project or task: ' + v['rule'])
         if 'content' in v and sha(v['content']) != v['content_sha256']:
             raise EvidenceError('rule historical content hash mismatch: ' + v['rule'])
-    for t in data['tests']:
-        if t['session'] not in sessions:
-            raise EvidenceError('test references missing session: ' + t['id'])
+    for kind in ('tests', 'findings', 'issues', 'preflights'):
+        for row in data[kind]:
+            if row['session'] not in sessions or row['project'] != scope['project'] or not within(row):
+                raise EvidenceError(kind + ' crosses project/session/time scope: ' + row['id'])
+            if row.get('task') is not None and row['task'] not in tasks:
+                raise EvidenceError(kind + ' references missing or foreign task: ' + row['id'])
+            if scope.get('task') and row.get('task') is not None and row['task'] != scope['task']:
+                raise EvidenceError(kind + ' crosses selected task scope: ' + row['id'])
     return summarize(data)
 
 
@@ -389,6 +472,8 @@ def export_bundle(db, project_id, out, **filters):
         evidence = canonical(data) + b'\n'
         report = ('# CodeNeuro experiment evidence\n\n'
                   + '\n'.join(f'- {key}: {value}' for key, value in summary.items())
+                  + '\n\n## Declared omissions\n\n- Task-unattributed issues excluded: '
+                  + str(data['issues_excluded_unattributed'])
                   + '\n\n## Limits\n\n' + '\n'.join('- ' + item for item in data['limitations']) + '\n').encode('utf-8')
         if len(evidence) > MAX_BUNDLE_BYTES or len(report) > MAX_BUNDLE_BYTES:
             raise EvidenceError('evidence output exceeds 50 MB; narrow the filter')
@@ -397,6 +482,7 @@ def export_bundle(db, project_id, out, **filters):
         manifest = {'format_version': FORMAT_VERSION, 'kind': 'codeneuro_experiment_evidence',
                     'files': {'evidence.json': sha(evidence), 'report.md': sha(report)},
                     'summary': summary, 'privacy': 'private' if filters.get('private') else 'shareable',
+                    'declared_omissions': {'task_unattributed_issues': data['issues_excluded_unattributed']},
                     'artifact_status': 'external_artifacts_not_bundled'}
         _write(temporary / 'manifest.json', canonical(manifest) + b'\n')
         os.replace(temporary, target)
@@ -431,5 +517,7 @@ def verify_bundle(path):
     summary = _validate(data)
     if summary != manifest.get('summary'):
         raise EvidenceError('manifest summary differs from receipt-backed counts')
+    if manifest.get('declared_omissions') != {'task_unattributed_issues': data['issues_excluded_unattributed']}:
+        raise EvidenceError('manifest omission declaration differs from bundle')
     return {'verified': True, 'summary': summary, 'privacy': manifest.get('privacy'),
             'limitations': data['limitations']}

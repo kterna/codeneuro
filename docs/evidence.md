@@ -12,10 +12,15 @@ codeneuro evidence-verify --bundle /path/new-bundle
 ```
 
 `--task-id`, `--session-id`, `--since` and `--until` narrow the snapshot. The
-timestamps are ISO 8601. The output directory must not exist. A single SQLite
-read transaction provides the snapshot; the source database is never opened by
-`Storage` or migrated. A 50 MB limit per bundle member and a 50,000 row limit per selected
-table return an explicit error instead of silently truncating evidence. Queries
+timestamps are ISO 8601. Time filters apply before row limits to delivery,
+feedback, test, finding, issue and preflight events; historical rule versions
+remain as supporting evidence. Issue rows lack a historical task ID, so a
+task-filtered export omits them and source-declares the omission count; the
+portable verifier cannot reconstruct that count without the database. The output
+directory must not exist. A single SQLite read transaction provides the
+snapshot; the source database is never opened by `Storage` or migrated. A 50 MB
+limit per bundle member and a 50,000 row limit per selected table return an
+explicit error instead of silently truncating evidence. Queries
 are batched for older SQLite parameter limits on Windows.
 
 ## Classification and counting
@@ -47,8 +52,9 @@ authenticate an external coding-agent process or a provider call.
 
 ## Privacy and verification boundary
 
-The default bundle aliases identifiers and hashes relative file paths, rule
-content, feedback reasons, agent names and branches. It omits credentials, raw
+The default bundle aliases identifiers and hashes relative file paths, client
+reported repository identities, rule content, feedback reasons, agent names
+and branches. It omits credentials, raw
 environment, source excerpts, test output and private absolute paths. Use
 `--private` explicitly to include historical rule content and rating reasons;
 keep that directory private and review it before sharing. The exporter creates

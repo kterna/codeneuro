@@ -3,13 +3,16 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
 import pytest
 
+import codeneuro.evidence as evidence_module
 from codeneuro.evidence import EvidenceError, export_bundle, sha, verify_bundle
 from codeneuro.models import Priority, Project, Rule, Task
+from codeneuro.remote import RemoteRegistry
 from codeneuro.service import ContextService
 from codeneuro.storage import Storage
 
@@ -131,3 +134,76 @@ def test_cli_export_and_verify_without_mutating_source(tmp_path):
                               capture_output=True, text=True, env=env)
     assert verified.returncode == 0, verified.stderr
     assert json.loads(verified.stdout)['verified']
+
+
+def test_shareable_bundle_hashes_untrusted_remote_repository_identity(tmp_path):
+    database = tmp_path / 'remote.db'
+    store = Storage(str(database))
+    store.create_project(Project(id='p', name='remote fixture'))
+    store.create_task(Task(id='t', project_id='p', title='scope'))
+    store.create_rule(Rule(id='r', project_id='p', task_id='t', title='scope',
+                           scope_patterns=['src/**'], content_points=['Keep values scoped.']))
+    remote = RemoteRegistry(store)
+    client = remote.enroll('fixture client', ['p'], admin_configured=True)
+    secret_identity = 'https://credential:do-not-export@example.invalid/private-repo'
+    session = remote.start_session(client['id'], project_id='p', workspace_path='/work/repo',
+        machine_name='fixture', platform='linux', task_id='t', repo_identity=secret_identity,
+        agent_client='real remote fixture', debug=True)
+    remote.rpc(client['id'], 'context', {'session_id': session['id'], 'file_path': 'src/file.py'})
+    store.close()
+    bundle = tmp_path / 'shareable-remote'
+    export_bundle(database, 'p', bundle)
+    output = (bundle / 'evidence.json').read_text(encoding='utf-8')
+    assert secret_identity not in output and 'do-not-export' not in output
+    identity = json.loads(output)['worktrees'][0]['repo_identity_sha256']
+    assert re.fullmatch('[0-9a-f]{64}', identity)
+    assert verify_bundle(bundle)['verified']
+
+
+def test_date_filter_applies_before_row_limit_and_to_test_records(tmp_path, monkeypatch):
+    database, labels, natural, _ = fixture(tmp_path)
+    store = Storage(str(database))
+    service = ContextService(store)
+    recent = service.resolve(session_id=natural, file_path='src/recent.py')
+    recent_at = store.conn.execute('SELECT created_at FROM context_deliveries WHERE id=?',
+                                   (recent.delivery_id,)).fetchone()[0]
+    old_at = '2000-01-01T00:00:00'
+    with store.transaction():
+        store.conn.execute('''INSERT INTO governance_test_runs
+            (id,project_id,task_id,session_id,request_id,request_hash,command_json,
+             command_hash,exit_code,stdout,stderr,started_at,finished_at,paths_json,source,created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            ('old-test', 'p', 't', natural, 'old-request', 'old-request-hash', '[]',
+             'old-command-hash', 0, '', '', old_at, old_at, '[]', 'synthetic', old_at))
+    store.close()
+    monkeypatch.setattr(evidence_module, 'MAX_ROWS', 2)
+    bundle = tmp_path / 'recent-only'
+    summary = export_bundle(database, 'p', bundle, session_id=natural, since=recent_at,
+                            classification_path=labels)['summary']
+    assert summary['deliveries_total'] == 1
+    assert summary['tests_recorded'] == 0
+    assert verify_bundle(bundle)['verified']
+
+
+def test_verifier_rejects_cross_project_worktree_and_task_scope(tmp_path):
+    database, labels, _, _ = fixture(tmp_path)
+    bundle = tmp_path / 'scoped'
+    export_bundle(database, 'p', bundle, task_id='t', classification_path=labels)
+    evidence_file, manifest_file = bundle / 'evidence.json', bundle / 'manifest.json'
+    original = json.loads(evidence_file.read_text(encoding='utf-8'))
+    def rewrite(value):
+        evidence_file.write_text(json.dumps(value), encoding='utf-8')
+        manifest = json.loads(manifest_file.read_text(encoding='utf-8'))
+        manifest['files']['evidence.json'] = sha(evidence_file.read_bytes())
+        manifest_file.write_text(json.dumps(manifest), encoding='utf-8')
+    altered = json.loads(json.dumps(original))
+    altered['worktrees'][0]['project'] = 'p2'
+    rewrite(altered)
+    with pytest.raises(EvidenceError, match='worktree crosses project'):
+        verify_bundle(bundle)
+    altered = json.loads(json.dumps(original))
+    altered['tasks'].append({'id': 't_other', 'project': 'p1', 'status': 'active'})
+    altered['deliveries'][0]['task'] = 't_other'
+    rewrite(altered)
+    with pytest.raises(EvidenceError, match='selected task scope'):
+        verify_bundle(bundle)
