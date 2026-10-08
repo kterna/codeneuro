@@ -322,6 +322,15 @@ def test_semantic_checks_every_rule_and_requires_verbatim_conflict(environment):
         return out
     provider.callback = allow
     assert service.semantic_assess('shop', files=['backend/api.py'], plan='Keep audits and add an index', rules=[rule])['decision'] == 'allow'
+    def allow_with_invented_nonviolation_excerpt(payload):
+        out = allow(payload)
+        out['assessments'][0].update(diff_excerpt='invented diff quote', plan_excerpt='invented plan quote')
+        return out
+    provider.callback = allow_with_invented_nonviolation_excerpt
+    allowed = service.semantic_assess('shop', files=['backend/api.py'], plan='Keep audits and add an index', rules=[rule])
+    assert allowed['decision'] == 'allow'
+    assert allowed['assessments'][0]['diff_excerpt'] == allowed['assessments'][0]['plan_excerpt'] == ''
+    assert any('nonverbatim' in message for message in allowed['limitations'])
     provider.callback = lambda payload: {'reasoning': 'Omitted rule', 'assessments': []}
     with pytest.raises(DomainError, match='every supplied rule'):
         service.semantic_assess('shop', files=[], plan='Keep audits', rules=[rule])

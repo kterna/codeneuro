@@ -486,12 +486,19 @@ class IntelligenceService:
         if len(keys) != len(set(keys)) or set(keys) != set(expected):
             raise DomainError('Semantic response must assess every supplied rule exactly once.', 'provider_response_invalid', 502)
         violations, uncertain, blocking = [], False, False
+        assessments, evidence_limits = [], []
         for assessment in output.assessments:
             self._check_evidence(assessment.evidence, prompt_graph)
             if assessment.diff_excerpt and assessment.diff_excerpt not in diff:
-                raise DomainError('Semantic evidence is not present in the supplied diff.', 'provider_response_invalid', 502)
+                if assessment.outcome == 'violation':
+                    raise DomainError('Semantic evidence is not present in the supplied diff.', 'provider_response_invalid', 502)
+                assessment = assessment.model_copy(update={'diff_excerpt': ''})
+                evidence_limits.append(f'{assessment.rule_id} supplied a nonverbatim diff excerpt; it was discarded.')
             if assessment.plan_excerpt and assessment.plan_excerpt not in plan:
-                raise DomainError('Semantic evidence is not present in the supplied plan.', 'provider_response_invalid', 502)
+                if assessment.outcome == 'violation':
+                    raise DomainError('Semantic evidence is not present in the supplied plan.', 'provider_response_invalid', 502)
+                assessment = assessment.model_copy(update={'plan_excerpt': ''})
+                evidence_limits.append(f'{assessment.rule_id} supplied a nonverbatim plan excerpt; it was discarded.')
             if assessment.outcome == 'violation':
                 if not assessment.diff_excerpt.strip() and not assessment.plan_excerpt.strip():
                     raise DomainError('A violation requires a verbatim plan or diff excerpt.', 'provider_response_invalid', 502)
@@ -499,10 +506,11 @@ class IntelligenceService:
             if assessment.outcome in {'violation', 'uncertain'}:
                 violations.append({**assessment.model_dump(), 'severity': assessment.outcome})
                 uncertain = True
+            assessments.append(assessment.model_dump())
         return {'decision': 'block' if blocking else 'review' if uncertain else 'allow', 'violations': violations,
-                'assessments': [a.model_dump() for a in output.assessments],
+                'assessments': assessments,
                 'rules_checked': [{'rule_id': rid, 'rule_version': version} for rid, version in expected],
-                'reasoning': output.reasoning, 'limitations': output.limitations + prompt_graph['limitations'],
+                'reasoning': output.reasoning, 'limitations': output.limitations + evidence_limits + prompt_graph['limitations'],
                 'provider': response.get('provider', {}), 'snapshot_id': graph['snapshot_id']}
 
     def diagnose(self, project_id, *, worktree_id=None):
