@@ -21,7 +21,7 @@ def slugify(text):
 def atomic_text(path, text):
     fd, temporary = tempfile.mkstemp(prefix='.codeneuro-', dir=path.parent)
     try:
-        with os.fdopen(fd, 'w') as stream:
+        with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as stream:
             stream.write(text)
             stream.flush()
             os.fsync(stream.fileno())
@@ -81,7 +81,7 @@ class RuleExporter:
         if manifest.is_symlink():
             raise DomainError('Export manifest may not be a symlink.')
         with export_lock(root):
-            previous = json.loads(manifest.read_text()) if manifest.exists() else {'files': []}
+            previous = json.loads(manifest.read_text(encoding="utf-8")) if manifest.exists() else {'files': []}
             paths = []
             for rule in eligible(rules, active_task_id):
                 identity = hashlib.sha256(rule.id.encode()).hexdigest()[:24]
@@ -110,7 +110,7 @@ class RuleExporter:
             raise DomainError('Refusing to overwrite symlinked instructions.')
         start, end = '<!-- codeneuro:start -->', '<!-- codeneuro:end -->'
         with export_lock(path.parent):
-            previous = path.read_text() if path.exists() else ''
+            previous = path.read_text(encoding="utf-8") if path.exists() else ''
             lines = [start, '# CodeNeuro scoped rules', '> Generated snapshot; regenerate after rule/task changes.']
             for rule in eligible(rules, active_task_id):
                 lines.extend([f'\n## [{rule.priority.value}] {rule.title}',

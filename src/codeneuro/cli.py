@@ -17,14 +17,18 @@ def main():
     for name,help_text in [('serve','Serve WebUI and HTTP API'),('mcp','Serve MCP over stdio'),
                            ('export','Export a managed static rule snapshot'),('doctor','Read-only database checks'),
                            ('session','Register a real workspace session'),('context','Resolve context for a session'),
-                           ('close-session','Close an agent session')]:
+                           ('close-session','Close an agent session'),('sync','Synchronize task-scoped static rules to a native worktree')]:
         command=sub.add_parser(name,help=help_text)
         command.add_argument('--db',default=default_db)
         if name=='serve':
             command.add_argument('--host',default='127.0.0.1');command.add_argument('--port',type=int,default=8800)
-        if name=='mcp':
+        if name in ('mcp','sync'):
             command.add_argument('--config', help='Workstation .codeneuro.json for pinned remote Hub sidecar')
             command.add_argument('--workspace', help='Native Windows/Linux workspace path')
+        if name=='sync':
+            command.add_argument('--watch', action='store_true')
+            command.add_argument('--format', choices=['cursor','claude','both'], default='both')
+            command.add_argument('--interval', type=float, default=2)
         if name in ('mcp','serve','session'):command.add_argument('--debug',action='store_true')
         if name in ('session','export'):
             command.add_argument('--project-id',required=True);command.add_argument('--task-id')
@@ -45,21 +49,39 @@ def main():
             version=connection.execute('PRAGMA user_version').fetchone()[0]
         print(json.dumps({'integrity':integrity,'foreign_key_errors':foreign_keys,'schema_version':version,'expected_schema_version':SCHEMA_VERSION}))
         return 0 if integrity=='ok' and not foreign_keys and version==SCHEMA_VERSION else 1
-    if args.command=='mcp' and args.config:
+    if args.command in ('mcp','sync') and args.config:
         from pathlib import Path
         from .client import discover_config, RemoteClient
         from .client_mcp import create_client_mcp
         try:
             config=discover_config(config_path=args.config)
             workspace=Path(args.workspace) if args.workspace else Path(config['config_path']).parent
-            with RemoteClient(config,workspace,debug=args.debug) as client:
-                server=create_client_mcp(client,debug_mode=args.debug)
-                if hasattr(server,'run_stdio_async'):asyncio.run(server.run_stdio_async())
-                else:server.run(transport='stdio')
+            with RemoteClient(config,workspace,debug=getattr(args,'debug',False),timeout=8 if args.command=='sync' else 130) as client:
+                if args.command=='mcp':
+                    server=create_client_mcp(client,debug_mode=args.debug)
+                    if hasattr(server,'run_stdio_async'):asyncio.run(server.run_stdio_async())
+                    else:server.run(transport='stdio')
+                else:
+                    import threading
+                    import signal
+                    from .sync import StaticSync
+                    watcher=StaticSync(client,formats=args.format,poll_interval=args.interval,
+                                       status_callback=lambda result:print(json.dumps(result,ensure_ascii=False),flush=True))
+                    if args.watch:
+                        stop=threading.Event()
+                        def stop_watching(*_):stop.set()
+                        for signame in ('SIGINT','SIGTERM'):
+                            if hasattr(signal,signame):signal.signal(getattr(signal,signame),stop_watching)
+                        watcher.watch(stop)
+                    else:
+                        result=watcher.sync_once()
+                        if result.get('state')!='current':return 2
             return 0
         except DomainError as exc:
             print(json.dumps({'error':exc.code,'detail':str(exc)}),file=sys.stderr)
             return 2
+    if args.command=='sync':
+        parser.error('sync requires --config and a trusted remote Hub')
     storage=Storage(args.db)
     try:
         service=ContextService(storage)
