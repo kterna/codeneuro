@@ -36,7 +36,7 @@ an external deployment.
 | R26 | Version history, CAS updates, rollback and audit records are covered. | None found in current test scope. |
 | R27 | Structural and semantic diagnosis endpoints preserve provider limitations and evidence clauses. | Model diagnostics remain advisory. |
 | R28 | Tree/focus panes, swimlanes, command palette and live activity UI are present; browser acceptance passed. | Visual acceptance was on Linux Chromium. |
-| R29 | Four substantive jobs across MCQQ (two worktrees), QueQiao and CodeNeuro produced commits, real MCP receipts, tests and feedback. B's lifecycle follow-up added commit `10b11a7` and a 43-test receipt-backed run. | The catalog target of 60 distinct feedback pairs is not met; several further model attempts failed at provider capacity before editing. |
+| R29 | Four substantive jobs across MCQQ (two worktrees), QueQiao and CodeNeuro produced commits, real MCP receipts, tests and feedback. B's lifecycle follow-up added commit `10b11a7` and a 43-test receipt-backed run. C's configuration reload follow-up added `34123c2` and a 50-test run. | The catalog target of 60 distinct feedback pairs is not met; the latest C follow-up had no token in its environment and therefore produced no new receipt, which is explicitly recorded rather than inferred. |
 | R30 | Release archive and rollback script are prepared; current full-product source passes 175 tests. | Production replacement was rejected by automatic approval because it would restart the live service without explicit release authorization. |
 | R31 | Isolated benchmark measured 1,000 rules, 1,000 requests, 100 observed concurrency, 25.03 req/s, p95 4.70 s, p99 5.98 s, zero errors and durable receipts. | These are Linux loopback fixture measurements, not Windows or WAN guarantees. |
 
@@ -46,7 +46,7 @@ The private isolated Hub contains 319 context deliveries, 14 agent ratings, 11
 distinct `(project_id, rule_id, rule_version)` pairs and test/issue/preflight
 records. Job A committed `e175dac` and `863b992` with 37 tests; Job B committed
 `b2351c8`, `3fac61d` and `10b11a7` with 40 and 43-test runs; Job C committed
-`744d9ae` with 49 tests; Job D committed `3b0c55b` and `00095d1`, and its
+`744d9ae` and follow-up `34123c2` with 49 and 50-test runs; Job D committed `3b0c55b` and `00095d1`, and its
 integrated CodeNeuro regression passed 175 tests. A shareable receipt bundle was
 exported and independently verified; it contains no tokens or private absolute
 paths.
