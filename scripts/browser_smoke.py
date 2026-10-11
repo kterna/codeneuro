@@ -1,6 +1,9 @@
-"""Real Chromium acceptance using an isolated database/profile. Never visits production."""
+"""Isolated Chromium acceptance of the rebuilt Web intake/archive/ledger flow.
+
+Creates a temporary NEW-schema database and browser profile; never visits the
+another service, opens production data or writes to a user browser profile.
+"""
 import argparse
-import base64
 import json
 import os
 from pathlib import Path
@@ -13,101 +16,130 @@ import urllib.request
 from websockets.sync.client import connect
 
 
-def port():
-    with socket.socket() as s:s.bind(('127.0.0.1',0));return s.getsockname()[1]
+def free_port():
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        return listener.getsockname()[1]
 
 
-def wait(fn,timeout=25):
-    deadline=time.monotonic()+timeout
-    while time.monotonic()<deadline:
+def wait(check, timeout=25):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         try:
-            result=fn()
-            if result:return result
-        except (OSError,ValueError):pass
+            value = check()
+            if value:
+                return value
+        except (OSError, ValueError, KeyError):
+            pass
         time.sleep(.1)
-    raise TimeoutError('Condition not met')
+    raise TimeoutError('Browser acceptance condition not reached.')
 
 
-def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--chromium',required=True);parser.add_argument('--screenshot',required=True)
-    args=parser.parse_args();repo=Path(__file__).resolve().parents[1]
-    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    def get(url):
-        with opener.open(url,timeout=2) as r:return json.load(r)
-    processes=[]
-    with tempfile.TemporaryDirectory(prefix='codeneuro-browser-') as temp:
-        root=Path(temp);http,debug=port(),port()
-        workspace=root/'workspace';(workspace/'src').mkdir(parents=True);(workspace/'src/cache.py').write_text('def cache(value):\n    return value\n')
-        env={**os.environ,'PYTHONPATH':str(repo/'src'),'PYTHONDONTWRITEBYTECODE':'1'}
-        env.pop('CODENEURO_API_TOKEN',None)
-        log=(root/'process.log').open('w+')
+def main(argv=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--chromium', required=True)
+    args = parser.parse_args(argv)
+    root = Path(__file__).resolve().parents[1]
+    with tempfile.TemporaryDirectory(prefix='codeneuro-browser-') as temporary:
+        temp = Path(temporary)
+        database = temp / 'new.db'
+        repo_env = {**os.environ, 'PYTHONPATH': str(root / 'src'), 'PYTHONDONTWRITEBYTECODE': '1'}
+        subprocess.run([sys.executable, '-B', '-m', 'codeneuro', 'migrate',
+                        '--db', str(database)], cwd=root, env=repo_env, check=True)
+        credential = 'isolated-browser-credential-not-for-production'
+        env = {**repo_env, 'CODENEURO_CLIENTS': json.dumps([{'token_env': 'CODENEURO_HUMAN_TOKEN',
+            'actor_id': 'smoke-human', 'project_ids': ['browser-project'], 'role': 'human'}]),
+            'CODENEURO_HUMAN_TOKEN': credential}
+        http_port, debug_port = free_port(), free_port()
+        processes = []
+        log = (temp / 'browser.log').open('w+')
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        def fetch(url):
+            with opener.open(url, timeout=2) as response:
+                return json.load(response)
         try:
-            processes.append(subprocess.Popen([sys.executable,'-m','codeneuro.cli','serve','--port',str(http),'--db',str(root/'test.db')],env=env,stdout=log,stderr=log))
-            wait(lambda:get(f'http://127.0.0.1:{http}/api/health'))
-            processes.append(subprocess.Popen([args.chromium,'--headless','--no-sandbox','--disable-gpu','--disable-background-networking','--disable-component-update','--disable-sync','--no-first-run','--password-store=basic',f'--user-data-dir={root/"profile"}',f'--remote-debugging-port={debug}','about:blank'],stdout=log,stderr=log))
-            targets=wait(lambda:get(f'http://127.0.0.1:{debug}/json/list'))
-            ws=connect(targets[0]['webSocketDebuggerUrl'],max_size=None,legacy=True)
-            serial=0;errors=[]
-            def cdp(method,params=None):
-                nonlocal serial
-                serial+=1;ws.send(json.dumps({'id':serial,'method':method,'params':params or {}}))
-                while True:
-                    response=json.loads(ws.recv(timeout=15))
-                    if response.get('method')=='Runtime.exceptionThrown':errors.append(response['params'])
-                    if response.get('id')==serial:
-                        if 'error' in response:raise RuntimeError(response['error'])
-                        return response.get('result',{})
-            def js(source):
-                result=cdp('Runtime.evaluate',{'expression':source,'returnByValue':True,'awaitPromise':True})
-                if 'exceptionDetails' in result:raise RuntimeError(result['exceptionDetails'])
-                return result.get('result',{}).get('value')
-            def click(text,scope='document'):
-                wait(lambda:js(f"Array.from({scope}.querySelectorAll('button')).some(b=>(b.textContent.trim()==={json.dumps(text)} || b.getAttribute('aria-label')==={json.dumps(text)}) && !b.disabled)"))
-                js(f"Array.from({scope}.querySelectorAll('button')).find(b=>(b.textContent.trim()==={json.dumps(text)} || b.getAttribute('aria-label')==={json.dumps(text)})).click()")
-            def fill(values):
-                for name,value in values.items():js(f"document.querySelector('#editor-fields [name={name}]').value={json.dumps(value)}")
-                js("document.querySelector('#editor-form button[type=submit]').click()")
-                wait(lambda:js("!document.getElementById('editor').open"))
-            cdp('Runtime.enable');cdp('Page.enable');cdp('Emulation.setDeviceMetricsOverride',{'width':1440,'height':1080,'deviceScaleFactor':1,'mobile':False})
-            cdp('Page.navigate',{'url':f'http://127.0.0.1:{http}/'})
-            wait(lambda:js("document.getElementById('health')?.textContent.includes('服务正常')"))
-            click('＋ 注册项目');fill({'name':'真实浏览器验收','roots':str(workspace),'description':'isolated browser acceptance'})
-            wait(lambda:js("document.getElementById('project').options.length===1"))
-            click('需求与生命周期');wait(lambda:js("document.getElementById('title').textContent==='需求与生命周期'"))
-            click('＋ 新建任务');fill({'title':'缓存需求','description':'Verify a real temporary rule lifecycle'})
-            wait(lambda:js("document.querySelectorAll('#content article').length===1"))
-            click('范围规则');wait(lambda:js("document.getElementById('title').textContent==='范围规则'"))
-            click('＋ 新建规则')
-            task=js("document.querySelector('#editor-fields select[name=task_id]').options[1].value")
-            fill({'title':'缓存不能修改输入','task_id':task,'priority':'P1','scopes':'src/**','points':'Never mutate the caller input.','reason':'browser acceptance'})
-            wait(lambda:js("document.querySelectorAll('#content article').length===1"))
-            click('编辑');fill({'title':'缓存不能修改输入','task_id':task,'priority':'P1','scopes':'src/**','points':'Copy input before editing.','reason':'clarify contract'})
-            wait(lambda:js("document.querySelector('#content').textContent.includes('v2')"))
-            click('上下文预览');wait(lambda:js("document.querySelector('#content input')!==null"))
-            js("document.querySelector('#content input').value='src/cache.py'")
-            js(f"document.querySelector('#content select').value={json.dumps(task)}")
-            click('预览上下文');wait(lambda:js("document.querySelector('#content pre')?.textContent.includes('Copy input before editing.')"))
-            assert get(f'http://127.0.0.1:{http}/api/stats')['total_hits']==0
-            click('需求与生命周期');wait(lambda:js("document.querySelectorAll('#content article').length===1"))
-            js('window.confirm=()=>true');click('已归档')
-            wait(lambda:js("document.querySelector('#content article .tag')?.textContent==='已归档'"))
-            click('范围规则');wait(lambda:js("document.querySelector('#content .empty')!==null"))
-            click('工作区与会话');wait(lambda:js("document.querySelector('#content').textContent.includes('尚无工作区客户端注册')"))
-            assert get(f'http://127.0.0.1:{http}/api/health')['verified_deliveries']==0
-            click('变更记录');wait(lambda:js("document.querySelector('#content').textContent.includes('task.status')"))
-            screenshot=cdp('Page.captureScreenshot',{'format':'png','captureBeyondViewport':False})
-            Path(args.screenshot).write_bytes(base64.b64decode(screenshot['data']))
-            assert not errors,errors
-            print(json.dumps({'status':'passed','flows':['project_registration','task_creation','rule_creation','optimistic_edit','real_preview','preview_does_not_count','archive_deactivation','empty_workspace_without_mock','audit_display'],'javascript_errors':len(errors),'screenshot':args.screenshot}),flush=True)
-            ws.close()
+            processes.append(subprocess.Popen([sys.executable, '-B', '-m', 'codeneuro',
+                'serve', '--db', str(database), '--port', str(http_port)], cwd=root,
+                env=env, stdout=log, stderr=log))
+            def ready():
+                request = urllib.request.Request(f'http://127.0.0.1:{http_port}/api/projects',
+                    headers={'Authorization': 'Bearer ' + credential})
+                with opener.open(request, timeout=2) as response:
+                    return json.load(response) == []
+            wait(ready)
+            processes.append(subprocess.Popen([args.chromium, '--headless', '--no-sandbox',
+                '--disable-gpu', '--disable-background-networking', '--disable-component-update',
+                '--disable-sync', '--no-first-run', '--password-store=basic',
+                f'--user-data-dir={temp / "profile"}', f'--remote-debugging-port={debug_port}',
+                'about:blank'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+            targets = wait(lambda: fetch(f'http://127.0.0.1:{debug_port}/json/list'))
+            page = next(item for item in targets if item.get('type') == 'page')
+            with connect(page['webSocketDebuggerUrl'], max_size=None, legacy=True) as websocket:
+                serial = 0
+                errors = []
+                def cdp(method, params=None):
+                    nonlocal serial
+                    serial += 1
+                    websocket.send(json.dumps({'id': serial, 'method': method, 'params': params or {}}))
+                    while True:
+                        response = json.loads(websocket.recv(timeout=15))
+                        if response.get('method') == 'Runtime.exceptionThrown':
+                            errors.append(response['params'])
+                        if response.get('id') == serial:
+                            if 'error' in response:
+                                raise RuntimeError(response['error'])
+                            return response.get('result', {})
+                def js(source):
+                    reply = cdp('Runtime.evaluate', {'expression': source,
+                        'returnByValue': True, 'awaitPromise': True})
+                    if 'exceptionDetails' in reply:
+                        raise RuntimeError(reply['exceptionDetails'])
+                    return reply.get('result', {}).get('value')
+                def fill(selector, value):
+                    js(f"(()=>{{let field=document.querySelector({json.dumps(selector)});"
+                       f"field.value={json.dumps(value)};field.dispatchEvent(new Event('input',{{bubbles:true}}))}})()")
+                def click(label):
+                    wait(lambda: js(f"[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==={json.dumps(label)}&&!b.disabled)"))
+                    js(f"[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==={json.dumps(label)}).click()")
+                cdp('Runtime.enable'); cdp('Page.enable')
+                cdp('Page.navigate', {'url': f'http://127.0.0.1:{http_port}/app/'})
+                wait(lambda: js("!!document.querySelector('#hub-token')"))
+                fill('#hub-token', credential)
+                click('连接')
+                wait(lambda: js("!!document.querySelector('#new-project-id')"))
+                fill('#new-project-id', 'browser-project')
+                fill('#new-project-name', 'Browser test')
+                click('登记项目')
+                wait(lambda: js("document.body.innerText.includes('下一件要完成的事')"))
+                fill('#demand-text', '新增退款流程并确保幂等。')
+                click('提交原文需求')
+                wait(lambda: js("document.body.innerText.includes('新增退款流程并确保幂等。')"))
+                assert js("document.querySelectorAll('.requirement').length") == 1
+                js("window.prompt=()=> 'Coding Agent confirmed completion.'")
+                click('确认归档')
+                wait(lambda: js("document.body.innerText.includes('完成摘要：Coding Agent confirmed completion.')"))
+                wait(lambda: js("[...document.querySelectorAll('.badge')].some(x=>x.textContent.includes('archived'))"))
+                assert not errors, errors
+                print(json.dumps({'result': 'passed', 'flow': 'intake_archival_ledger',
+                                  'javascript_errors': len(errors)}))
+                try:
+                    cdp('Browser.close')
+                except (OSError, RuntimeError):
+                    pass  # Browser.close can end the CDP connection before acknowledging.
         except BaseException:
-            log.flush();log.seek(0);print(log.read()[-2500:],file=sys.stderr);print(locals().get('errors',[]),file=sys.stderr);raise
+            log.flush();log.seek(0)
+            print(log.read()[-3000:], file=sys.stderr)
+            raise
         finally:
             for process in reversed(processes):
-                process.terminate()
-                try:process.wait(timeout=5)
-                except subprocess.TimeoutExpired:process.kill();process.wait()
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        process.kill(); process.wait(timeout=5)
             log.close()
 
 
-if __name__=='__main__':main()
+if __name__ == '__main__':
+    main()

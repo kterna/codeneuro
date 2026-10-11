@@ -1,22 +1,7 @@
-# Full product implementation and real coding validation
+# 历史扩展计划（非当前产品验收清单）
 
-Goal: complete the 31-item requirements baseline in requirements-coverage-2026-10-07.md, then dispatch multiple substantive coding tasks and collect genuine context/feedback evidence. A narrower foundation release is not completion.
+此文档记录旧版 R01–R31 扩展路线，**不再作为当前 CodeNeuro 的强制功能或发布门槛**。现行范围以 [产品契约](product-contract.md)、[白皮书](whitepaper/index.html)和用户后续明确决策为准。
 
-## Implementation tracks
+旧路线中针对特定 Coding Agent 的 native hook、工作区静态规则导出/同步、CodeNeuro 文件编辑/测试执行均已废止。旧文档曾提出的代码拓扑索引、指定 LLM 实证、命令面板/SSE 与“四项任务、三仓库、反馈配额”属于历史扩展或研究验收设想；不能因为旧代码实现过它们，就要求新产品保留这些模块。白皮书明确要求的需求闭环、多维 JIT、跨 Worktree 中央真实源、规则作用域密度与资产演进账本仍应独立验收。
 
-- Root: authenticated remote Hub/client and MCP, .codeneuro.json, actual file/tool adapters, sync --watch, integration, operations, performance, real coding orchestration.
-- Intelligence: repository entity/dependency/endpoint index, graph-grounded LLM PRD analysis, explainable candidate review, semantic assessment and task distillation.
-- Governance: complete task-scoped agent rule lifecycle, failure evidence/reflection, confidence/aging, pause/resume, session epilogue, actionable reviewed proposals/issues.
-- Workbench: directory heatmap + focus inspector, task swimlanes, workspace/session details, feedback matrix, live events, review flows and command palette.
-
-## Evidence gates
-
-- Each R01–R31 has direct implementation and behavioral evidence; maintain final coverage audit.
-- Current unit/integration/browser checks remain passing; add tests for actual new behavior.
-- Real authenticated remote client from a distinct process/environment, no server-local path assumption.
-- Real configured LLM analyses and genuinely launched coding agents; protocol fixtures are not counted as LLM coding evidence.
-- Initial empirical target: at least four independent substantive coding jobs over at least three repositories, including two isolated worktrees of one repository; aim for at least 100 actual context deliveries and 60 non-duplicate rule-version feedback pairs.
-- Jobs must contain sustained useful coding, debugging and validation. If they finish too early or evidence is insufficient, add substantive follow-up work; never wait or replay probes merely to inflate runtime/samples. Record actual active duration rather than promise a clock threshold as proof.
-- Report natural-use ratings separately from explicitly labelled adversarial/diagnostic cases. Never demand positive ratings or fabricate agent identities.
-- Preserve commits, diffs, test outputs, session/delivery/version links, issue resolutions and feedback changes. Sample counts do not by themselves prove general effectiveness.
-- Final publication/deployment includes rollback and current live readiness. No completion until full scope and empirical evidence are inspected.
+实测报告必须标明样本、环境和证据；没有真实外部模型、真实 Agent 工作或跨机器部署证据时只写“未验证”，不反向宣称相关能力已被证明。

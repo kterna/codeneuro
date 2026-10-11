@@ -21,6 +21,7 @@ wheels/
 
 .venv
 venv/
+web/node_modules/
 ENV/
 env/
 

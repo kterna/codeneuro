@@ -1,4 +1,6 @@
-# CodeNeuro current scope audit
+# CodeNeuro 历史范围审计（旧版本快照，非现行产品契约）
+
+> 以下是旧版 `feature/full-product` 的当时记录；涉及的宿主钩子、静态同步和旧架构已移除。现行范围见 [产品契约](product-contract.md)。保留本文仅供追溯，不作为现行能力声明。
 
 This audit supersedes the 2026-10-07 snapshot. It is based on `feature/full-product`
 at `9cb23fb`, the 175-test regression, the isolated remote MCP/HTTP tests, the

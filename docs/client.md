@@ -1,70 +1,9 @@
-# Native workspace client and stdio MCP
+# Hub 客户端与身份边界
 
-The workstation keeps its repository. CodeNeuro runs a local stdio MCP sidecar that reads native Windows or Linux paths, registers actual Git/machine identity, and contacts a pinned Hub through an independently issued project-scoped bearer token.
+当前产品提供同机 stdio MCP、受认证的远程 streamable HTTP MCP、Web HTTP API；三者的业务工具定义和应用用例同源。客户端获得的 `Actor` 项目范围来自操作员在环境中配置的 Token，不能靠模型传入 `actor_id`、项目 ID 或 `reviewed=true` 自我授权。人类审阅既有长期契约只能由 human 身份完成。
 
-## Connection
+远程 MCP 客户端调用 `codeneuro_start_session` 时可以附带 `workspace`、机器名、平台、仓库身份与分支。Hub 根据身份及路径生成稳定 Worktree ID，**只证明“这个认证客户端做过该声明”**，不假称读取或验证过远端工作区。上下文路径仍须为工作区相对 POSIX 路径；不支持把 NAS 上的目录当作办公机目录。
 
-Create a client credential from the Hub workbench's **工作区与会话 → 连接办公机 / Agent** flow. Save the returned token in the workstation's credential mechanism or process environment. The Hub returns that secret once. Do not put it in the repository.
+所有 Rule、Requirement、版本和实际 Delivery 保存在 Hub 数据库；没有本地静态规则文件或同步守护进程。`codeneuro_get_context` 需要 Agent 主动调用，预览不计作真实下发。评分只能引用该会话真实取得的 Rule 版本和 `delivery_id`；0 代表会话已知，效用均分排除 0，P0 仍完整下发。
 
-The workspace `.codeneuro.json` contains nonsecret selection only:
-
-```json
-{
-  "hub_url": "https://your-hub.example",
-  "project_id": "your-project-id",
-  "active_task": "your-task-id",
-  "token_env": "CODENEURO_TOKEN"
-}
-```
-
-On Linux, set the explicitly trusted destination and token in the environment used to launch the coding host:
-
-```sh
-export CODENEURO_HUB_URL='https://your-hub.example'
-export CODENEURO_TOKEN='<the issued client token>'
-python -m codeneuro.cli mcp --config '/actual/worktree/.codeneuro.json' --workspace '/actual/worktree' --debug
-```
-
-On Windows PowerShell:
-
-```powershell
-$env:CODENEURO_HUB_URL = 'https://your-hub.example'
-$env:CODENEURO_TOKEN = '<the issued client token>'
-python -m codeneuro.cli mcp --config 'C:\actual\worktree\.codeneuro.json' --workspace 'C:\actual\worktree' --debug
-```
-
-Install the same CodeNeuro package version as the Hub in the Python environment used by the host. Register that command and its arguments as the host's local stdio MCP service. Codex, Hermes and Claude Code have different configuration formats; use the verified host-specific integration documentation. Pi requires an MCP-capable adapter if its installation does not support MCP natively. The common service launch shape is `{command, args}`; credentials and the trusted Hub pin are inherited from the launch environment.
-
-`discover_config()` walks from the requested directory to its ancestors. Discovery does **not** grant trust: `.codeneuro.json` can be changed by repository code, so `CODENEURO_HUB_URL` or the Python API's explicit `trusted_hub_url` must match before a bearer token or code metadata can leave the workstation. Redirects and inherited proxy environment settings are disabled. Only dedicated `CODENEURO_*TOKEN` environment variable names are accepted.
-
-## File operations and provenance
-
-`codeneuro_read_file` obtains scoped context automatically, then returns the real file text, SHA-256, line range and `delivery_id`. File tools reject path traversal, external absolute paths, credential locations, symlinks and Windows filesystem reparse points. The rule matcher receives canonical workspace-relative POSIX paths.
-
-`codeneuro_edit_file` requires the SHA-256 returned by a read, the replacement text and a plan. New files use the explicit value `missing`; their parent directory must already exist. The client submits the **actual unified diff** to preflight and writes only when the Hub returns `decision=allow` without `stale`. `block`, `review`, missing decisions, hash conflicts and provider errors leave the file untouched. Accepted edits use an atomic replacement in the same directory and preserve an existing executable mode. POSIX directory descriptors protect file I/O from ancestor symlink replacement.
-
-A Hub operation boundary brackets each sidecar read/edit/test. The Hub can therefore reject task rebinding while an operation is still using the pinned task. Interrupted operation records must be reconciled explicitly; an observation error does not prove a completed operation.
-
-`codeneuro_index_workspace` builds bounded static metadata on the workstation with the common indexer. The indexer excludes credential locations, generated/vendor directories, symlinks and private-key markers. The client applies its credential-path filter again before transmitting the manifest. It does not ask the Linux Hub to read `C:\...` paths.
-
-## Actual tests and Debug feedback
-
-`codeneuro_run_tests` takes an argv list and affected paths. It uses `shell=False`, a workspace cwd, a deadline of at most 900 seconds, process-tree cleanup, a 10 MB output bound, and an environment without API-token/password/proxy variables. The returned exit code, timestamps and output come from the actual subprocess. Bounded redacted output is kept under `.codeneuro/test-runs/`; Hub excerpts are explicitly marked when truncated. An upload failure returns `recorded=false` and the local artifact path rather than pretending that the Hub accepted the evidence.
-
-Tests execute trusted repository code with the current user's OS permissions. Workspace cwd and argv validation are **not an OS filesystem sandbox**. If a repository itself is untrusted, run the client in an appropriate OS/container sandbox before authorizing its tests.
-
-Debug exposes both receipt-backed 0–5 rating and active issue reporting. The client never assigns ratings automatically. Scores must be supplied from actual observed usefulness. The browser acceptance fixtures and mocked-transport unit tests do not count as real coding-agent experiments.
-
-## Native host hooks and session reuse
-
-`create_native_bridge(config_path, workspace, host_session_id, agent_client)` supplies the verified host integration with context, preflight, real-test recording, operation boundaries and cleanup. Each hook process reuses the same Hub session keyed by trusted Hub, bearer identity, project, configured task, native workspace and actual host session ID.
-
-State under `.codeneuro/native-sessions/` contains session IDs and up to 2000 receipt references, never bearer tokens or source content. POSIX `flock` and Windows `msvcrt` locks serialize restoration and atomic state updates. A restored session is checked with `session_status`. A network or server observation failure leaves the session identity intact and surfaces the error; it does not spawn a duplicate session. Cleanup retries with the same request ID return the stored result without opening another session.
-
-Set `CODENEURO_HOST_SESSION_ID` and `CODENEURO_AGENT_CLIENT` for the MCP sidecar when the host adapter exposes those values. That sidecar and the native hooks then share receipt references, so a native file-access delivery can be rated through the MCP feedback tool. No global host configuration is modified by the client factory.
-
-## Validation scope
-
-`tests/test_client.py` checks trust pinning, redirect refusal, credential/path/symlink boundaries, actual local reads and atomic edits, SHA conflicts during assessment, block/review behavior, actual subprocess output/exit codes, child cleanup on timeout, session persistence, transient-status handling and MCP tool invocation. Its HTTP transport is an explicit deterministic test double. Integrated Hub tests and actual host-agent experiments provide separate evidence for network authorization and long coding runs.
-
-Windows-specific locking, reparse-point and process-tree code is implemented using native platform branches. Linux execution alone does not establish that those branches have run on Windows; native Windows validation must be recorded separately.
+Web 使用 `/app/`；MCP 连接与配置见 [标准接入](agent-integrations.md)。当前不内置 CodeNeuro 远程路径自动发现器或宿主钩子；不要引用旧版 `codeneuro.client`、`codeneuro.cli`、`sync/export` API。

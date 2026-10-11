@@ -1,4 +1,6 @@
-# Empirical coding acceptance catalog
+# Empirical coding acceptance catalog（旧版实验设计，非现行验收）
+
+> 本文描述旧版多仓库实验及旧性能基准，相关宿主工具与基准脚本已退出当前代码。保留历史任务素材供追溯；不要按旧命令运行，也不把样本配额作为现行产品验收门槛。现行行为见 [产品契约](product-contract.md)。
 
 This catalog defines future work and acceptance gates. It is not a report of completed coding runs. Root provisions isolated worktrees, an authenticated CodeNeuro Hub, real provider processes, and MCP sidecars before dispatch. No task below authorizes modifying the deployed AstrBot/MCDR services, production credentials, or their live configuration.
 
@@ -33,11 +35,11 @@ Each job has bounded useful milestones and a follow-up backlog. The agent is exp
 
 1. Record job ID, repository identity and base commit, actual provider/model, real agent host/name, worktree path alias, task/session/worktree IDs, sidecar version, and start time. Secrets stay in process environment or protected operator configuration, not in the prompt.
 2. Read applicable project instructions and establish baseline tests. Distinguish a preexisting failure from one introduced by the task. Upload the actual client-generated index. Analyze the PRD with the configured model and review candidate rules before making them active. Reject irrelevant/broad/duplicated candidates; there is no quota of P0 rules.
-3. Use `codeneuro_read_file` and `codeneuro_edit_file` for task file reads/writes so context injection and edit preflight are observable. Use `codeneuro_run_tests` for real test commands with affected paths. Directory listings/searches can use native tools, but content access that bypasses the adapter must be logged as an instrumentation gap, not counted as an injected delivery.
-4. Before a cross-file change, inspect the preflight result. Resolve `block` or `review` using the actual constraint/plan/evidence. Do not bypass the tool with an untracked shell write merely because it refused a change.
+3. Before a relevant file access, the Agent explicitly calls `codeneuro_get_context` with its scope. Agent-native tools perform all real file reads, edits and tests. A file access without a CodeNeuro context call is an instrumentation gap, not an injected delivery; never invent a receipt.
+4. Before a cross-file change, explicitly request CodeNeuro preflight where available and inspect its decision/evidence. CodeNeuro does not intercept or authorize native file operations, so report any bypass honestly rather than claiming automatic enforcement.
 5. After a meaningful development step, rate actually seen rules using their delivery IDs. Use the documented scale: 0 already known, 1 irrelevant, 2 low quality, 3 neutral, 4 helpful, 5 essential. Explain the observed effect or interference. Never require score 5 or any particular distribution. Repeated feedback on the same receipt is not a new sample.
 6. Record genuine failures and discoveries with source/test evidence. Update task rules only when the evidence supports the change; version changes made only to inflate counts are invalid. Report rule conflicts, missing scope, stale constraints or excess noise when actually encountered.
-7. At milestones and final handoff, record commit/diff, tests, unresolved limits and the effect of retrieved rules. End with idempotent session cleanup; release/archive a task only after its code acceptance passes. Review distillation suggestions and verify the resulting long-term contract and short-term expiry using another actual access.
+7. At milestones and final handoff, record commit/diff, tests, unresolved limits and the effect of retrieved rules. Explicitly close/clean up the Agent's CodeNeuro session; archive each Requirement only after the Agent confirms completion and supplies a summary. The final archived Requirement completes the Task; review any separate long-term contract changes before activation.
 
 Aggregate target: **four substantive jobs, at least three repositories, at least 100 genuine context deliveries and 60 distinct `(project_id, rule_id, rule_version)` feedback pairs**. Also report distinct `(session_id, rule_id, rule_version)` pairs, total feedback rows and receipt duplicates so cross-session repeats cannot conceal low rule diversity. These are evidence targets, not instructions to manufacture calls or rules. Root must inspect actual receipt and tool logs before claiming the counts. If the data falls short, continue useful coding work rather than counting protocol fixtures.
 
@@ -64,4 +66,4 @@ PYTHONPATH=src python scripts/benchmark_context.py --rules 20 --requests 8 --con
 PYTHONPATH=src python scripts/benchmark_context.py --rules 1000 --requests 1000 --concurrency 100 --output /tmp/codeneuro-benchmark-100.json
 ```
 
-Metrics use `schema_version:1`; the machine-readable contract is [benchmark-context.schema.json](benchmark-context.schema.json). Top-level keys are `kind`, `created_at`, `environment`, `workload`, `metrics`, `resources`, `validation`, `errors`, and `latency_samples_ms`. `kind` is `synthetic_isolated_http_benchmark`. A nonzero exit indicates request/correctness/integrity failure. Slow valid output remains useful evidence and is not relabelled as success against an unspecified performance promise.
+Historical metrics used `schema_version:1`; that benchmark schema is no longer shipped with the current product. Top-level keys are `kind`, `created_at`, `environment`, `workload`, `metrics`, `resources`, `validation`, `errors`, and `latency_samples_ms`. `kind` is `synthetic_isolated_http_benchmark`. A nonzero exit indicates request/correctness/integrity failure. Slow valid output remains useful evidence and is not relabelled as success against an unspecified performance promise.

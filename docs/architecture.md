@@ -1,62 +1,32 @@
-# 0.4 架构与行为契约
+# CodeNeuro 架构与约束
 
-## 分层
+产品规则以 [现行产品契约](product-contract.md) 为准。CodeNeuro 是一个模块化单体：领域策略不依赖数据库或 MCP；跨模块业务由工作流在一个 Unit of Work 内协调；仓储按 Workspaces、Requirements、Knowledge、Context、Feedback、Governance 与 Audit 分工；HTTP/Web 和 MCP 只做认证与 DTO 映射。源码位于 `src/codeneuro/`，不存在需长期并行维护的 `codeneuro_rebuild` 包。
 
-```mermaid
-flowchart LR
-    UI[WebUI] --> HTTP[HTTP API]
-    MCP[stdio MCP] --> Service[ContextService]
-    CLI[CLI] --> Service
-    HTTP --> Service
-    Service --> Matcher[Anchored scope matcher]
-    Service --> Store[Transactional Storage]
-    Store --> SQLite[(SQLite WAL)]
+```text
+Web/Vue ──► HTTP API ─┐
+stdio MCP ────────────┼──► 工作流 ─► 领域策略
+streamable HTTP MCP ──┘       │
+                              ▼
+                       Unit of Work / SQLAlchemy Core
+                              │
+                       Hub 本机 SQLite WAL
 ```
 
-`service.py` 负责会话绑定、上下文选择、下发凭据、幂等重试和版本反馈。`storage.py` 负责带事务的关系校验、生命周期与版本持久化。`database.py` 为单连接多线程提供整事务互斥，为嵌套工作单元提供 savepoint。多个 MCP/HTTP 进程通过 SQLite 写事务和 busy timeout 协调。
+## 主要实体
 
-HTTP 的复合操作在整个 handler 上包裹事务。规则内容、快照、审计同时提交；任意阶段失败全部回滚。编辑使用观察到的版本比较，避免后写覆盖前写。
+- Task 六态；Requirement 独立保存原文、归属、归档摘要及不可变版本快照。最后一条活跃需求归档在同一事务中完成 Task、停用短期规则；`paused/released` 拒绝归档。
+- Rule 区分任务临时规则和项目长期契约。`rule_versions` 保存不可变历史；晋升复制有效版本为新长期 Rule，保留来源版本和理由。对既有长期契约的更新须 Agent 提案、人类按版本审阅。
+- Session 固定经认证 actor、项目、Task 和客户端声明的 Worktree。Delivery 记录实际输出及 Rule/Requirement/Finding 版本；反馈引用本会话真实下发。0=已知仅简写该会话版本，P0 永远完整。
+- 未经审阅的 Finding 保持任务和会话作用域，不自行变成长期规范。宿主上报的测试报告标记为 `client_reported`，两个独立成功证据和无反证等条件可激活 Agent 创建的任务草稿规则；CodeNeuro 不执行测试。
 
-## 关键实体
+## JIT 并发与作用域
 
-| 对象 | 作用及约束 |
-|---|---|
-| Project | 显式仓库根目录；不会自动扫描或注册示例工程 |
-| WorktreeInstance | 已注册路径、机器、Git 分支和最后访问时间；身份不能被改绑到其他项目 |
-| Task | 独立需求生命周期；task/project 关系写入时验证 |
-| AgentSession | 固定 project/worktree/task，保存客户端来源和 debug 标志 |
-| Rule / RuleVersion | 规则状态、内容、范围、版本；范围必须是相对路径；版本快照唯一 |
-| ContextDelivery / DeliveryRules | 下发请求、实际内容、规则版本和完整/提醒表示 |
-| SessionKnowledge | 哪个会话对哪个规则版本明确反馈“已知” |
-| RuleEvaluation | 关联 session + delivery + rule version；相同下发只记录一次 |
-| Finding / Proposal / Issue | 带来源的观察与提案；未经审核的发现限定在相同任务/会话 |
-| AuditEvent | API 不提供修改和删除入口的持久变更记录 |
+短只读快照获取项目规则修订、Task 修订和会话已知修订，释放数据库读事务后纯装配，最后短写事务重核修订并原子签发 Delivery；冲突有界重算，不签发旧快照/新版本混合结果。按项目、Task、类别、优先级与锚定路径范围选择规则；`implementing/debugging` 决定同优先级内顺序，清单与详细模式均保留条款。结果同时给出 Markdown 和 `must_obey_contracts`、`task_actionable_checklist`、`module_gotchas` 结构化章节。P0 不因预算或分类静默消失；省略项分别报告。
 
-## 上下文流程
+语义模型不是 JIT 热路径的依赖。当前未配置语义评估时返回 `not_assessed`；Agent 主动上报的潜在冲突只有涉及的规则 ID/版本都仍在本次候选时才以“未验证报告”形式提示，**不冒充模型诊断或自动仲裁**。不把相似文本机械合并。账本上的“密度”由已存 Rule 的具体作用域前缀计算，不暗示服务器扫描过远程文件树。
 
-1. 校验会话仍开放、项目与任务一致。
-2. 将文件路径归一到固定工作区，拒绝越界和逃逸符号链接。
-3. 选取已启用的项目长期规则及当前仍活跃任务的短期规则。
-4. 以锚定 Glob 匹配路径，避免 basename fallback 导致跨目录误命中。
-5. 查询当前会话对规则当前版本的明确已知记录。
-6. 按 P0/P1/P2 合成内容；P0 不因重复或预算被静默省略。
-7. 实际 Agent 下发：在同一事务中写入凭据、规则版本集合、审计及命中数。页面预览不执行这些写入。
+## 数据与部署
 
-反馈绑定实际下发版本。规则更新后，旧版本评分留在历史记录，当前版本的评分统计重新开始。0 表示知识已知，不等于规则质量差；它不会全局降低其他会话的上下文。
+新 schema 由**一条显式 Alembic 初始迁移**管理；`codeneuro migrate --db <new-path>` 必须由所有者选定新库。运行入口拒绝旧版或未知 schema，不对真实旧库做隐式写入。Web、同机 stdio MCP 与远程 HTTP MCP 使用 Hub 本机同一数据库。远程机器不能在网络共享盘直接打开 SQLite WAL；服务将工作区路径视为经认证客户端的有界声明；JIT 对文件参数做工作区相对路径校验，并执行项目/Task/会话归属检查，不声称做了远端 OS 文件验证。
 
-## 数据库与迁移
-
-`PRAGMA user_version` 记录 schema 版本。迁移使用 SQLite 显式事务，拒绝较新版本数据库，检查实际列名后增补字段，不吞掉任意 SQL 错误。
-
-首次升级保留历史命中数为 `legacy_hit_count`，实际下发计数从可追溯凭据开始。已知的模拟记录标记 `source=demo`，默认查询不展示/注入这些记录。其他旧记录保留并标记 `legacy`。迁移不会删除原规则或历史内容。
-
-同一台机器上的多个进程可共用数据库；不要将 SQLite 数据库放在多机共享网络文件系统上。跨主机部署需要独立的远程工作区注册、身份认证与服务端存储设计，不应把服务器上的目录验证假装成对另一台机器的验证。
-
-## 当前边界
-
-- MCP 自身不提供文件访问拦截；Agent/宿主工具必须主动接入上下文调用。
-- 身份字段用于规则隔离与追踪；HTTP 可选 Bearer Token 是实例级认证，不是多用户租户隔离。
-- “在线”表示最近 120 秒有客户端访问/心跳，不是操作系统进程存活保证。
-- 结构体检只提示范围相同、孤儿任务、低相关性反馈等已知结构现象，不推断自然语言规则是否语义矛盾。
-- 不包含自主编码调度器。部署、复测、导出和下发计数都不会被汇报成自动产生的新功能。
-- 字符预算是上下文目标，P0 超出目标时会明确标记；生产调用仍需宿主自身的模型 token 限制。
+更多工程边界见 [实现规范](rebuild-plan.md)。历史 R01–R31 清单及旧架构交付记录不是当前入口代码的规范；已取消的宿主专用钩子、静态副本及 CodeNeuro 代跑测试能力不会恢复。
