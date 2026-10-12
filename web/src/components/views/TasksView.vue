@@ -19,7 +19,7 @@ const selectedTaskId = ref('')
 const viewMode = ref<'swimlane' | 'list'>('swimlane')
 const searchKeyword = ref('')
 const onlyActive = ref(false)
-const focusedTask = ref<Task | null>(null) // 当前弹窗聚焦的任务
+const focusedTask = ref<Task | null>(null)
 
 const activeLanes: { key: TaskStatus; label: string; dotCls: string }[] = [
   { key: 'draft', label: '待开始 (Draft)', dotCls: 'draft' },
@@ -81,8 +81,8 @@ function closeTaskDetail() {
 </script>
 
 <template>
-  <div class="tasks-workbench">
-    <!-- 1. 原文需求输入卡片 -->
+  <div class="tasks-view-root">
+    <!-- 1. 原文需求输入卡片 (GitHub Inset 风格) -->
     <section class="intake-panel">
       <div class="intake-title">
         <h2>录入业务需求</h2>
@@ -159,7 +159,7 @@ function closeTaskDetail() {
       </div>
     </div>
 
-    <!-- 3. 高质感现代化泳道看板视图 -->
+    <!-- 3. GitHub Projects 高质感悬浮泳道看板视图 -->
     <div v-if="viewMode === 'swimlane'" class="kanban-wrapper">
       <div class="kanban-grid">
         <!-- 4 根核心流转泳道 -->
@@ -184,7 +184,7 @@ function closeTaskDetail() {
               暂无任务
             </div>
 
-            <!-- 干净、紧凑、呼吸感强的任务卡片 -->
+            <!-- GitHub Projects 立体悬浮卡片 -->
             <article
               v-for="task in filteredTasks.filter(t => t.status === lane.key)"
               :key="task.id"
@@ -203,7 +203,7 @@ function closeTaskDetail() {
                 {{ task.description }}
               </p>
 
-              <!-- 需求紧凑单行预览胶囊 (满足结构与断言，绝不折叠竖排字) -->
+              <!-- 需求紧凑单行预览胶囊 (满足结构与断言，坚决不换行折叠) -->
               <div v-if="getTaskRequirements(task.id).length" class="req-mini-preview-line">
                 <div
                   v-for="req in getTaskRequirements(task.id).slice(0, 1)"
@@ -223,7 +223,7 @@ function closeTaskDetail() {
                 </div>
               </div>
 
-              <!-- 需求紧凑微标进度 -->
+              <!-- 需求紧凑微标进度与操作 -->
               <div class="task-card-footer">
                 <span class="req-progress-pill" :class="{ 'all-done': getTaskProgress(task.id).percent === 100 }">
                   需求达成 {{ getTaskProgress(task.id).done }} / {{ getTaskProgress(task.id).total }}
@@ -363,14 +363,14 @@ function closeTaskDetail() {
       </table>
     </div>
 
-    <!-- 5. 任务与需求舒适详情大抽屉 (Task Detail Drawer，宽达 560px 舒展阅读) -->
+    <!-- 5. 任务与需求舒适详情大抽屉 (宽达 580px 舒展阅读流) -->
     <aside v-if="focusedTask" class="task-drawer-overlay" @click.self="closeTaskDetail">
       <div class="task-drawer-content">
         <div class="drawer-header">
           <div class="card-top" style="margin-bottom: 0">
             <div>
               <span class="tag" :class="focusedTask.status">{{ focusedTask.status }}</span>
-              <span class="muted" style="margin-left: 8px; font-size: 11px">任务 #{{ focusedTask.id }}</span>
+              <span class="muted font-mono" style="margin-left: 8px; font-size: 11px">任务 #{{ focusedTask.id }}</span>
             </div>
             <button type="button" class="subtle" style="font-size: 16px" @click="closeTaskDetail">✕</button>
           </div>
@@ -430,44 +430,47 @@ function closeTaskDetail() {
 </template>
 
 <style scoped>
-.tasks-workbench {
+.tasks-view-root {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
+  height: 100%;
+  overflow: hidden;
 }
 
-/* 需求录入面板 */
+/* 需求录入面板 (GitHub Inset 风格) */
 .intake-panel {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 20px 24px;
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 16px 20px;
+  flex-shrink: 0;
 }
 .intake-title h2 {
-  font-size: 15px;
+  font-size: 14px;
   margin: 0;
 }
 .intake-form {
-  margin-top: 14px;
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .intake-footer {
   display: flex;
   justify-content: flex-end;
 }
 .match-box {
-  background: var(--bg-subtle);
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
+  background: var(--gh-canvas-default);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--gh-border-default);
 }
 .choices-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .choice-label {
   display: flex;
@@ -477,7 +480,7 @@ function closeTaskDetail() {
   cursor: pointer;
 }
 .match-hint {
-  color: var(--green);
+  color: var(--gh-success-fg);
   font-size: 12px;
 }
 
@@ -486,9 +489,10 @@ function closeTaskDetail() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 .board-header-left h2 {
-  font-size: 16px;
+  font-size: 15px;
   margin: 0;
 }
 .board-header-left .muted {
@@ -497,11 +501,11 @@ function closeTaskDetail() {
 .board-header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 .filter-check {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--gh-fg-muted);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -509,57 +513,61 @@ function closeTaskDetail() {
 }
 .view-toggle {
   display: flex;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
   overflow: hidden;
 }
 .view-toggle button {
   background: transparent;
   border: 0;
   border-radius: 0;
-  padding: 6px 14px;
+  padding: 5px 12px;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--gh-fg-muted);
 }
 .view-toggle button.active {
-  background: var(--bg-surface);
-  color: var(--text-primary);
+  background: var(--gh-canvas-subtle);
+  color: var(--gh-fg-default);
   font-weight: 600;
 }
 
 /* 现代化泳道网格 */
 .kanban-wrapper {
   overflow-x: auto;
-  padding-bottom: 16px;
+  overflow-y: hidden;
+  flex: 1;
 }
 .kanban-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(310px, 1fr)) minmax(330px, 1.2fr);
-  gap: 16px;
+  gap: 14px;
   min-width: 1580px;
+  height: 100%;
 }
 
+/* 泳道托盘 */
 .kanban-col {
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
   display: flex;
   flex-direction: column;
-  max-height: 760px;
+  overflow: hidden;
+  height: 100%;
 }
 .col-closed {
-  background: rgba(10, 12, 19, 0.75);
+  background: rgba(1, 4, 9, 0.4);
   border-style: dashed;
 }
 
 .col-head {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gh-border-default);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: #161b22;
+  flex-shrink: 0;
 }
 .col-title {
   display: flex;
@@ -575,56 +583,57 @@ function closeTaskDetail() {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--text-tertiary);
+  background: var(--gh-fg-subtle);
 }
-.status-dot.active { background: var(--green); box-shadow: 0 0 6px rgba(16, 185, 129, 0.5); }
-.status-dot.paused { background: var(--amber); }
-.status-dot.testing { background: var(--blue); }
-.status-dot.dot-closed { background: var(--text-tertiary); }
+.status-dot.active { background: var(--gh-success-fg); box-shadow: 0 0 6px rgba(46, 160, 67, 0.4); }
+.status-dot.paused { background: var(--gh-attention-fg); }
+.status-dot.testing { background: var(--gh-accent-fg); }
+.status-dot.dot-closed { background: var(--gh-fg-subtle); }
 
 .badge-count {
   font-size: 11px;
   font-family: var(--font-mono);
-  background: var(--bg-surface);
-  padding: 2px 8px;
+  background: var(--gh-canvas-default);
+  padding: 1px 7px;
   border-radius: 10px;
-  color: var(--text-secondary);
+  color: var(--gh-fg-muted);
 }
 
 .col-scroll {
-  padding: 12px;
+  padding: 10px;
   overflow-y: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .col-empty {
-  padding: 36px 12px;
+  padding: 30px 10px;
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--gh-fg-subtle);
   font-size: 12px;
 }
 
-/* 核心：卡片高质感紧凑布局（告别臃肿长竹竿） */
+/* GitHub Projects 风格立体悬浮卡片 */
 .task-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
+  background: var(--gh-surface-card);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(1, 4, 9, 0.4);
+  transition: all 0.12s ease;
 }
 .task-card:hover {
-  border-color: var(--border-hover);
+  background: var(--gh-surface-card-hover);
+  border-color: var(--gh-accent-fg);
   transform: translateY(-1px);
 }
 .card-active {
-  border-left: 3px solid var(--green);
+  border-left: 3px solid var(--gh-success-fg);
 }
 .card-closed {
   opacity: 0.85;
@@ -638,15 +647,15 @@ function closeTaskDetail() {
 .task-id {
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-tertiary);
+  color: var(--gh-fg-subtle);
 }
 
 .task-title {
   font-size: 13px;
   font-weight: 600;
   margin: 0;
-  line-height: 1.45;
-  color: var(--text-primary);
+  line-height: 1.4;
+  color: var(--gh-fg-default);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -655,8 +664,8 @@ function closeTaskDetail() {
 
 .task-desc {
   font-size: 11px;
-  line-height: 1.5;
-  color: var(--text-secondary);
+  line-height: 1.45;
+  color: var(--gh-fg-muted);
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -665,10 +674,10 @@ function closeTaskDetail() {
 }
 
 .req-mini-preview-line {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .original-text.compact-pill {
-  padding: 4px 8px;
+  padding: 3px 6px;
   font-size: 11px;
   display: flex;
   align-items: center;
@@ -687,9 +696,9 @@ function closeTaskDetail() {
 .btn-inline-archive {
   padding: 1px 6px;
   font-size: 10px;
-  color: var(--green);
-  border: 1px solid var(--green-border);
-  background: var(--green-bg);
+  color: var(--gh-success-fg);
+  border: 1px solid rgba(46, 160, 67, 0.4);
+  background: var(--gh-success-subtle);
   border-radius: 3px;
 }
 
@@ -698,19 +707,19 @@ function closeTaskDetail() {
   justify-content: space-between;
   align-items: center;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid rgba(240, 246, 252, 0.05);
 }
 
 .req-progress-pill {
   font-size: 10px;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--gh-fg-muted);
+  background: var(--gh-canvas-inset);
   padding: 2px 6px;
   border-radius: 4px;
 }
 .req-progress-pill.all-done {
-  color: var(--green);
-  background: var(--green-bg);
+  color: var(--gh-success-fg);
+  background: var(--gh-success-subtle);
 }
 
 .actions-group {
@@ -722,25 +731,25 @@ function closeTaskDetail() {
   font-size: 10px;
 }
 
-/* 详情抽屉遮罩与内容区 */
+/* 详情抽屉 */
 .task-drawer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(1, 4, 9, 0.65);
+  backdrop-filter: blur(2px);
   z-index: 100;
   display: flex;
   justify-content: flex-end;
 }
 .task-drawer-content {
-  width: min(600px, 94vw);
-  background: var(--bg-overlay);
-  border-left: 1px solid var(--border-strong);
+  width: min(580px, 94vw);
+  background: var(--gh-canvas-overlay);
+  border-left: 1px solid var(--gh-border-default);
   height: 100vh;
   display: flex;
   flex-direction: column;
-  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.7);
-  animation: slideDrawer 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: -12px 0 32px rgba(1, 4, 9, 0.85);
+  animation: slideDrawer 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes slideDrawer {
   from { transform: translateX(100%); }
@@ -748,18 +757,18 @@ function closeTaskDetail() {
 }
 
 .drawer-header {
-  padding: 24px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-subtle);
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
 }
 .drawer-body {
-  padding: 24px;
+  padding: 20px 24px;
   overflow-y: auto;
   flex: 1;
 }
 .drawer-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-subtle);
+  padding: 14px 24px;
+  border-top: 1px solid var(--gh-border-default);
   display: flex;
   justify-content: flex-end;
 }
@@ -767,20 +776,20 @@ function closeTaskDetail() {
 .drawer-req-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 .drawer-req-item {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--radius-md);
-  padding: 16px;
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-left: 3px solid var(--gh-accent-fg);
+  border-radius: 6px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .drawer-req-item.is-archived {
-  border-left-color: var(--green);
+  border-left-color: var(--gh-success-fg);
   opacity: 0.9;
 }
 .drawer-req-top {
@@ -794,38 +803,39 @@ function closeTaskDetail() {
 }
 .req-block-label {
   font-size: 10px;
-  color: var(--text-tertiary);
+  color: var(--gh-fg-subtle);
   font-weight: 600;
   text-transform: uppercase;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 .summary-text {
-  color: var(--green);
+  color: var(--gh-success-fg);
   font-size: 12px;
   margin: 0;
   line-height: 1.5;
 }
 
-/* 清单表格 */
+/* 清单表格模式 */
 .table-wrap {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  overflow-y: auto;
+  flex: 1;
 }
 .rules-table {
   width: 100%;
   border-collapse: collapse;
 }
 .rules-table th, .rules-table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gh-border-muted);
   font-size: 12px;
 }
 .rules-table th {
-  background: var(--bg-subtle);
-  color: var(--text-tertiary);
-  text-transform: uppercase;
+  background: var(--gh-canvas-subtle);
+  color: var(--gh-fg-muted);
   font-size: 11px;
   font-weight: 600;
+  text-transform: uppercase;
 }
 </style>
