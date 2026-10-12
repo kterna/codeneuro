@@ -56,6 +56,10 @@ def create_router(product: Product):
     def register(body: ProjectInput):
         return call(product.workspaces.register_project, web_actor, body.id, body.name)
 
+    @router.delete('/projects/{project_id}')
+    def remove_project(project_id: str):
+        return call(product.workspaces.delete_project, web_actor, project_id)
+
     @router.get('/projects/{project_id}/tasks')
     def tasks(project_id: str):
         return call(product.workspaces.list_tasks, web_actor, project_id)

@@ -12,6 +12,7 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'select-project', id: string): void
   (e: 'open-create-project'): void
+  (e: 'delete-current-project'): void
   (e: 'select-tab', tab: TabId): void
   (e: 'open-palette'): void
 }>()
@@ -34,7 +35,18 @@ const emit = defineEmits<{
       <option v-if="!projects.length" value="">暂无项目</option>
       <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
     </select>
-    <button id="new-project" class="subtle" @click="emit('open-create-project')">＋ 注册项目</button>
+    <div style="display: flex; gap: 6px; margin-top: 6px">
+      <button id="new-project" class="subtle" style="flex: 1; text-align: center" @click="emit('open-create-project')">＋ 注册项目</button>
+      <button
+        v-if="currentProjectId"
+        class="subtle"
+        style="color: var(--red); padding: 6px 8px"
+        title="删除当前选中的项目"
+        @click="emit('delete-current-project')"
+      >
+        🗑
+      </button>
+    </div>
 
     <nav id="navigation" aria-label="工作台导航">
       <button

@@ -15,6 +15,18 @@ class WorkspacesRepo(Repo):
     def create_project(self, project_id, name):
         self.c.execute(s.projects.insert().values(id=project_id, name=name, rule_revision=0))
 
+    def delete_project(self, project_id):
+        # 清理该项目下的所有关联记录
+        self.c.execute(s.findings.delete().where(s.findings.c.project_id == project_id))
+        self.c.execute(s.contract_proposals.delete().where(s.contract_proposals.c.project_id == project_id))
+        self.c.execute(s.rules.delete().where(s.rules.c.project_id == project_id))
+        self.c.execute(s.requirements.delete().where(s.requirements.c.project_id == project_id))
+        self.c.execute(s.tasks.delete().where(s.tasks.c.project_id == project_id))
+        self.c.execute(s.sessions.delete().where(s.sessions.c.project_id == project_id))
+        self.c.execute(s.worktrees.delete().where(s.worktrees.c.project_id == project_id))
+        self.c.execute(s.audit.delete().where(s.audit.c.project_id == project_id))
+        self.c.execute(s.projects.delete().where(s.projects.c.id == project_id))
+
     def list_projects(self):
         return [dict(r) for r in self.c.execute(sa.select(s.projects).order_by(s.projects.c.id)).mappings()]
 

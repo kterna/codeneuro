@@ -93,6 +93,24 @@ async function handleSelectProject(id: string) {
   await refresh()
 }
 
+async function handleDeleteProject() {
+  if (!projectId.value) return
+  const currentProjectName = projects.value.find(p => p.id === projectId.value)?.name || projectId.value
+  if (!confirm(`确认要彻底删除项目【${currentProjectName}】吗？\n该项目下的所有任务、需求与规则都将被永久清除。`)) return
+  busy.value = true
+  error.value = ''
+  try {
+    await apiService.deleteProject(projectId.value)
+    notice.value = `项目【${currentProjectName}】已成功删除。`
+    projectId.value = ''
+    await connect()
+  } catch (cause) {
+    fail(cause)
+  } finally {
+    busy.value = false
+  }
+}
+
 // 统计衍生属性
 const activeRequirementsCount = computed(
   () => ledger.value?.requirements.filter(r => r.status === 'active').length ?? 0,
@@ -241,6 +259,7 @@ onUnmounted(() => {
       :error-text="error"
       @select-project="handleSelectProject"
       @open-create-project="openCreateProject"
+      @delete-current-project="handleDeleteProject"
       @select-tab="tab = $event"
       @open-palette="paletteRef?.open()"
     />

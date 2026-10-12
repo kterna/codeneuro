@@ -29,6 +29,13 @@ class Workspaces:
             tx.audit.record(project_id, actor.id, 'project.created', project_id, {})
         return {'id': project_id, 'name': name}
 
+    def delete_project(self, actor: Actor, project_id: str):
+        if actor.role != 'human':
+            raise ProductError('Only a human administrator may delete a project.', 'forbidden')
+        with self.uow.write() as tx:
+            tx.workspaces.delete_project(project_id)
+        return {'deleted': True, 'id': project_id}
+
     def list_projects(self, actor: Actor):
         with self.uow.read() as tx:
             return tx.workspaces.list_projects()

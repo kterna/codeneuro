@@ -24,6 +24,9 @@ export const apiService = {
   createProject: (id: string, name: string) =>
     requestApi<Project>('/projects', 'POST', { id, name }),
 
+  deleteProject: (id: string) =>
+    requestApi<{ deleted: boolean; id: string }>(`/projects/${encodeURIComponent(id)}`, 'DELETE'),
+
   getLedger: (projectId: string) =>
     requestApi<Ledger>(buildProjectPath(projectId, 'ledger')),
 
