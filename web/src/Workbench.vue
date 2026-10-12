@@ -283,7 +283,7 @@ onUnmounted(() => {
 
         <template v-else-if="ledger">
           <!-- 1. 规则作用域 (Explorer) -->
-          <ExplorerView v-if="tab === 'explorer'" :ledger="ledger" />
+          <ExplorerView v-if="tab === 'explorer'" :ledger="ledger" :project-id="projectId" />
 
           <!-- 2. 需求与任务看板 (Tasks) -->
           <TasksView

@@ -90,4 +90,34 @@ def create_router(product: Product):
     def ledger(project_id: str):
         return call(product.ledger.project, web_actor, project_id)
 
+    @router.get('/projects/{project_id}/tree')
+    def tree(project_id: str):
+        # 获取项目关联的 worktree 真实路径
+        ledger_data = call(product.ledger.project, web_actor, project_id)
+        worktrees_list = ledger_data.get('worktrees', [])
+        ws_path = worktrees_list[0].get('workspace') if worktrees_list else None
+        
+        items = []
+        import os
+        from pathlib import Path
+
+        # 如果本地存在该工作区路径，真实扫描文件树（深度3层，过滤隐藏与依赖目录）
+        if ws_path and os.path.exists(ws_path):
+            base = Path(ws_path)
+            ignored = {'.git', '.venv', 'node_modules', '__pycache__', 'dist', '.pytest_cache', 'build', '.idea', '.vscode'}
+            for root, dirs, files in os.walk(base, topdown=True):
+                dirs[:] = [d for d in dirs if d not in ignored and not d.startswith('.')]
+                rel_root = Path(root).relative_to(base).as_posix()
+                depth = rel_root.count('/') if rel_root != '.' else 0
+                if depth > 2:
+                    continue
+                if rel_root != '.':
+                    items.append({'path': rel_root, 'is_dir': True})
+                for f in files:
+                    if f.startswith('.') or f.endswith(('.pyc', '.pyo', '.pyd')):
+                        continue
+                    file_rel = f if rel_root == '.' else f"{rel_root}/{f}"
+                    items.append({'path': file_rel, 'is_dir': False})
+        return {'workspace': ws_path, 'tree': items}
+
     return router
