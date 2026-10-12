@@ -1,27 +1,29 @@
-/* GitHub Primer Dark 深度高精设计系统 */
+/* ==========================================================================
+   CodeNeuro GitHub Primer Dark 完整统一设计系统
+   ========================================================================== */
+
 :root {
   color-scheme: dark;
 
-  /* 1. GitHub 官方表面色阶体系 (Surfaces & Elevation) */
+  /* GitHub 官方表面色阶 */
   --gh-canvas-default: #0d1117;     /* 全局最底层画布 (深黑) */
-  --gh-canvas-subtle: #161b22;      /* 侧边栏、泳道托盘底色、表头 */
+  --gh-canvas-subtle: #161b22;      /* 侧边栏、托盘底色、表头 */
   --gh-canvas-inset: #010409;       /* 输入框背景、代码块底色 */
   --gh-canvas-overlay: #1c2128;     /* 抽屉、模态弹窗表面 */
-  --gh-surface-card: #21262d;       /* 悬浮卡片表面 (浮于托盘之上) */
+  --gh-surface-card: #21262d;       /* 悬浮卡片表面 */
   --gh-surface-card-hover: #292e36; /* 卡片悬浮状态 */
 
-  /* 2. GitHub 官方边框色阶 (Borders) */
+  /* GitHub 官方边框色阶 */
   --gh-border-default: #30363d;     /* 主分割线、外边框 */
   --gh-border-muted: #21262d;       /* 托盘内微弱线 */
   --gh-border-subtle: rgba(240, 246, 252, 0.10);
 
-  /* 3. GitHub 官方前景色阶 (Typography) */
+  /* GitHub 官方前景色阶 */
   --gh-fg-default: #e6edf3;         /* 主正文白 */
   --gh-fg-muted: #848d97;           /* 辅助说明灰 */
   --gh-fg-subtle: #656d76;          /* 弱化元数据 */
-  --gh-fg-on-emphasis: #ffffff;     /* 高亮按钮纯白字 */
 
-  /* 4. GitHub 功能强调与状态色 */
+  /* GitHub 功能强调与状态色 */
   --gh-accent-fg: #58a6ff;          /* 经典 GitHub 蓝 */
   --gh-accent-emphasis: #1f6feb;    /* 强调动作蓝 */
   --gh-accent-subtle: rgba(56, 139, 253, 0.15);
@@ -37,11 +39,11 @@
   --gh-danger-emphasis: #da3633;    /* 危险操作按钮红 */
   --gh-danger-subtle: rgba(248, 81, 73, 0.15);
 
-  --gh-done-purple: #a371f7;        /* GitHub 归档/合并紫 */
+  --gh-done-purple: #a371f7;        /* 归档紫 */
   --gh-done-subtle: rgba(163, 113, 247, 0.15);
 
-  /* 5. 变量映射兼容已有代码与冒烟断言 */
-  --accent: #a49aff;                /* 保持冒烟断言一致 */
+  /* 自动化测试与旧样式兼容变量 */
+  --accent: #a49aff;
   --accent-hover: #b8aeff;
   --bg-canvas: var(--gh-canvas-default);
   --bg-subtle: var(--gh-canvas-subtle);
@@ -107,7 +109,7 @@ html, body {
   overflow: hidden;
 }
 
-/* 侧边栏：满足 position: fixed 断言，高度 100vh */
+/* 侧边栏：fixed 240px */
 .sidebar {
   width: 240px;
   min-width: 240px;
@@ -161,6 +163,7 @@ html, body {
   color: var(--gh-fg-subtle);
   margin-bottom: 6px;
   text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* 侧边栏导航条目 */
@@ -293,7 +296,57 @@ p {
   line-height: 1.5;
 }
 
-/* GitHub 风格标准按钮 */
+/* 顶栏 4 维指标卡 */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.metric {
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gh-fg-subtle);
+}
+
+.metric strong {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--gh-fg-default);
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0;
+}
+
+.metric small {
+  font-size: 11px;
+  color: var(--gh-fg-muted);
+}
+
+/* 核心内容区容器 */
+section#content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   全局通用组件规范（表格、卡片、抽屉、表单）
+   ========================================================================== */
+
+/* 标准按钮 */
 button {
   font: inherit;
   font-size: 12px;
@@ -338,7 +391,7 @@ button.subtle:hover {
   color: var(--gh-fg-default);
 }
 
-/* GitHub 风格输入控件 */
+/* 标准输入框 */
 input, select, textarea {
   font: inherit;
   font-size: 12px;
@@ -357,45 +410,7 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 2px var(--gh-accent-subtle);
 }
 
-/* 顶栏 4 维指标卡（通透 GitHub 统计卡） */
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.metric {
-  background: var(--gh-canvas-subtle);
-  border: 1px solid var(--gh-border-default);
-  border-radius: 6px;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.metric span {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--gh-fg-subtle);
-}
-
-.metric strong {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--gh-fg-default);
-  font-variant-numeric: tabular-nums;
-  margin: 2px 0;
-}
-
-.metric small {
-  font-size: 11px;
-  color: var(--gh-fg-muted);
-}
-
-/* GitHub 官方 Label 标签体系 */
+/* 标签 Tags */
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -451,6 +466,46 @@ input:focus, select:focus, textarea:focus {
   border-color: rgba(163, 113, 247, 0.4);
 }
 
+/* 全局通用 GitHub 风格表格封装体系 (.gh-table-wrap) */
+.gh-table-wrap, .table-wrap {
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  background: var(--gh-canvas-subtle);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.gh-table, .rules-table, .projects-table, .feedback-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.gh-table th, .rules-table th, .projects-table th, .feedback-table th {
+  background: var(--gh-canvas-subtle);
+  border-bottom: 1px solid var(--gh-border-default);
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gh-fg-muted);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  text-transform: uppercase;
+}
+
+.gh-table td, .rules-table td, .projects-table td, .feedback-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gh-border-muted);
+  vertical-align: middle;
+  font-size: 12px;
+}
+
+.gh-table tr:hover, .rules-table tr:hover, .projects-table tr:hover, .feedback-table tr:hover {
+  background: rgba(177, 186, 196, 0.05);
+}
+
+/* 通用通知浮条 */
 #notice {
   padding: 8px 12px;
   border-radius: 6px;
@@ -484,12 +539,17 @@ code {
   line-height: 1.5;
 }
 
-/* 核心内容视口容器：内部自管理局部滚动，根部不产生滚动条 */
-section#content {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+.empty {
+  padding: 40px 20px;
+  border: 1px dashed var(--gh-border-default);
+  border-radius: 6px;
+  text-align: center;
+  color: var(--gh-fg-subtle);
+  font-size: 12px;
+}
+
+.empty.compact {
+  padding: 20px 14px;
 }
 
 /* 原生弹窗规范 */

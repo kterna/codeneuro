@@ -276,10 +276,12 @@ function handleDelete() {
 
 /* 项目表格 */
 .projects-table-wrap {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--gh-border-default);
   border-radius: 6px;
-  overflow: hidden;
+  max-height: 260px;
+  overflow-y: auto;
   margin-top: 12px;
+  background: var(--gh-canvas-subtle);
 }
 
 .projects-table {
@@ -287,9 +289,16 @@ function handleDelete() {
   border-collapse: collapse;
 }
 
+.projects-table th {
+  background: #161b22;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
 .projects-table th, .projects-table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gh-border-muted);
   font-size: 12px;
 }
 
