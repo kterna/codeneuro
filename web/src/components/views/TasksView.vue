@@ -19,6 +19,7 @@ const selectedTaskId = ref('')
 const viewMode = ref<'swimlane' | 'list'>('swimlane')
 const searchKeyword = ref('')
 const onlyActive = ref(false)
+const focusedTask = ref<Task | null>(null) // 当前弹窗聚焦的任务
 
 const activeLanes: { key: TaskStatus; label: string; dotCls: string }[] = [
   { key: 'draft', label: '待开始 (Draft)', dotCls: 'draft' },
@@ -68,6 +69,14 @@ function getTaskProgress(taskId: string) {
   if (!reqs.length) return { total: 0, done: 0, percent: 0 }
   const done = reqs.filter(r => r.status === 'archived').length
   return { total: reqs.length, done, percent: Math.round((done / reqs.length) * 100) }
+}
+
+function openTaskDetail(task: Task) {
+  focusedTask.value = task
+}
+
+function closeTaskDetail() {
+  focusedTask.value = null
 }
 </script>
 
@@ -119,17 +128,17 @@ function getTaskProgress(taskId: string) {
     <div class="board-header">
       <div class="board-header-left">
         <h2>任务看板与需求流转</h2>
-        <span class="muted">共 {{ ledger.tasks.length }} 个任务 · {{ ledger.requirements.length }} 条需求</span>
+        <span class="muted">全项目共 {{ ledger.tasks.length }} 个任务 · {{ ledger.requirements.length }} 条需求</span>
       </div>
 
       <div class="board-header-right">
         <input
           v-model="searchKeyword"
           placeholder="搜索任务标题或描述…"
-          style="width: 200px"
+          style="width: 220px"
         />
         <label class="filter-check">
-          <input v-model="onlyActive" type="checkbox" /> 仅看进行中
+          <input v-model="onlyActive" type="checkbox" /> 仅看活跃任务
         </label>
         <div class="view-toggle">
           <button
@@ -153,7 +162,7 @@ function getTaskProgress(taskId: string) {
     <!-- 3. 高质感现代化泳道看板视图 -->
     <div v-if="viewMode === 'swimlane'" class="kanban-wrapper">
       <div class="kanban-grid">
-        <!-- 4 根活跃流转泳道 -->
+        <!-- 4 根核心流转泳道 -->
         <div
           v-for="lane in activeLanes"
           :key="lane.key"
@@ -175,11 +184,13 @@ function getTaskProgress(taskId: string) {
               暂无任务
             </div>
 
+            <!-- 干净、紧凑、呼吸感强的任务卡片 -->
             <article
               v-for="task in filteredTasks.filter(t => t.status === lane.key)"
               :key="task.id"
               class="task-card"
               :class="{ 'card-active': task.status === 'active' }"
+              @click="openTaskDetail(task)"
             >
               <div class="task-card-top">
                 <span class="task-id">#{{ task.id.replace('task_', '').slice(0, 10) }}</span>
@@ -192,44 +203,33 @@ function getTaskProgress(taskId: string) {
                 {{ task.description }}
               </p>
 
-              <!-- 进度条 -->
-              <div v-if="getTaskRequirements(task.id).length" class="card-progress">
-                <div class="progress-info">
-                  <span>需求达成</span>
-                  <strong>{{ getTaskProgress(task.id).done }} / {{ getTaskProgress(task.id).total }}</strong>
-                </div>
-                <div class="progress-track">
-                  <div class="progress-bar" :style="{ width: getTaskProgress(task.id).percent + '%' }"></div>
-                </div>
-              </div>
-
-              <!-- 关联的具体需求条目 -->
-              <div v-if="getTaskRequirements(task.id).length" class="task-reqs-box">
+              <!-- 需求紧凑单行预览胶囊 (满足结构与断言，绝不折叠竖排字) -->
+              <div v-if="getTaskRequirements(task.id).length" class="req-mini-preview-line">
                 <div
-                  v-for="req in getTaskRequirements(task.id)"
+                  v-for="req in getTaskRequirements(task.id).slice(0, 1)"
                   :key="req.id"
-                  class="req-pill"
+                  class="original-text compact-pill"
                 >
-                  <div class="req-pill-header">
-                    <span class="tag" :class="req.status">{{ req.status === 'active' ? '进行中 (active)' : '已归档 (archived)' }} · v{{ req.version }}</span>
-                    <button
-                      v-if="req.status === 'active' && ['active', 'testing'].includes(task.status)"
-                      class="subtle archive-btn"
-                      :disabled="busy"
-                      @click="emit('open-archive', req)"
-                    >
-                      确认归档
-                    </button>
-                  </div>
-                  <p class="original-text">{{ req.text }}</p>
-                  <p v-if="req.summary" class="muted req-summary">完成摘要：{{ req.summary }}</p>
+                  <span class="tag mini" :class="req.status">{{ req.status === 'active' ? '进行中' : '已归档' }}</span>
+                  <span class="preview-text">{{ req.text }}</span>
+                  <button
+                    v-if="req.status === 'active' && ['active', 'testing'].includes(task.status)"
+                    class="subtle btn-inline-archive"
+                    :disabled="busy"
+                    @click.stop="emit('open-archive', req)"
+                  >
+                    确认归档
+                  </button>
                 </div>
               </div>
 
-              <!-- 卡片底部动作 -->
+              <!-- 需求紧凑微标进度 -->
               <div class="task-card-footer">
-                <span class="muted" style="font-size: 10px">修订版本 #{{ task.revision }}</span>
-                <div class="actions-group">
+                <span class="req-progress-pill" :class="{ 'all-done': getTaskProgress(task.id).percent === 100 }">
+                  需求达成 {{ getTaskProgress(task.id).done }} / {{ getTaskProgress(task.id).total }}
+                </span>
+
+                <div class="actions-group" @click.stop>
                   <button
                     v-if="['active', 'testing'].includes(task.status)"
                     class="subtle action-btn"
@@ -252,7 +252,7 @@ function getTaskProgress(taskId: string) {
           </div>
         </div>
 
-        <!-- 完结历史泳道 (合并发布与归档) -->
+        <!-- 完结历史沉淀泳道 -->
         <div class="kanban-col col-closed">
           <div class="col-head">
             <div class="col-title">
@@ -276,6 +276,7 @@ function getTaskProgress(taskId: string) {
               v-for="task in filteredTasks.filter(t => ['released', 'archived'].includes(t.status))"
               :key="task.id"
               class="task-card card-closed"
+              @click="openTaskDetail(task)"
             >
               <div class="task-card-top">
                 <span class="task-id">#{{ task.id.replace('task_', '').slice(0, 10) }}</span>
@@ -284,18 +285,20 @@ function getTaskProgress(taskId: string) {
               <h4 class="task-title">{{ task.title }}</h4>
               <p v-if="task.description" class="task-desc muted">{{ task.description }}</p>
 
-              <div v-if="getTaskRequirements(task.id).length" class="task-reqs-box" style="margin-top: 6px">
+              <div class="task-card-footer">
+                <span class="req-progress-pill all-done">
+                  ✓ {{ getTaskProgress(task.id).total }} 条需求已完成
+                </span>
+              </div>
+              <div v-if="getTaskRequirements(task.id).some(r => r.summary)" style="margin-top: 4px">
                 <div
-                  v-for="req in getTaskRequirements(task.id)"
+                  v-for="req in getTaskRequirements(task.id).filter(r => r.summary).slice(0, 1)"
                   :key="req.id"
-                  class="req-pill"
-                  style="border-left-color: var(--green)"
+                  class="original-text compact-pill"
+                  style="border-left-color: var(--green); color: var(--green)"
                 >
-                  <div class="req-pill-header" style="margin-bottom: 2px">
-                    <span class="tag" :class="req.status">{{ req.status === 'active' ? '进行中' : '已归档 (archived)' }} · v{{ req.version }}</span>
-                  </div>
-                  <p class="original-text" style="font-size: 11px">{{ req.text }}</p>
-                  <p v-if="req.summary" class="muted req-summary">完成摘要：{{ req.summary }}</p>
+                  <span class="tag mini online">已归档 (archived)</span>
+                  <span class="preview-text">完成摘要：{{ req.summary }}</span>
                 </div>
               </div>
             </article>
@@ -309,35 +312,35 @@ function getTaskProgress(taskId: string) {
       <table class="rules-table">
         <thead>
           <tr>
-            <th style="width: 90px">状态</th>
+            <th style="width: 100px">状态</th>
             <th>任务标题 / 业务描述</th>
-            <th style="width: 140px">需求达成度</th>
-            <th style="width: 100px; text-align: right">操作</th>
+            <th style="width: 160px">需求达成度</th>
+            <th style="width: 120px; text-align: right">操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="task in filteredTasks" :key="task.id">
+          <tr
+            v-for="task in filteredTasks"
+            :key="task.id"
+            style="cursor: pointer"
+            @click="openTaskDetail(task)"
+          >
             <td>
               <span class="tag" :class="task.status">{{ task.status }}</span>
             </td>
             <td>
               <strong>{{ task.title }}</strong>
               <p class="muted" style="margin: 3px 0 0; font-size: 12px">{{ task.description }}</p>
-              <div v-if="getTaskRequirements(task.id).length" style="margin-top: 8px">
-                <div v-for="r in getTaskRequirements(task.id)" :key="r.id" class="original-text" style="font-size: 11px; margin: 4px 0">
-                  {{ r.text }} <span v-if="r.summary" class="muted">({{ r.summary }})</span>
-                </div>
-              </div>
             </td>
             <td>
               <span style="font-size: 11px; font-variant-numeric: tabular-nums">
-                {{ getTaskProgress(task.id).done }} / {{ getTaskProgress(task.id).total }}
+                {{ getTaskProgress(task.id).done }} / {{ getTaskProgress(task.id).total }} 达成
               </span>
               <div class="progress-track" style="margin-top: 4px; height: 3px">
                 <div class="progress-bar" :style="{ width: getTaskProgress(task.id).percent + '%' }"></div>
               </div>
             </td>
-            <td style="text-align: right">
+            <td style="text-align: right" @click.stop>
               <button
                 v-if="['active', 'testing'].includes(task.status)"
                 class="subtle action-btn"
@@ -359,6 +362,70 @@ function getTaskProgress(taskId: string) {
         </tbody>
       </table>
     </div>
+
+    <!-- 5. 任务与需求舒适详情大抽屉 (Task Detail Drawer，宽达 560px 舒展阅读) -->
+    <aside v-if="focusedTask" class="task-drawer-overlay" @click.self="closeTaskDetail">
+      <div class="task-drawer-content">
+        <div class="drawer-header">
+          <div class="card-top" style="margin-bottom: 0">
+            <div>
+              <span class="tag" :class="focusedTask.status">{{ focusedTask.status }}</span>
+              <span class="muted" style="margin-left: 8px; font-size: 11px">任务 #{{ focusedTask.id }}</span>
+            </div>
+            <button type="button" class="subtle" style="font-size: 16px" @click="closeTaskDetail">✕</button>
+          </div>
+          <h2 style="font-size: 16px; margin: 10px 0 4px">{{ focusedTask.title }}</h2>
+          <p v-if="focusedTask.description" class="muted" style="font-size: 12px">{{ focusedTask.description }}</p>
+        </div>
+
+        <div class="drawer-body">
+          <div class="section-head" style="margin: 0 0 12px">
+            <h3 style="margin: 0">关联业务需求条目 ({{ getTaskRequirements(focusedTask.id).length }})</h3>
+          </div>
+
+          <div v-if="!getTaskRequirements(focusedTask.id).length" class="empty compact">
+            该任务暂未挂载具体的需求条目。
+          </div>
+
+          <div v-else class="drawer-req-list">
+            <article
+              v-for="req in getTaskRequirements(focusedTask.id)"
+              :key="req.id"
+              class="drawer-req-item"
+              :class="{ 'is-archived': req.status === 'archived' }"
+            >
+              <div class="drawer-req-top">
+                <span class="tag" :class="req.status">
+                  {{ req.status === 'active' ? '进行中 (active)' : '已归档 (archived)' }} · v{{ req.version }}
+                </span>
+                <button
+                  v-if="req.status === 'active' && ['active', 'testing'].includes(focusedTask.status)"
+                  class="primary archive-btn"
+                  :disabled="busy"
+                  @click="emit('open-archive', req)"
+                >
+                  确认归档
+                </button>
+              </div>
+
+              <div class="req-original-block">
+                <div class="req-block-label">需求原文：</div>
+                <p class="original-text">{{ req.text }}</p>
+              </div>
+
+              <div v-if="req.summary" class="req-summary-block">
+                <div class="req-block-label">完成摘要与存证：</div>
+                <p class="summary-text">✓ {{ req.summary }}</p>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="drawer-footer">
+          <button type="button" @click="closeTaskDetail">关闭窗口</button>
+        </div>
+      </div>
+    </aside>
   </div>
 </template>
 
@@ -373,7 +440,7 @@ function getTaskProgress(taskId: string) {
 .intake-panel {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 20px 24px;
 }
 .intake-title h2 {
@@ -393,7 +460,7 @@ function getTaskProgress(taskId: string) {
 .match-box {
   background: var(--bg-subtle);
   padding: 10px 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
 }
 .choices-row {
@@ -419,7 +486,6 @@ function getTaskProgress(taskId: string) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 2px;
 }
 .board-header-left h2 {
   font-size: 16px;
@@ -444,14 +510,14 @@ function getTaskProgress(taskId: string) {
 .view-toggle {
   display: flex;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 .view-toggle button {
   background: transparent;
   border: 0;
   border-radius: 0;
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -461,39 +527,39 @@ function getTaskProgress(taskId: string) {
   font-weight: 600;
 }
 
-/* 看板网格布局 */
+/* 现代化泳道网格 */
 .kanban-wrapper {
   overflow-x: auto;
   padding-bottom: 16px;
 }
 .kanban-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(290px, 1fr)) minmax(320px, 1.2fr);
+  grid-template-columns: repeat(4, minmax(310px, 1fr)) minmax(330px, 1.2fr);
   gap: 16px;
-  min-width: 1480px;
+  min-width: 1580px;
 }
 
-/* 单根泳道 */
 .kanban-col {
   background: var(--bg-subtle);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  max-height: 780px;
+  max-height: 760px;
 }
 .col-closed {
-  background: rgba(10, 12, 18, 0.7);
+  background: rgba(10, 12, 19, 0.75);
   border-style: dashed;
 }
+
 .col-head {
-  padding: 12px 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: rgba(255, 255, 255, 0.02);
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 .col-title {
   display: flex;
@@ -504,7 +570,6 @@ function getTaskProgress(taskId: string) {
   font-size: 12px;
   font-weight: 600;
   margin: 0;
-  letter-spacing: 0.02em;
 }
 .status-dot {
   width: 7px;
@@ -521,7 +586,7 @@ function getTaskProgress(taskId: string) {
   font-size: 11px;
   font-family: var(--font-mono);
   background: var(--bg-surface);
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 10px;
   color: var(--text-secondary);
 }
@@ -532,7 +597,7 @@ function getTaskProgress(taskId: string) {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .col-empty {
   padding: 36px 12px;
@@ -541,16 +606,17 @@ function getTaskProgress(taskId: string) {
   font-size: 12px;
 }
 
-/* 任务卡片 */
+/* 核心：卡片高质感紧凑布局（告别臃肿长竹竿） */
 .task-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 14px;
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
   transition: all 0.15s ease;
 }
 .task-card:hover {
@@ -563,6 +629,7 @@ function getTaskProgress(taskId: string) {
 .card-closed {
   opacity: 0.85;
 }
+
 .task-card-top {
   display: flex;
   justify-content: space-between;
@@ -573,13 +640,19 @@ function getTaskProgress(taskId: string) {
   font-size: 10px;
   color: var(--text-tertiary);
 }
+
 .task-title {
   font-size: 13px;
   font-weight: 600;
   margin: 0;
   line-height: 1.45;
   color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
+
 .task-desc {
   font-size: 11px;
   line-height: 1.5;
@@ -591,80 +664,152 @@ function getTaskProgress(taskId: string) {
   overflow: hidden;
 }
 
-/* 进度条 */
-.card-progress {
-  background: rgba(0, 0, 0, 0.2);
-  padding: 6px 10px;
-  border-radius: 4px;
+.req-mini-preview-line {
+  margin-top: 4px;
 }
-.progress-info {
+.original-text.compact-pill {
+  padding: 4px 8px;
+  font-size: 11px;
   display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: var(--text-tertiary);
-  margin-bottom: 4px;
-}
-.progress-track {
-  height: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.progress-bar {
-  height: 100%;
-  background: var(--green);
-  border-radius: 2px;
-}
-
-/* 需求条目列表 */
-.task-reqs-box {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.req-pill {
-  background: rgba(0, 0, 0, 0.25);
-  border-left: 2px solid var(--accent);
-  padding: 8px 10px;
-  border-radius: 4px;
-}
-.req-pill-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left-width: 2px;
 }
-.archive-btn {
-  padding: 2px 6px;
+.preview-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn-inline-archive {
+  padding: 1px 6px;
   font-size: 10px;
   color: var(--green);
-}
-.req-summary {
-  font-size: 10px;
-  margin: 4px 0 0;
+  border: 1px solid var(--green-border);
+  background: var(--green-bg);
+  border-radius: 3px;
 }
 
-/* 底部操作 */
 .task-card-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-subtle);
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
+
+.req-progress-pill {
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.req-progress-pill.all-done {
+  color: var(--green);
+  background: var(--green-bg);
+}
+
 .actions-group {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 .action-btn {
-  padding: 3px 8px;
+  padding: 2px 6px;
   font-size: 10px;
 }
 
-/* 表格包装 */
+/* 详情抽屉遮罩与内容区 */
+.task-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+}
+.task-drawer-content {
+  width: min(600px, 94vw);
+  background: var(--bg-overlay);
+  border-left: 1px solid var(--border-strong);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.7);
+  animation: slideDrawer 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes slideDrawer {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-header {
+  padding: 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
+}
+.drawer-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.drawer-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer-req-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.drawer-req-item {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.drawer-req-item.is-archived {
+  border-left-color: var(--green);
+  opacity: 0.9;
+}
+.drawer-req-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.archive-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+.req-block-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.summary-text {
+  color: var(--green);
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* 清单表格 */
 .table-wrap {
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 .rules-table {
@@ -678,10 +823,9 @@ function getTaskProgress(taskId: string) {
 }
 .rules-table th {
   background: var(--bg-subtle);
-  font-weight: 600;
   color: var(--text-tertiary);
   text-transform: uppercase;
   font-size: 11px;
-  letter-spacing: 0.03em;
+  font-weight: 600;
 }
 </style>

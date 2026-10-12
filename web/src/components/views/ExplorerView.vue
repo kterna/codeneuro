@@ -56,14 +56,12 @@ const directoryTree = computed(() => {
   const nodeMap = new Map<string, TreeNode>()
   nodeMap.set('', root)
 
-  // 1. 优先使用真实文件系统扫描结果
   const rawPaths: { path: string; isDir: boolean }[] = []
   if (realTreeItems.value.length > 0) {
     for (const item of realTreeItems.value) {
       rawPaths.push({ path: item.path, isDir: item.is_dir })
     }
   } else {
-    // 兜底从规则 patterns 提炼合法路径
     for (const rule of props.ledger.rules) {
       for (const pat of rule.patterns) {
         const clean = pat.replace(/^\.\//, '').replace(/\/\*\*|\/\*/g, '').trim()
@@ -74,7 +72,6 @@ const directoryTree = computed(() => {
     }
   }
 
-  // 2. 将路径插入树结构中
   for (const item of rawPaths) {
     const parts = item.path.split('/')
     let currentPath = ''
@@ -103,7 +100,6 @@ const directoryTree = computed(() => {
     }
   }
 
-  // 3. 计算每个节点的统计数
   const activeRules = props.ledger.rules.filter(r => r.status === 'active')
   for (const [, node] of nodeMap) {
     for (const rule of activeRules) {
@@ -114,7 +110,6 @@ const directoryTree = computed(() => {
     }
   }
 
-  // 默认展开顶层目录
   for (const child of root.children) {
     openDirs.value.add(child.path)
   }
@@ -122,7 +117,6 @@ const directoryTree = computed(() => {
   return root.children
 })
 
-// 默认选中
 watch(
   () => directoryTree.value,
   nodes => {
@@ -145,7 +139,6 @@ function selectNode(node: TreeNode) {
   selectedPath.value = node.path
 }
 
-// 核心规则匹配算法
 function isRuleApplicableToPath(rule: Rule, targetPath: string, includeGlobal = true): boolean {
   if (!targetPath) return includeGlobal
   for (const rawPattern of rule.patterns) {
@@ -155,7 +148,6 @@ function isRuleApplicableToPath(rule: Rule, targetPath: string, includeGlobal = 
       continue
     }
     const cleanPrefix = pat.replace(/\/\*\*|\/\*/g, '')
-    // 选中的是该子树或其下文件（如选 src，规则在 src/adapters/**，或者选 src/adapters，规则在 src/**）
     if (targetPath.startsWith(cleanPrefix) || cleanPrefix.startsWith(targetPath)) {
       return true
     }
@@ -166,21 +158,18 @@ function isRuleApplicableToPath(rule: Rule, targetPath: string, includeGlobal = 
   return false
 }
 
-// 过滤后的树节点
 const filteredTree = computed(() => {
   const q = treeSearch.value.trim().toLowerCase()
   if (!q) return directoryTree.value
   return directoryTree.value.filter(n => n.name.toLowerCase().includes(q) || n.path.toLowerCase().includes(q))
 })
 
-// 当前路径直接专属匹配的规则
 const directMatchedRules = computed<Rule[]>(() => {
   if (!selectedPath.value) return []
   const rules = props.ledger.rules.filter(r => r.status === 'active')
   return rules.filter(r => isRuleApplicableToPath(r, selectedPath.value, false))
 })
 
-// 全局通配继承的规则（在任何目录都会兜底生效的 P0/P1）
 const globalInheritedRules = computed<Rule[]>(() => {
   const rules = props.ledger.rules.filter(r => r.status === 'active')
   return rules.filter(r => r.patterns.some(p => p === '**' || p === '*' || !p.trim()))
@@ -188,11 +177,11 @@ const globalInheritedRules = computed<Rule[]>(() => {
 </script>
 
 <template>
-  <div>
+  <div class="explorer-view-wrapper">
     <div class="section-head">
       <h2>代码作用域与层级目录</h2>
       <span class="caption">
-        {{ realTreeItems.length ? '已连接本地工作区，真实呈现代码目录结构' : '解析规则路径模式，呈现受控目录层级' }}
+        {{ realTreeItems.length ? '已连接本地工作区，读取真实代码目录结构' : '解析规则路径模式，呈现受控目录层级' }}
       </span>
     </div>
 
@@ -200,87 +189,90 @@ const globalInheritedRules = computed<Rule[]>(() => {
       当前项目尚未配置任何针对代码路径的规则。
     </div>
 
-    <div v-else class="split-view">
-      <!-- 左侧：目录树面板 -->
-      <div class="tree-pane">
-        <div class="pane-title">
-          <h2>工程目录结构 (Directory Tree)</h2>
-          <span class="muted">{{ directoryTree.length }} 顶层节点</span>
+    <div v-else class="explorer-split-container">
+      <!-- 左侧：目录树面板（固定 300px 宽，完全禁止文本折行） -->
+      <aside class="tree-sidebar-panel">
+        <div class="tree-header">
+          <h3>工程目录</h3>
+          <span class="muted font-mono">{{ directoryTree.length }} 顶层节点</span>
         </div>
 
-        <div style="padding: 10px 12px; border-bottom: 1px solid var(--line)">
+        <div class="tree-filter-box">
           <input
             v-model="treeSearch"
-            placeholder="过滤目录或文件…"
-            style="padding: 5px 8px; font-size: 11px"
+            placeholder="快速过滤目录或文件…"
+            class="tree-search-input"
           />
         </div>
 
-        <div class="tree-content">
-          <ul class="file-tree-root">
+        <div class="tree-scroll-area">
+          <ul class="tree-ul">
             <template v-for="node in filteredTree" :key="node.id">
-              <li class="tree-node-item">
+              <li class="tree-li">
                 <div
-                  class="tree-node-row"
-                  :class="{ selected: selectedPath === node.path }"
+                  class="tree-row"
+                  :class="{ active: selectedPath === node.path }"
+                  :title="node.path"
                   @click="selectNode(node)"
                 >
                   <button
                     v-if="node.children.length"
                     type="button"
-                    class="tree-arrow-btn"
+                    class="tree-expander"
                     @click.stop="toggleDir(node.path)"
                   >
-                    {{ openDirs.has(node.path) ? '▼' : '▶' }}
+                    {{ openDirs.has(node.path) ? '▾' : '▸' }}
                   </button>
-                  <span v-else class="tree-arrow-placeholder"></span>
-                  <span class="tree-icon">{{ node.isDir ? '📁' : '📄' }}</span>
-                  <span class="tree-label">{{ node.name }}</span>
-                  <div class="tree-counts">
-                    <span v-if="node.p0Count" class="p0">P0:{{ node.p0Count }}</span>
-                    <span v-if="node.p1Count" class="p1">P1:{{ node.p1Count }}</span>
+                  <span v-else class="tree-expander-space"></span>
+                  <span class="tree-type-icon">{{ node.isDir ? '📁' : '📄' }}</span>
+                  <span class="tree-text-truncate">{{ node.name }}</span>
+                  <div class="tree-pill-tags">
+                    <span v-if="node.p0Count" class="tag p0 mini">P0:{{ node.p0Count }}</span>
+                    <span v-if="node.p1Count" class="tag p1 mini">P1:{{ node.p1Count }}</span>
                   </div>
                 </div>
 
                 <!-- 二级目录 -->
-                <ul v-if="node.children.length && openDirs.has(node.path)" class="tree-sub-list">
-                  <li v-for="sub in node.children" :key="sub.id" class="tree-node-item">
+                <ul v-if="node.children.length && openDirs.has(node.path)" class="tree-ul sub-tree">
+                  <li v-for="sub in node.children" :key="sub.id" class="tree-li">
                     <div
-                      class="tree-node-row"
-                      :class="{ selected: selectedPath === sub.path }"
+                      class="tree-row"
+                      :class="{ active: selectedPath === sub.path }"
+                      :title="sub.path"
                       @click="selectNode(sub)"
                     >
                       <button
                         v-if="sub.children.length"
                         type="button"
-                        class="tree-arrow-btn"
+                        class="tree-expander"
                         @click.stop="toggleDir(sub.path)"
                       >
-                        {{ openDirs.has(sub.path) ? '▼' : '▶' }}
+                        {{ openDirs.has(sub.path) ? '▾' : '▸' }}
                       </button>
-                      <span v-else class="tree-arrow-placeholder"></span>
-                      <span class="tree-icon">{{ sub.isDir ? '📁' : '📄' }}</span>
-                      <span class="tree-label">{{ sub.name }}</span>
-                      <div class="tree-counts">
-                        <span v-if="sub.p0Count" class="p0">P0:{{ sub.p0Count }}</span>
-                        <span v-if="sub.p1Count" class="p1">P1:{{ sub.p1Count }}</span>
+                      <span v-else class="tree-expander-space"></span>
+                      <span class="tree-type-icon">{{ sub.isDir ? '📁' : '📄' }}</span>
+                      <span class="tree-text-truncate">{{ sub.name }}</span>
+                      <div class="tree-pill-tags">
+                        <span v-if="sub.p0Count" class="tag p0 mini">P0:{{ sub.p0Count }}</span>
+                        <span v-if="sub.p1Count" class="tag p1 mini">P1:{{ sub.p1Count }}</span>
                       </div>
                     </div>
 
                     <!-- 三级目录 -->
-                    <ul v-if="sub.children.length && openDirs.has(sub.path)" class="tree-sub-list">
-                      <li v-for="deep in sub.children" :key="deep.id" class="tree-node-item">
+                    <ul v-if="sub.children.length && openDirs.has(sub.path)" class="tree-ul sub-tree">
+                      <li v-for="deep in sub.children" :key="deep.id" class="tree-li">
                         <div
-                          class="tree-node-row"
-                          :class="{ selected: selectedPath === deep.path }"
+                          class="tree-row"
+                          :class="{ active: selectedPath === deep.path }"
+                          :title="deep.path"
                           @click="selectNode(deep)"
                         >
-                          <span class="tree-arrow-placeholder"></span>
-                          <span class="tree-icon">{{ deep.isDir ? '📁' : '📄' }}</span>
-                          <span class="tree-label">{{ deep.name }}</span>
-                          <div class="tree-counts">
-                            <span v-if="deep.p0Count" class="p0">P0:{{ deep.p0Count }}</span>
-                            <span v-if="deep.p1Count" class="p1">P1:{{ deep.p1Count }}</span>
+                          <span class="tree-expander-space"></span>
+                          <span class="tree-type-icon">{{ deep.isDir ? '📁' : '📄' }}</span>
+                          <span class="tree-text-truncate">{{ deep.name }}</span>
+                          <div class="tree-pill-tags">
+                            <span v-if="deep.p0Count" class="tag p0 mini">P0:{{ deep.p0Count }}</span>
+                            <span v-if="deep.p1Count" class="tag p1 mini">P1:{{ deep.p1Count }}</span>
                           </div>
                         </div>
                       </li>
@@ -291,149 +283,412 @@ const globalInheritedRules = computed<Rule[]>(() => {
             </template>
           </ul>
         </div>
+      </aside>
 
-        <div class="tree-legend">
-          <span>P0 强制核心契约</span>
-          <span>P1 任务约束规范</span>
-        </div>
-      </div>
-
-      <!-- 右侧：焦点视口 (Focus Inspector) -->
-      <div class="focus-pane">
-        <div class="focus-path">
-          <strong>当前选定代码路径：</strong><code>{{ selectedPath || '项目根目录' }}</code>
-        </div>
-        <div class="breadcrumbs">
-          <span>该路径专属匹配 {{ directMatchedRules.length }} 条 · 全局继承 {{ globalInheritedRules.length }} 条</span>
-          <span>Agent 触碰该代码时自动下发</span>
-        </div>
-
-        <!-- 专属匹配规则板块 -->
-        <div v-if="directMatchedRules.length">
-          <div class="section-head" style="margin: 16px 0 10px">
-            <h3 style="margin: 0">模块专属规矩 ({{ directMatchedRules.length }} 条)</h3>
+      <!-- 右侧：主焦点视口（单栏舒适阅读流，宽度自适应展开） -->
+      <main class="inspector-main-flow">
+        <div class="selected-target-bar">
+          <div class="target-title-line">
+            <span class="target-label">选定路径：</span>
+            <code class="target-code">{{ selectedPath || '项目根目录' }}</code>
           </div>
-          <article
-            v-for="rule in directMatchedRules"
-            :key="rule.id"
-            class="focus-rule"
-            :class="rule.priority.toLowerCase()"
-          >
-            <div class="card-top">
-              <h3>{{ rule.title }}</h3>
-              <div class="tags">
-                <span class="tag" :class="rule.priority.toLowerCase()">
-                  {{ rule.priority === 'P0' ? 'P0 强制核心契约' : rule.priority === 'P1' ? 'P1 任务约束规范' : 'P2 建议' }}
-                </span>
-                <span class="tag" :class="rule.status">{{ rule.status === 'active' ? '生效中' : '已停用' }}</span>
-                <span class="tag">{{ rule.task_id ? '任务短期规则' : '长期项目契约' }}</span>
-              </div>
-            </div>
-
-            <ul style="margin: 10px 0; padding-left: 18px; line-height: 1.7">
-              <li v-for="(point, i) in rule.points" :key="i">{{ point }}</li>
-            </ul>
-
-            <div class="definition">
-              <dt>管辖模式：</dt>
-              <dd><code>{{ rule.patterns.join(' · ') }}</code></dd>
-              <dt>效用评估：</dt>
-              <dd>
-                被引用 {{ rule.eval_count }} 次 · 标记已知 {{ rule.known_count }} 次 · 均分：{{ rule.avg_score ?? '—' }}
-              </dd>
-            </div>
-          </article>
-        </div>
-
-        <div v-else class="empty compact" style="margin: 16px 0">
-          该路径暂无单独定制的局部规矩，当前默认遵循下方全项目通用的全局核心规范。
-        </div>
-
-        <!-- 全局继承规矩板块 (兜底契约) -->
-        <div v-if="globalInheritedRules.length" style="margin-top: 24px">
-          <div class="section-head" style="margin: 16px 0 10px">
-            <h3 style="margin: 0; color: var(--accent)">全项目通用契约 (全局继承 · {{ globalInheritedRules.length }} 条)</h3>
+          <div class="target-summary">
+            <span>专属匹配：<strong>{{ directMatchedRules.length }}</strong> 条</span>
+            <span class="divider">/</span>
+            <span>全局继承：<strong>{{ globalInheritedRules.length }}</strong> 条</span>
           </div>
-          <article
-            v-for="rule in globalInheritedRules"
-            :key="rule.id"
-            class="focus-rule"
-            :class="rule.priority.toLowerCase()"
-            style="opacity: 0.9"
-          >
-            <div class="card-top">
-              <h3>{{ rule.title }}</h3>
-              <div class="tags">
-                <span class="tag" :class="rule.priority.toLowerCase()">{{ rule.priority }} 全局契约</span>
-              </div>
-            </div>
-            <ul style="margin: 10px 0; padding-left: 18px; line-height: 1.7">
-              <li v-for="(point, i) in rule.points" :key="i">{{ point }}</li>
-            </ul>
-            <small class="muted">全项目代码改动均受此约束管辖</small>
-          </article>
         </div>
-      </div>
+
+        <!-- 专属规则板块 -->
+        <div v-if="directMatchedRules.length" class="rules-section-block">
+          <h3 class="section-title-line">
+            <span>模块专属规矩</span>
+            <span class="badge-count">{{ directMatchedRules.length }}</span>
+          </h3>
+
+          <div class="rule-cards-vertical">
+            <article
+              v-for="rule in directMatchedRules"
+              :key="rule.id"
+              class="spec-article-card"
+              :class="rule.priority.toLowerCase()"
+            >
+              <div class="article-top">
+                <div class="article-title-wrap">
+                  <h4>{{ rule.title }}</h4>
+                  <div class="tags">
+                    <span class="tag" :class="rule.priority.toLowerCase()">
+                      {{ rule.priority === 'P0' ? 'P0 强制核心契约' : rule.priority === 'P1' ? 'P1 任务约束规范' : 'P2 建议' }}
+                    </span>
+                    <span class="tag" :class="rule.status">{{ rule.status === 'active' ? '生效中' : '已停用' }}</span>
+                    <span class="tag">{{ rule.task_id ? '任务短期规则' : '长期项目契约' }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 条款列表：充足宽度与行高，自然段落排版 -->
+              <div class="article-points-content">
+                <div class="points-header">具体执行条款：</div>
+                <ol class="points-ol">
+                  <li v-for="(point, i) in rule.points" :key="i">
+                    <span class="point-text">{{ point }}</span>
+                  </li>
+                </ol>
+              </div>
+
+              <!-- 元数据横向流动标签 -->
+              <div class="article-meta-footer">
+                <div class="meta-item">
+                  <span class="meta-name">管辖模式:</span>
+                  <code class="meta-code" v-for="(pat, i) in rule.patterns" :key="i">{{ pat }}</code>
+                </div>
+                <div class="meta-item right">
+                  <span class="muted">引用: {{ rule.eval_count }} 次 · 标记已知: {{ rule.known_count }} 次 · 均分: <strong>{{ rule.avg_score ?? '—' }}</strong></span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div v-else class="empty-hint-card">
+          该路径暂未定制模块专属规矩，编码时将默认遵循下方全项目通用的全局核心规范。
+        </div>
+
+        <!-- 全局继承规矩板块 -->
+        <div v-if="globalInheritedRules.length" class="rules-section-block global-block">
+          <h3 class="section-title-line global">
+            <span>全项目通用核心规范 (全局继承)</span>
+            <span class="badge-count">{{ globalInheritedRules.length }}</span>
+          </h3>
+
+          <div class="rule-cards-vertical">
+            <article
+              v-for="rule in globalInheritedRules"
+              :key="rule.id"
+              class="spec-article-card global"
+              :class="rule.priority.toLowerCase()"
+            >
+              <div class="article-top">
+                <div class="article-title-wrap">
+                  <h4>{{ rule.title }}</h4>
+                  <div class="tags">
+                    <span class="tag" :class="rule.priority.toLowerCase()">{{ rule.priority }} 全局契约</span>
+                  </div>
+                </div>
+              </div>
+              <div class="article-points-content">
+                <ol class="points-ol">
+                  <li v-for="(point, i) in rule.points" :key="i">
+                    <span class="point-text">{{ point }}</span>
+                  </li>
+                </ol>
+              </div>
+            </article>
+          </div>
+        </div>
+      </main>
     </div>
   </div>
 </template>
 
 <style scoped>
-.file-tree-root {
-  list-style: none;
+.explorer-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.explorer-split-container {
+  display: flex;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  min-height: 700px;
+  overflow: hidden;
+}
+
+/* 左侧目录树面板（严格单行、截断排版） */
+.tree-sidebar-panel {
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.tree-header h3 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.tree-filter-box {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.tree-search-input {
+  padding: 6px 10px;
+  font-size: 11px;
+  background: var(--bg-surface);
+}
+
+.tree-scroll-area {
   padding: 8px 6px;
-  margin: 0;
+  overflow-y: auto;
+  flex: 1;
+  max-height: 700px;
 }
-.tree-sub-list {
+
+.tree-ul {
   list-style: none;
-  padding-left: 14px;
+  padding: 0;
   margin: 0;
-  border-left: 1px solid var(--line);
 }
-.tree-node-item {
+.tree-ul.sub-tree {
+  padding-left: 12px;
+  border-left: 1px solid var(--border-subtle);
+  margin-left: 10px;
+}
+
+.tree-li {
   margin: 2px 0;
 }
-.tree-node-row {
+
+/* 核心：单行截断，坚决不折叠为多行竖直字 */
+.tree-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
+  padding: 6px 8px;
   border-radius: 4px;
   cursor: pointer;
+  color: var(--text-secondary);
   font-size: 11px;
-  font-family: var(--mono);
-  color: #bfc5d8;
-  transition: background 0.12s;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  transition: all 0.1s ease;
 }
-.tree-node-row:hover {
-  background: var(--surface);
-  color: var(--text);
+.tree-row:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
-.tree-node-row.selected {
-  background: #28233d;
-  color: #e0d9ff;
-  border-left: 2px solid var(--accent);
+.tree-row.active {
+  background: var(--accent-bg);
+  color: #d1caff;
+  font-weight: 600;
 }
-.tree-arrow-btn {
+
+.tree-expander {
   background: transparent;
   border: 0;
-  color: var(--muted);
-  padding: 0;
+  color: var(--text-tertiary);
   width: 14px;
-  font-size: 9px;
-  line-height: 1;
+  padding: 0;
+  font-size: 10px;
+  cursor: pointer;
 }
-.tree-arrow-placeholder {
+.tree-expander-space {
   width: 14px;
   display: inline-block;
 }
-.tree-icon {
+
+.tree-type-icon {
   font-size: 12px;
+  flex-shrink: 0;
 }
-.tree-label {
+
+.tree-text-truncate {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tree-pill-tags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.tag.mini {
+  padding: 1px 4px;
+  font-size: 9px;
+  border-radius: 2px;
+}
+
+/* 右侧：单栏舒适阅读流 */
+.inspector-main-flow {
+  flex: 1;
+  padding: 24px 32px;
+  overflow-y: auto;
+  max-height: 800px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.selected-target-bar {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.target-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.target-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+.target-code {
+  font-size: 13px;
+  color: var(--accent);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.target-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.divider {
+  color: var(--text-tertiary);
+}
+
+.section-title-line {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-title-line.global {
+  color: var(--accent);
+}
+.badge-count {
+  font-size: 11px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  padding: 2px 7px;
+  border-radius: 10px;
+  color: var(--text-secondary);
+}
+
+.rule-cards-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 规范文章卡片：给足宽度，舒展大方 */
+.spec-article-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+.spec-article-card.p0 {
+  border-left-color: var(--red);
+}
+.spec-article-card.p1 {
+  border-left-color: var(--amber);
+}
+.spec-article-card.global {
+  border-left-color: #6366f1;
+}
+
+.article-title-wrap h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--text-primary);
+}
+
+.article-points-content {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+.points-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.points-ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.point-text {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+.article-meta-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+}
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.meta-name {
+  color: var(--text-tertiary);
+}
+.meta-code {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #c4b5fd;
+}
+
+.empty-hint-card {
+  background: var(--bg-subtle);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 6px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 </style>
