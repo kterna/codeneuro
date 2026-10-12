@@ -115,64 +115,70 @@ function closeDetail() {
       </table>
     </div>
 
-    <!-- 规则详情右侧抽屉 -->
-    <aside v-if="selectedRule" class="detail-drawer">
-      <div class="drawer-header">
-        <div class="drawer-header-top">
-          <h3>规则详情</h3>
-          <button type="button" class="subtle close-btn" @click="closeDetail">✕</button>
-        </div>
-        <p class="muted font-mono" style="margin: 2px 0 0; font-size: 11px">标识：{{ selectedRule.id }}</p>
-      </div>
-
-      <div class="drawer-content-scroll">
-        <div class="drawer-section">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
-            <h2 style="font-size: 15px; margin: 0; line-height: 1.4">{{ selectedRule.title }}</h2>
-            <span class="tag" :class="selectedRule.priority.toLowerCase()">{{ selectedRule.priority }}</span>
+    <!-- 规则详情右侧抽屉（带遮罩，点击背景关闭） -->
+    <div v-if="selectedRule" class="gh-drawer-overlay" @click.self="closeDetail">
+      <aside class="detail-drawer">
+        <div class="drawer-header">
+          <div class="drawer-header-top">
+            <h3>规则详情</h3>
+            <button type="button" class="subtle close-btn" @click="closeDetail">✕</button>
           </div>
-          <div class="tags" style="margin-top: 8px">
-            <span class="tag" :class="selectedRule.status">{{ selectedRule.status === 'active' ? '生效中' : '已停用' }}</span>
-            <span class="tag">{{ selectedRule.task_id ? '任务短期规则' : '长期项目契约' }}</span>
-            <span v-if="selectedRule.origin_rule_id" class="tag">由任务规则晋升</span>
-          </div>
+          <p class="muted font-mono" style="margin: 2px 0 0; font-size: 11px">标识：{{ selectedRule.id }}</p>
         </div>
 
-        <div class="drawer-section">
-          <div class="section-label">具体执行条款</div>
-          <ol class="clause-ol">
-            <li v-for="(p, i) in selectedRule.points" :key="i">
-              <span class="clause-text">{{ p }}</span>
-            </li>
-          </ol>
-        </div>
-
-        <div class="drawer-section">
-          <div class="section-label">管辖文件路径模式</div>
-          <div class="tags">
-            <code v-for="(pat, i) in selectedRule.patterns" :key="i" class="path-badge">{{ pat }}</code>
-          </div>
-        </div>
-
-        <div class="drawer-section">
-          <div class="section-label">使用情况与真实反馈</div>
-          <div class="stat-meta-grid">
-            <div class="stat-meta-item">
-              <span>实际引用</span>
-              <strong>{{ selectedRule.eval_count }} 次</strong>
+        <div class="drawer-content-scroll">
+          <div class="drawer-section">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
+              <h2 style="font-size: 15px; margin: 0; line-height: 1.4">{{ selectedRule.title }}</h2>
+              <span class="tag" :class="selectedRule.priority.toLowerCase()">{{ selectedRule.priority }}</span>
             </div>
-            <div class="stat-meta-item">
-              <span>已掌握标记</span>
-              <strong>{{ selectedRule.known_count }} 次</strong>
-            </div>
-            <div class="stat-meta-item">
-              <span>实用度均分</span>
-              <strong>{{ selectedRule.avg_score ?? '暂无' }}</strong>
+            <div class="tags" style="margin-top: 8px">
+              <span class="tag" :class="selectedRule.status">{{ selectedRule.status === 'active' ? '生效中' : '已停用' }}</span>
+              <span class="tag">{{ selectedRule.task_id ? '任务短期规则' : '长期项目契约' }}</span>
+              <span v-if="selectedRule.origin_rule_id" class="tag">由任务规则晋升</span>
             </div>
           </div>
+
+          <div class="drawer-section">
+            <div class="section-label">具体执行条款</div>
+            <ol class="clause-ol">
+              <li v-for="(p, i) in selectedRule.points" :key="i">
+                <span class="clause-text">{{ p }}</span>
+              </li>
+            </ol>
+          </div>
+
+          <div class="drawer-section">
+            <div class="section-label">管辖文件路径模式</div>
+            <div class="tags">
+              <code v-for="(pat, i) in selectedRule.patterns" :key="i" class="path-badge">{{ pat }}</code>
+            </div>
+          </div>
+
+          <div class="drawer-section">
+            <div class="section-label">使用情况与真实反馈</div>
+            <div class="stat-meta-grid">
+              <div class="stat-meta-item">
+                <span>实际引用</span>
+                <strong>{{ selectedRule.eval_count }} 次</strong>
+              </div>
+              <div class="stat-meta-item">
+                <span>已掌握标记</span>
+                <strong>{{ selectedRule.known_count }} 次</strong>
+              </div>
+              <div class="stat-meta-item">
+                <span>实用度均分</span>
+                <strong>{{ selectedRule.avg_score ?? '暂无' }}</strong>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </aside>
+
+        <div class="drawer-footer">
+          <button type="button" @click="closeDetail">关闭抽屉</button>
+        </div>
+      </aside>
+    </div>
   </div>
 </template>
 

@@ -552,57 +552,193 @@ code {
   padding: 20px 14px;
 }
 
-/* 原生弹窗规范 */
+/* ==========================================================================
+   全局统一 GitHub 风格模态弹窗 (<dialog>) 与右侧滑出抽屉 (.gh-drawer)
+   ========================================================================== */
+
+/* 1. 原生模态弹窗规范 (<dialog>) */
 dialog {
   color: var(--gh-fg-default);
-  background: var(--gh-canvas-overlay);
+  background: #161b22;
   border: 1px solid var(--gh-border-default);
   border-radius: 8px;
   width: min(560px, 92vw);
-  padding: 20px;
-  box-shadow: 0 16px 32px rgba(1, 4, 9, 0.85);
+  padding: 0;
+  box-shadow: 0 16px 36px rgba(1, 4, 9, 0.85);
+  overflow: hidden;
 }
 
 dialog::backdrop {
-  background: rgba(1, 4, 9, 0.7);
-  backdrop-filter: blur(2px);
+  background: rgba(1, 4, 9, 0.75);
+  backdrop-filter: blur(3px);
 }
 
 .dialog-head {
+  padding: 16px 20px;
+  background: #161b22;
+  border-bottom: 1px solid var(--gh-border-default);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
 }
 
 .dialog-head h2 {
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 600;
   margin: 0;
+  color: var(--gh-fg-default);
 }
 
 .dialog-head button {
   background: transparent;
   border: 0;
   font-size: 16px;
-  color: var(--gh-fg-subtle);
+  color: var(--gh-fg-muted);
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.dialog-head button:hover {
+  background: rgba(177, 186, 196, 0.12);
+  color: var(--gh-fg-default);
+}
+
+dialog form {
+  padding: 20px;
 }
 
 .field {
   display: block;
   font-size: 12px;
+  font-weight: 500;
   color: var(--gh-fg-muted);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .field input, .field textarea, .field select {
-  margin-top: 4px;
+  margin-top: 6px;
+  background: #010409;
+  border: 1px solid var(--gh-border-default);
+  color: var(--gh-fg-default);
 }
 
 dialog footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gh-border-muted);
+}
+
+/* 2. 通用右侧滑出大抽屉体系 (.gh-drawer-overlay / .gh-drawer-content) */
+.gh-drawer-overlay, .task-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(1, 4, 9, 0.7);
+  backdrop-filter: blur(3px);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.gh-drawer-content, .task-drawer-content, .detail-drawer {
+  width: min(580px, 94vw);
+  background: #161b22;
+  border-left: 1px solid var(--gh-border-default);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -12px 0 36px rgba(1, 4, 9, 0.9);
+  animation: ghDrawerSlide 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ghDrawerSlide {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--gh-border-default);
+  background: #161b22;
+  flex-shrink: 0;
+}
+
+.drawer-header-top, .card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drawer-header h3, .drawer-header h2 {
+  color: var(--gh-fg-default);
+  margin: 0;
+}
+
+.drawer-body, .drawer-content-scroll {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #0d1117;
+}
+
+.drawer-footer {
+  padding: 14px 24px;
+  border-top: 1px solid var(--gh-border-default);
+  background: #161b22;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* 抽屉内卡片条目 */
+.drawer-req-item {
+  background: #161b22;
+  border: 1px solid var(--gh-border-default);
+  border-left: 3px solid var(--gh-accent-fg);
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drawer-req-item.is-archived {
+  border-left-color: var(--gh-success-fg);
+}
+
+.req-block-label, .section-label {
+  font-size: 11px;
+  color: var(--gh-fg-subtle);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.req-original-block .original-text {
+  background: #010409;
+  border: 1px solid var(--gh-border-muted);
+  border-left: 2px solid var(--gh-accent-fg);
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: var(--gh-fg-default);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.req-summary-block .summary-text {
+  background: var(--gh-success-subtle);
+  border: 1px solid rgba(46, 160, 67, 0.3);
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: var(--gh-success-fg);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
 }
 
 /* 命令面板 */
