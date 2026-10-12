@@ -1,8 +1,4 @@
-"""One MCP tool catalogue used by stdio and authenticated streamable HTTP.
-
-Identity comes from the transport, never from model-supplied arguments. MCP
-schemas, result envelopes and default parameters live here exactly once.
-"""
+"""One MCP tool catalogue shared by stdio and streamable HTTP."""
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -15,11 +11,14 @@ from mcp.server.mcpserver.exceptions import ToolError
 from ...modules.context import ContextQuery
 from ...modules.knowledge import Priority
 from ...modules.tasks import ProductError
+from ...modules.workspaces import Actor
 from ...workflows.product import Product
 
 
-def create_mcp(product: Product, actor_for_context, *, name: str = 'CodeNeuro') -> MCPServer:
-    """actor_for_context(Context|None) must return a verified Actor or raise."""
+def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeuro') -> MCPServer:
+    """Expose the same tools with no transport credentials."""
+    if actor_for_context is None:
+        actor_for_context = lambda _ctx: Actor('mcp')
     server = MCPServer(name, instructions=(
         'List Tasks first. Match active Task titles/descriptions locally using regex; choose explicitly '
         'when several match. Submit original demand text to a bound Task, call get_context before '
@@ -44,7 +43,7 @@ def create_mcp(product: Product, actor_for_context, *, name: str = 'CodeNeuro') 
 
     @server.tool()
     def codeneuro_list_projects(ctx: Context) -> str:
-        """List projects actually available to this authenticated caller."""
+        """List registered projects."""
         return invoke(product.workspaces.list_projects, actor(ctx))
 
     @server.tool()
@@ -166,7 +165,7 @@ def create_mcp(product: Product, actor_for_context, *, name: str = 'CodeNeuro') 
     @server.tool()
     def codeneuro_record_finding(session_id: str, target_path: str, text: str,
                                  ctx: Context, priority: str = 'P1') -> str:
-        """Record a session-scoped observation, not an approved long-term Rule."""
+        """Record a Task-scoped unreviewed observation for matching files across sessions."""
         try:
             selected = Priority(priority)
         except ValueError as error:

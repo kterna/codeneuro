@@ -1,4 +1,4 @@
-"""Authenticated caller and pinned agent session identities."""
+"""Caller provenance and agent session metadata (not authenticated)."""
 from dataclasses import dataclass
 
 from .tasks import ProductError
@@ -7,12 +7,7 @@ from .tasks import ProductError
 @dataclass(frozen=True)
 class Actor:
     id: str
-    project_ids: frozenset[str]
     role: str = 'agent'
-
-    def authorize(self, project_id: str):
-        if project_id not in self.project_ids:
-            raise ProductError('Project is outside the authenticated identity.', 'forbidden')
 
 
 @dataclass(frozen=True)
@@ -39,9 +34,6 @@ class Session:
     state: str
     knowledge_revision: int
 
-    def owned_by(self, actor: Actor):
-        actor.authorize(self.project_id)
-        if self.actor_id != actor.id:
-            raise ProductError('Session belongs to a different actor.', 'forbidden')
+    def require_active(self):
         if self.state != 'active':
             raise ProductError('Session is closed.', 'conflict')

@@ -9,7 +9,6 @@ from .workspaces import Workspaces
 
 class Ledger(Workspaces):
     def project(self, actor: Actor, project_id: str):
-        actor.authorize(project_id)
         with self.uow.read() as tx:
             tx.workspaces.project_revision(project_id)
             rules = tx.knowledge.project_rules(project_id)
@@ -25,6 +24,7 @@ class Ledger(Workspaces):
                     'tasks': [asdict(task) for task in tx.workspaces.list_tasks(project_id)],
                     'worktrees': [asdict(worktree) for worktree in tx.workspaces.project_worktrees(project_id)],
                     'requirements': [asdict(item) for item in tx.requirements.project_requirements(project_id)],
+                    'findings': [asdict(item) for item in tx.context.project_findings(project_id)],
                     'rules': rules,
                     'scope_density': density(rules),
                     'proposals': [asdict(item) for item in tx.knowledge.list_proposals(project_id)],

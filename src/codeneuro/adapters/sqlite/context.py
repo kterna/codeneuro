@@ -19,12 +19,19 @@ class ContextRepo(Repo):
         self.c.execute(s.tasks.update().where(s.tasks.c.id == finding.task_id).values(
             revision=s.tasks.c.revision + 1))
 
-    def pending_findings(self, task_id, session_id):
-        statement = sa.select(s.findings).where(s.findings.c.task_id == task_id,
-            s.findings.c.session_id == session_id, s.findings.c.status == 'pending_review')
-        return [Finding(row.id, row.project_id, row.task_id, row.session_id,
-                        row.target_path, row.text, Priority(row.priority), row.version, row.status)
-                for row in self.c.execute(statement)]
+    def pending_findings(self, project_id, task_id):
+        statement = sa.select(s.findings).where(s.findings.c.project_id == project_id,
+            s.findings.c.task_id == task_id, s.findings.c.status == 'pending_review')
+        return [self._finding(row) for row in self.c.execute(statement)]
+
+    def project_findings(self, project_id):
+        statement = sa.select(s.findings).where(s.findings.c.project_id == project_id)
+        return [self._finding(row) for row in self.c.execute(statement)]
+
+    @staticmethod
+    def _finding(row):
+        return Finding(row.id, row.project_id, row.task_id, row.session_id,
+                       row.target_path, row.text, Priority(row.priority), row.version, row.status)
 
     def find_delivery(self, session_id, request_id):
         row = self._one(sa.select(s.deliveries).where(s.deliveries.c.session_id == session_id,

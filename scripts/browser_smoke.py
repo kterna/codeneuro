@@ -46,10 +46,7 @@ def main(argv=None):
         repo_env = {**os.environ, 'PYTHONPATH': str(root / 'src'), 'PYTHONDONTWRITEBYTECODE': '1'}
         subprocess.run([sys.executable, '-B', '-m', 'codeneuro', 'migrate',
                         '--db', str(database)], cwd=root, env=repo_env, check=True)
-        credential = 'isolated-browser-credential-not-for-production'
-        env = {**repo_env, 'CODENEURO_CLIENTS': json.dumps([{'token_env': 'CODENEURO_HUMAN_TOKEN',
-            'actor_id': 'smoke-human', 'project_ids': ['browser-project'], 'role': 'human'}]),
-            'CODENEURO_HUMAN_TOKEN': credential}
+        env = repo_env
         http_port, debug_port = free_port(), free_port()
         processes = []
         log = (temp / 'browser.log').open('w+')
@@ -62,9 +59,7 @@ def main(argv=None):
                 'serve', '--db', str(database), '--port', str(http_port)], cwd=root,
                 env=env, stdout=log, stderr=log))
             def ready():
-                request = urllib.request.Request(f'http://127.0.0.1:{http_port}/api/projects',
-                    headers={'Authorization': 'Bearer ' + credential})
-                with opener.open(request, timeout=2) as response:
+                with opener.open(f'http://127.0.0.1:{http_port}/api/projects', timeout=2) as response:
                     return json.load(response) == []
             wait(ready)
             processes.append(subprocess.Popen([args.chromium, '--headless', '--no-sandbox',
@@ -99,26 +94,32 @@ def main(argv=None):
                     js(f"(()=>{{let field=document.querySelector({json.dumps(selector)});"
                        f"field.value={json.dumps(value)};field.dispatchEvent(new Event('input',{{bubbles:true}}))}})()")
                 def click(label):
-                    wait(lambda: js(f"[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==={json.dumps(label)}&&!b.disabled)"))
-                    js(f"[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==={json.dumps(label)}).click()")
+                    wait(lambda: js(f"[...document.querySelectorAll('button')].some(b=>b.textContent.trim().endsWith({json.dumps(label)})&&!b.disabled)"))
+                    js(f"[...document.querySelectorAll('button')].find(b=>b.textContent.trim().endsWith({json.dumps(label)})).click()")
                 cdp('Runtime.enable'); cdp('Page.enable')
                 cdp('Page.navigate', {'url': f'http://127.0.0.1:{http_port}/app/'})
-                wait(lambda: js("!!document.querySelector('#hub-token')"))
-                fill('#hub-token', credential)
-                click('连接')
-                wait(lambda: js("!!document.querySelector('#new-project-id')"))
+                wait(lambda: js("!!document.querySelector('.sidebar') && document.querySelector('#health').textContent.includes('已连接')"))
+                assert not js("!!document.querySelector('#hub-token')")
+                assert js("getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") == '#a49aff'
+                assert js("getComputedStyle(document.querySelector('.sidebar')).position") == 'fixed'
+                click('注册项目')
+                wait(lambda: js("document.querySelector('#editor').open"))
                 fill('#new-project-id', 'browser-project')
                 fill('#new-project-name', 'Browser test')
-                click('登记项目')
-                wait(lambda: js("document.body.innerText.includes('下一件要完成的事')"))
+                click('保存')
+                wait(lambda: js("document.querySelector('#project').value === 'browser-project'"))
+                click('需求与任务看板')
+                wait(lambda: js("!!document.querySelector('#demand-text')"))
                 fill('#demand-text', '新增退款流程并确保幂等。')
                 click('提交原文需求')
                 wait(lambda: js("document.body.innerText.includes('新增退款流程并确保幂等。')"))
-                assert js("document.querySelectorAll('.requirement').length") == 1
-                js("window.prompt=()=> 'Coding Agent confirmed completion.'")
+                assert js("document.querySelectorAll('.original-text').length") == 1
                 click('确认归档')
+                wait(lambda: js("document.querySelector('#editor').open"))
+                fill('#editor textarea', 'Coding Agent confirmed completion.')
+                click('保存')
                 wait(lambda: js("document.body.innerText.includes('完成摘要：Coding Agent confirmed completion.')"))
-                wait(lambda: js("[...document.querySelectorAll('.badge')].some(x=>x.textContent.includes('archived'))"))
+                wait(lambda: js("[...document.querySelectorAll('.tag')].some(x=>x.textContent.includes('archived'))"))
                 assert not errors, errors
                 print(json.dumps({'result': 'passed', 'flow': 'intake_archival_ledger',
                                   'javascript_errors': len(errors)}))
@@ -139,6 +140,8 @@ def main(argv=None):
                     except subprocess.TimeoutExpired:
                         process.kill(); process.wait(timeout=5)
             log.close()
+            time.sleep(0.5)
+
 
 
 if __name__ == '__main__':

@@ -1,21 +1,20 @@
-"""CodeNeuro CLI: explicit schema initialization and authenticated MCP/HTTP Hub."""
+"""CodeNeuro CLI: explicit schema initialization and MCP/HTTP Hub."""
 import argparse
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from .adapters.mcp.identity import Identities
 from .adapters.mcp.tools import create_mcp
 from .adapters.sqlite.uow import SqliteUnitOfWork
 from .workflows.product import Product
 
 
-def create_http_app(product: Product, identities: Identities):
+def create_http_app(product: Product):
     from fastapi import FastAPI
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
 
-    mcp = create_mcp(product, identities.for_http)
+    mcp = create_mcp(product)
     transport = mcp.streamable_http_app(streamable_http_path='/',
         json_response=True, stateless_http=True, host='0.0.0.0')
 
@@ -26,7 +25,7 @@ def create_http_app(product: Product, identities: Identities):
 
     from .adapters.http.api import create_router
     app = FastAPI(lifespan=lifespan)
-    app.include_router(create_router(product, identities))
+    app.include_router(create_router(product))
     app.mount('/mcp', transport)
     static = Path(__file__).resolve().parent / 'static'
     if (static / 'index.html').is_file():
@@ -35,6 +34,10 @@ def create_http_app(product: Product, identities: Identities):
         @app.get('/app/')
         def workbench():
             return FileResponse(static / 'index.html')
+
+        @app.get('/')
+        def home():
+            return RedirectResponse('/app/')
     return app
 
 
@@ -53,17 +56,17 @@ def main(argv=None):
         config.set_main_option('codeneuro_db', args.db)
         command.upgrade(config, 'head')
         return
-    identities = Identities.from_environment()
     uow = SqliteUnitOfWork(args.db)
     try:
         product = Product(uow)
         if args.mode == 'mcp':
-            actor = identities.for_stdio()
-            server = create_mcp(product, lambda _ctx: actor)
+            server = create_mcp(product)
             asyncio.run(server.run_stdio_async())
         else:
             import uvicorn
-            uvicorn.run(create_http_app(product, identities), host=args.host, port=args.port)
+            if args.host not in ('127.0.0.1', 'localhost', '::1'):
+                print('Warning: HTTP API and MCP have no authentication; bind only on a trusted network.', flush=True)
+            uvicorn.run(create_http_app(product), host=args.host, port=args.port)
     finally:
         uow.dispose()
 

@@ -14,7 +14,6 @@ class Requirements(Workspaces):
         """Web human explicitly selects a Task, or creates it with the original demand."""
         if actor.role != 'human':
             raise ProductError('Web intake requires a human identity.', 'forbidden')
-        actor.authorize(project_id)
         if not text.strip() or not request_id or len(request_id) > 128:
             raise ProductError('Requirement text and bounded request_id are required.')
         if not task_id and (not title or not title.strip()):
@@ -78,7 +77,6 @@ class Requirements(Workspaces):
                          requirement_id: str, expected_version: int, summary: str):
         if actor.role != 'human':
             raise ProductError('Human review is required for Web archival.', 'forbidden')
-        actor.authorize(project_id)
         with self.uow.write() as tx:
             task = tx.workspaces.get_task(task_id, project_id)
             item = tx.requirements.get_requirement(requirement_id, task_id) if task else None

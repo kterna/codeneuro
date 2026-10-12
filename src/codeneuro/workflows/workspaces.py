@@ -18,13 +18,12 @@ class Workspaces:
         session = tx.workspaces.get_session(session_id)
         if session is None:
             raise ProductError('Session not found.', 'not_found')
-        session.owned_by(actor)
+        session.require_active()
         return session
 
     def register_project(self, actor: Actor, project_id: str, name: str):
         if actor.role != 'human' or not name.strip():
             raise ProductError('Only a human administrator may register a project.', 'forbidden')
-        actor.authorize(project_id)
         with self.uow.write() as tx:
             tx.workspaces.create_project(project_id, name)
             tx.audit.record(project_id, actor.id, 'project.created', project_id, {})
@@ -32,16 +31,14 @@ class Workspaces:
 
     def list_projects(self, actor: Actor):
         with self.uow.read() as tx:
-            return [row for row in tx.workspaces.list_projects() if row['id'] in actor.project_ids]
+            return tx.workspaces.list_projects()
 
     def list_tasks(self, actor: Actor, project_id: str):
-        actor.authorize(project_id)
         with self.uow.read() as tx:
             tx.workspaces.project_revision(project_id)
             return tx.workspaces.list_tasks(project_id)
 
     def create_task(self, actor: Actor, project_id: str, title: str, description: str = ''):
-        actor.authorize(project_id)
         if not title.strip():
             raise ProductError('Task title is required.')
         with self.uow.write() as tx:
@@ -55,7 +52,6 @@ class Workspaces:
                    expected_revision: int, reason: str):
         if actor.role != 'human' or not reason.strip():
             raise ProductError('Human review and a reason are required to pause a Task.', 'forbidden')
-        actor.authorize(project_id)
         with self.uow.write() as tx:
             task = tx.workspaces.get_task(task_id, project_id)
             if task is None:
@@ -70,7 +66,6 @@ class Workspaces:
                     expected_revision: int, reason: str):
         if actor.role != 'human' or not reason.strip():
             raise ProductError('Human review and a reason are required to resume a Task.', 'forbidden')
-        actor.authorize(project_id)
         with self.uow.write() as tx:
             task = tx.workspaces.get_task(task_id, project_id)
             if task is None:
@@ -86,7 +81,6 @@ class Workspaces:
                       task_id: str | None = None, agent_client: str = 'MCP', debug: bool = False,
                       *, machine_name: str = 'not_attested', platform: str = 'unknown',
                       repo_identity: str | None = None, git_branch: str = ''):
-        actor.authorize(project_id)
         if (not isinstance(workspace, str) or not workspace.strip() or len(workspace) > 4096
                 or '\x00' in workspace or '\n' in workspace or not agent_client.strip()
                 or not machine_name or len(machine_name) > 255

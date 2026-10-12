@@ -4,7 +4,7 @@
 
 ## 依赖与边界
 
-采用 Python 3.11、FastAPI/Pydantic、官方 MCP SDK、SQLAlchemy 2 Core、Alembic；工作台采用 Vue 3、TypeScript、Vite。领域模块和工作流不可导入 SQLAlchemy、MCP SDK、FastAPI 或旧 `codeneuro`；接口只做身份与 DTO 映射；SQL 在 SQLite 适配器内。`bootstrap` 显式装配，拒绝隐式全局单例、通用插件框架和宿主品牌分支。用架构测试保护 import 方向。
+采用 Python 3.11、FastAPI/Pydantic、官方 MCP SDK、SQLAlchemy 2 Core、Alembic；工作台采用 Vue 3、TypeScript、Vite。领域模块和工作流不可导入 SQLAlchemy、MCP SDK、FastAPI 或旧 `codeneuro`；接口只做 DTO 映射；SQL 在 SQLite 适配器内。`bootstrap` 显式装配，拒绝隐式全局单例、通用插件框架和宿主品牌分支。用架构测试保护 import 方向。
 
 ```text
 modules/{workspaces,tasks,knowledge,context,findings}   纯数据与策略
@@ -12,7 +12,7 @@ workflows/{workspaces,requirements,knowledge,context,feedback,ledger}  用例与
 ports.py                                              真实用例需要的仓储/UoW 契约
 adapters/sqlite/{schema,uow,workspaces,requirements,knowledge,context,feedback,audit}
                                                        SQL、短事务、不可变版本引用
-adapters/mcp/{tools,identity}                         一份工具定义、认证身份
+adapters/mcp/tools.py                               stdio/HTTP 共用的一份工具定义
 adapters/http/api.py                                  人类入口、只读账本
 web/                                                  同源 HTTP 工作台
 ```
@@ -27,7 +27,7 @@ JIT **不持有 SQLite 写锁执行匹配与渲染**：短只读快照取得项�
 
 ## 入口与信任边界
 
-MCP 的核心六动作与列 Task、会话及 Issue 辅助工具在**同一个工具目录**定义，stdio 与认证 streamable HTTP 只改变身份来源。`Actor` 来自 operator 控制的 Token，不信任模型自报权限；Token 具项目边界，会话绑定 actor、项目、Task 和稳定的 Worktree ID；机器、分支、仓库身份为客户端声明，不等同 Hub 验证。标准 MCP 不自动拦截宿主文件/测试工具，CodeNeuro 不执行编码测试。远端工作区路径只是客户端证明，Hub 仍校验词法路径和项目会话范围，不声称访问过客户端磁盘。Web API 调用相同用例；Vue 只读取账本投影，不维护独立规则状态。
+MCP 的核心六动作与列 Task、会话及 Issue 辅助工具在**同一个工具目录**定义，stdio 与 streamable HTTP 无需鉴权。会话绑定项目、Task 和稳定的 Worktree ID；机器、分支、仓库身份为客户端声明，不等同 Hub 验证。Web 无需登录，直接打开页面自动读取项目；无鉴权时不能核实审阅人的真实身份。默认只监听本机，勿直接暴露公网。标准 MCP 不自动拦截宿主文件/测试工具，CodeNeuro 不执行编码测试。远端工作区路径只是客户端证明，Hub 仍校验词法路径和项目会话范围，不声称访问过客户端磁盘。Web API 调用相同用例；Vue 只读取账本投影，不维护独立规则状态。
 
 ## 数据升级与切换
 

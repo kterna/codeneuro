@@ -17,7 +17,6 @@ class Knowledge(Workspaces):
                     task_id: str | None = None):
         if actor.role != 'human':
             raise ProductError('Rule activation requires the reviewed entry point.', 'forbidden')
-        actor.authorize(project_id)
         if not title.strip() or not points or any(not point.strip() for point in points) or not patterns:
             raise ProductError('Rule needs a title, clauses and scope.')
         if category not in CATEGORIES:
@@ -66,7 +65,6 @@ class Knowledge(Workspaces):
                         approve: bool, reason: str):
         if actor.role != 'human' or type(approve) is not bool or not reason.strip():
             raise ProductError('Explicit human approval/rejection and reason are required.', 'forbidden')
-        actor.authorize(project_id)
         with self.uow.write() as tx:
             proposal = tx.knowledge.get_proposal(proposal_id)
             if proposal is None or proposal.project_id != project_id:

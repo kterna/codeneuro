@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeNeuro · 嵌套式多层无限画布工作台 (分层钻取 · 架构/业务流/心智/看板)</title>
+  <!-- Local Mermaid Script -->
+  <script src="mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #07090e;
+      --sidebar-bg: rgba(11, 15, 25, 0.96);
+      --card-bg: rgba(15, 23, 42, 0.88);
+      --card-border: #334155;
+      --card-hover: #475569;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-purple: #a855f7;
+      --accent-green: #4ade80;
+      --accent-amber: #fbbf24;
+      --accent-rose: #f43f5e;
+      --drawer-bg: rgba(11, 17, 32, 0.96);
+      --font-mono: 'JetBrains Mono', Consolas, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #app-container {
+      width: 100vw; height: 100vh;
+      display: flex;
+    }
+
+    /* Left Sidebar: Canvas & Root Hierarchy Selector */
+    #sidebar {
+      width: 280px;
+      min-width: 280px;
+      height: 100vh;
+      background: var(--sidebar-bg);
+      border-right: 1px solid #1e293b;
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+      box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+    }
+    .sidebar-header {
+      padding: 18px 20px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #38bdf8, #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 15px;
+      color: #fff;
+    }
+    .brand-text h1 { font-size: 15px; font-weight: 700; color: #fff; }
+    .brand-text span { font-size: 11px; color: var(--text-muted); }
+
+    .sidebar-section-title {
+      padding: 14px 20px 6px 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+    }
+    .sidebar-canvases-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .canvas-nav-item {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #94a3b8;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+    }
+    .canvas-nav-item:hover { background: rgba(30, 41, 59, 0.6); color: #fff; }
+    .canvas-nav-item.active {
+      background: rgba(56, 189, 248, 0.12);
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .canvas-nav-item .icon { font-size: 16px; }
+
+    .sidebar-footer {
+      padding: 14px 16px;
+      border-top: 1px solid #1e293b;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: #334155; color: #fff; border-color: #64748b; }
+    .btn.primary {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      border-color: #38bdf8;
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn.primary:hover { background: linear-gradient(135deg, #0369a1, #1d4ed8); }
+
+    /* Right Main Canvas Area */
+    #main-area {
+      flex: 1;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Breadcrumb Nav & Controls */
+    #canvas-header {
+      height: 56px;
+      background: rgba(11, 15, 25, 0.9);
+      border-bottom: 1px solid #1e293b;
+      backdrop-filter: blur(14px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 50;
+    }
+    .breadcrumb-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+    .breadcrumb-item {
+      cursor: pointer;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .breadcrumb-item:hover { color: #38bdf8; }
+    .breadcrumb-item.current { color: #fff; cursor: default; }
+    .breadcrumb-sep { color: #475569; font-size: 11px; }
+
+    .header-tools {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .zoom-indicator {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #94a3b8;
+      min-width: 46px;
+      text-align: center;
+    }
+
+    /* Infinite Canvas Viewport */
+    #canvas-container {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      cursor: grab;
+      background-image: radial-gradient(#1e293b 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    #canvas-container:active { cursor: grabbing; }
+
+    #world {
+      position: absolute;
+      top: 0; left: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    #svg-layer {
+      position: absolute;
+      top: 0; left: 0;
+      overflow: visible;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    #nodes-layer {
+      position: absolute;
+      top: 0; left: 0;
+      z-index: 2;
+    }
+
+    /* Canvas Nodes / Cards */
+    .canvas-node {
+      position: absolute;
+      width: 320px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 18px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+    }
+    .canvas-node:hover {
+      border-color: var(--card-hover);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      transform: translateY(-2px);
+    }
+    .canvas-node.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35), 0 16px 40px rgba(56, 189, 248, 0.15);
+    }
+
+    .node-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .node-title-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .node-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.3;
+    }
+    .node-tagline {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .node-badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      font-family: var(--font-mono);
+      white-space: nowrap;
+    }
+
+    /* Node Footer / Actions */
+    .node-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 8px;
+      border-top: 1px solid rgba(51, 65, 85, 0.5);
+      font-size: 11px;
+      color: #64748b;
+    }
+    .btn-dive {
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s;
+    }
+    .btn-dive:hover {
+      background: #38bdf8;
+      color: #0f172a;
+    }
+
+    /* Selected Action Bar */
+    .node-quick-bar {
+      position: absolute;
+      top: -38px; left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 3px 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+      z-index: 10;
+      white-space: nowrap;
+    }
+    .quick-btn {
+      background: transparent;
+      border: none;
+      color: #cbd5e1;
+      font-size: 11px;
+      padding: 3px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .quick-btn:hover { background: #334155; color: #38bdf8; }
+
+    /* Minimap */
+    #minimap {
+      position: fixed;
+      bottom: 24px; left: 304px;
+      width: 180px; height: 120px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      backdrop-filter: blur(10px);
+      z-index: 50;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    }
+    #minimap-canvas { width: 100%; height: 100%; }
+    #minimap-viewport {
+      position: absolute;
+      border: 1px solid #38bdf8;
+      background: rgba(56, 189, 248, 0.15);
+      pointer-events: none;
+    }
+
+    /* Floating Canvas Controls */
+    .floating-controls {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid #334155;
+      padding: 6px 10px;
+      border-radius: 12px;
+      backdrop-filter: blur(14px);
+      z-index: 50;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    }
+    .ctrl-btn {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .ctrl-btn:hover { background: #334155; color: #fff; }
+
+    /* Right Inspector & Drawer */
+    #drawer {
+      position: fixed;
+      top: 0; right: -840px;
+      width: 820px;
+      max-width: 90vw;
+      height: 100vh;
+      background: var(--drawer-bg);
+      border-left: 1px solid #334155;
+      backdrop-filter: blur(24px);
+      box-shadow: -20px 0 60px rgba(0, 0, 0, 0.8);
+      z-index: 200;
+      transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    #drawer.open { right: 0; }
+
+    .drawer-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .drawer-header h3 { font-size: 17px; font-weight: 700; color: #fff; }
+    .drawer-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 18px;
+      cursor: pointer;
+      width: 32px; height: 32px;
+      border-radius: 6px;
+    }
+    .drawer-close:hover { background: #1e293b; color: #fff; }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .drawer-body::-webkit-scrollbar { width: 6px; }
+    .drawer-body::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .form-input {
+      background: #090d16;
+      border: 1px solid #334155;
+      color: #fff;
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+    }
+    .form-input:focus { border-color: #38bdf8; }
+    .form-textarea {
+      background: #090d16;
+      border: 1px solid #334155;
+      color: #fff;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      outline: none;
+      min-height: 140px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+    .form-textarea:focus { border-color: #38bdf8; }
+
+    .mermaid-box {
+      background: #070a12;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .mermaid-viewport {
+      width: 100%;
+      height: 320px;
+      overflow: hidden;
+      position: relative;
+      background: rgba(10, 14, 24, 0.6);
+      border-radius: 8px;
+      cursor: grab;
+    }
+    .mermaid-viewport:active { cursor: grabbing; }
+    .mermaid-content {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      transform-origin: 0 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .drawer-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #1e293b;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 40px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1e293b;
+      border: 1px solid #38bdf8;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s;
+      z-index: 1000;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div id="app-container">
+  <!-- Left Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand-logo">CN</div>
+      <div class="brand-text">
+        <h1>CodeNeuro 工作台</h1>
+        <span>多层嵌套无限画布</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section-title">主题画布切换</div>
+    <div class="sidebar-canvases-list" id="canvases-list"></div>
+
+    <div class="sidebar-footer">
+      <button class="btn" id="btn-export-diff" title="查看用户改动">📝 我的改动 (<span id="mod-counter">0</span>)</button>
+      <button class="btn primary" id="btn-save-project" title="保存所有设计到项目">💾 保存全部设计到项目</button>
+    </div>
+  </aside>
+
+  <!-- Right Main Area -->
+  <main id="main-area">
+    <!-- Header with Breadcrumb & Tools -->
+    <header id="canvas-header">
+      <div class="breadcrumb-nav" id="breadcrumb-bar"></div>
+      <div class="header-tools">
+        <button class="btn" style="padding:4px 10px;" id="btn-add-node">＋ 添加设计节点</button>
+        <button class="ctrl-btn" id="btn-zoom-out">－</button>
+        <div class="zoom-indicator" id="zoom-text">100%</div>
+        <button class="ctrl-btn" id="btn-zoom-in">＋</button>
+        <button class="ctrl-btn" id="btn-fit">🎯</button>
+      </div>
+    </header>
+
+    <!-- Infinite Canvas Container -->
+    <div id="canvas-container">
+      <div id="world">
+        <svg id="svg-layer"></svg>
+        <div id="nodes-layer"></div>
+      </div>
+    </div>
+
+    <!-- Minimap (Bottom Left) -->
+    <div id="minimap">
+      <canvas id="minimap-canvas"></canvas>
+      <div id="minimap-viewport"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Slide-over Drawer / Inspector -->
+<aside id="drawer">
+  <div class="drawer-header">
+    <h3 id="drawer-node-title">节点设计详情</h3>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="form-group">
+      <label class="form-label">节点名称</label>
+      <input type="text" class="form-input" id="edit-title">
+    </div>
+    <div class="form-group">
+      <label class="form-label">一句话定位 / 说明</label>
+      <input type="text" class="form-input" id="edit-tagline">
+    </div>
+
+    <!-- Mermaid Section if present -->
+    <div class="form-group" id="drawer-mermaid-section">
+      <div class="form-label">
+        <span>业务架构流程图 (Mermaid 可编辑源码)</span>
+        <button class="btn" style="padding:2px 8px;font-size:11px;" onclick="renderDrawerMermaid()">▶ 实时刷新预览</button>
+      </div>
+      <textarea class="form-textarea" id="edit-mermaid"></textarea>
+
+      <div class="mermaid-box">
+        <div class="form-label">
+          <span>流程图预览 (滚轮缩放 / 拖拽漫游)</span>
+          <div style="display:flex;gap:4px;">
+            <button class="btn" style="padding:2px 6px;" onclick="zoomDrawerMermaid(1.2)">＋</button>
+            <button class="btn" style="padding:2px 6px;" onclick="zoomDrawerMermaid(0.8)">－</button>
+            <button class="btn" style="padding:2px 6px;" onclick="resetDrawerMermaid()">1:1</button>
+          </div>
+        </div>
+        <div class="mermaid-viewport" id="drawer-mermaid-viewport">
+          <div class="mermaid-content" id="drawer-mermaid-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Note Section -->
+    <div class="form-group">
+      <label class="form-label">设计笔记 / 产品思维沉淀</label>
+      <div class="form-textarea" id="edit-note" contenteditable="true" style="min-height:100px;"></div>
+    </div>
+
+    <!-- User Notes -->
+    <div class="form-group">
+      <label class="form-label" style="color:#fbbf24;">💡 我的大结构构想与设计要求 (给 Agent 的指示)</label>
+      <textarea class="form-textarea" id="edit-user-notes" placeholder="输入您对该层的设计批注与要求..." style="min-height:80px;border-color:rgba(251,191,36,0.4);"></textarea>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn" onclick="closeDrawer()">取消</button>
+    <button class="btn primary" onclick="saveDrawerChanges()">应用并保存该节点</button>
+  </div>
+</aside>
+
+<div id="toast">视野已居中</div>
+
+<!-- Safe Data Payload Tag to avoid JS SyntaxError with newlines -->
+<script type="application/json" id="workbench-data-payload">
+{"canvases": [{"id": "canvas_macro", "name": "01. 宏观架构与分层骨架", "icon": "🏛️", "tagline": "系统全局六大承重墙支柱，自顶向下解耦认知、任务、上下文与数据基座 (双击或点钻入下层查看子设计)", "root_nodes": [{"id": "node_ingestion", "title": "01 需求统一输入与智能解构中枢", "tagline": "双通道自然语言输入，自动匹配或创建任务，自适应解构长短期规则", "type": "sub_canvas", "badge": "输入解构", "color": "#a855f7", "note": "<h3>产品入口已落地</h3><p>Web 可录入自然语言原文；浏览器用活跃任务完整标题正则字面匹配，唯一命中复用，多命中要求选择，未命中事务内建 Task。Coding Agent 先 list_tasks 再本地正则判断归属并提交原文。语义模型是增强项；失败明示，不自动晋升长期规则。</p>", "mermaid": "flowchart TD\n    Human[\"人类在 Web 端<br/>输入自然语言需求\"] --> InputPort[\"统一需求输入中枢\"]\n    Agent[\"Coding Agent 对话中<br/>调用 MCP 工具提交需求\"] --> InputPort\n\n    InputPort --> SemanticEngine{\"语义意图与任务匹配引擎\"}\n    SemanticEngine -->|属于既有任务| MatchTask[\"自动追加至既有 Task\"]\n    SemanticEngine -->|全新业务需求| CreateTask[\"自动创建全新 Task\"]\n\n    MatchTask --> RuleDecomposer[\"长短期规则解构器\"]\n    CreateTask --> RuleDecomposer\n\n    RuleDecomposer --> LongTerm[\"自动提炼: 项目级长期架构契约 P0/P1<br/>承重墙规范 / 跨任务存续\"]\n    RuleDecomposer --> Ephemeral[\"自动生成: 本次任务临时需求<br/>特定功能点 / 随迭代流转\"]\n\n    LongTerm --> ActivePool[\"就绪规则池: 供 Agent 随时按需索引\"]\n    Ephemeral --> ActivePool\n\n    style InputPort fill:#1e1b4b,stroke:#a855f7,stroke-width:2px,color:#fff\n    style LongTerm fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff\n    style Ephemeral fill:#064e3b,stroke:#4ade80,stroke-width:2px,color:#fff\n", "children": [{"id": "sub_ingest_web", "title": "Web 极简自然语言入口", "tagline": "面向人类：一句话需求输入，自动识别多段诉求与意图，零心智负担", "type": "note", "badge": "人类通道", "color": "#a855f7", "note": "<h3>人类通道产品设计</h3><p>人类用户不需要手动选择 ID、不需要配置复杂的依赖关系。只需要在 Web 端输入日常对话式的需求描述，系统负责自动解析与结构化。</p>"}, {"id": "sub_ingest_mcp", "title": "MCP 智能调用入口", "tagline": "面向 Agent：暴露 codeneuro_submit_requirement，编码交谈中随时生成新需求", "type": "note", "badge": "Agent通道", "color": "#38bdf8", "note": "<h3>Agent 自主通道设计</h3><p>当 Coding Agent 在与人类交谈中发现用户提出了新诉求，或者在编写代码时发现需要开辟新的衍生任务，直接调用该工具，无需跳出当前会话环境。</p>"}, {"id": "sub_ingest_router", "title": "任务语义意图路由与匹配引擎", "tagline": "当前正则检索优先，语义分析仅作为可选增强，不自动替人决定歧义", "type": "mermaid", "badge": "智能路由", "color": "#4ade80", "mermaid": "flowchart TD\n    Req[输入原始需求] --> QueryActive[查询活跃 Task 标题与描述]\n    QueryActive --> Regex[Agent 本地正则检索／Web 标题匹配]\n    Regex -->|唯一匹配| Existing[追加为已有 Task 的 Requirement]\n    Regex -->|多项匹配| Select[明确选择，拒绝擅自绑定]\n    Regex -->|无匹配| NewTask[新建 Task 并保存 Requirement]\n    Existing --> Context[按需进入 JIT 上下文]\n    NewTask --> Context\n    Context -.-> Optional[可选语义分析；失败显式报错]\n"}, {"id": "sub_ingest_decomposer", "title": "长短期认知解构引擎", "tagline": "自动将需求解构为【项目级长期架构契约 P0/P1】与【本次任务临时需求 P1】", "type": "mermaid", "badge": "二元解构", "color": "#fbbf24", "mermaid": "flowchart LR\n    Input[\"用户原始需求文本\"] --> Parser[\"认知解构分析器\"]\n    Parser --> P0[\"长期承重墙契约 (P0/P1)<br/>系统底层规范 / 接口协议 / 跨任务存续\"]\n    Parser --> P1[\"临时任务实现点 (P1)<br/>具体业务改动 / 随任务完成而归档\"]\n"}]}, {"id": "node_lifecycle", "title": "02 Agent 自治驱动的规则与任务生命周期", "tagline": "当前：Agent 按版本晋升短期规则、逐条归档需求；最后一条需求归档自动完成 Task", "type": "sub_canvas", "badge": "生命周期", "color": "#38bdf8", "note": "<h3>已实现的 Agent 自治闭环</h3><p>Coding Agent 负责实际编码与测试；CodeNeuro 只记录需求与规则。Agent 可按版本晋升当前已启用的短期 Rule；提交完成摘要后逐条归档 Requirement，最后一条需求归档时 Task 自动完成。既有长期规则的变更仍需人工审阅。旧 Task 无逐条需求时保持人工生命周期。</p>", "mermaid": "flowchart TD\n    AgentCoding[\"Coding Agent 实际编码与人机会话\"] --> AgentDecide{\"Coding Agent 实时自主研判\"}\n\n    AgentDecide -->|发现通用规范/排坑经验| PromoteTool[\"按版本晋升当前已启用短期 Rule\"]\n    AgentDecide -->|当前具体编码已完成通过| ArchiveTool[\"逐条归档已完成 Requirement\"]\n    AgentDecide -->|发现需要补充临时约束| AddTool[\"调用工具: 动态追加当前任务短期规则\"]\n\n    PromoteTool --> ProjectKnowledge[(\"项目长期认知库: 永久生效\")]\n    ArchiveTool --> ArchivedHistory[(\"已归档历史: 退出活跃 Prompt\")]\n    AddTool --> ActiveContext[\"当前活跃任务规则\"]\n\n    ArchiveTool --> TaskProgressCheck{\"检查当前 Task<br/>所有需求是否均已达成?\"}\n    TaskProgressCheck -->|是| AutoArchiveTask[\"关联需求全部归档后<br/>自动完成 Task\"]\n    TaskProgressCheck -->|否| ContinueTask[\"继续推进当前 Task 激活状态\"]\n\n    style AgentDecide fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#fff\n    style ProjectKnowledge fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff\n    style AutoArchiveTask fill:#064e3b,stroke:#4ade80,stroke-width:2px,color:#fff\n", "children": [{"id": "sub_lc_promote", "title": "临时规则自动结晶晋升 (Promotion)", "tagline": "Agent 自主晋升已启用的短期规则；保留来源版本，已有长期契约的修改仍需审阅", "type": "mermaid", "badge": "晋升流", "color": "#a855f7", "mermaid": "flowchart LR\n    ShortRule[\"临时需求规则<br/>lifecycle=short_term\"] --> Check[\"Agent 研判具备通用架构价值\"]\n    Check --> CallTool[\"codeneuro_promote_rule<br/>按版本晋升并留存审计\"]\n    CallTool --> LongRule[\"项目级长期规则<br/>lifecycle=long_term<br/>永久存续 / 跨后续所有任务生效\"]\n"}, {"id": "sub_lc_archive", "title": "需求完成安全归档 (Archival)", "tagline": "Agent 确认完成后立即归档原文需求，退出活跃 JIT，保留历史凭据", "type": "mermaid", "badge": "归档流", "color": "#4ade80", "mermaid": "flowchart LR\n    Coding[\"功能编码完成并通过测试\"] --> ArchiveCall[\"codeneuro_archive_requirement<br/>立即归档原文需求\"]\n    ArchiveCall --> Inactive[\"临时约束退出活跃下发<br/>保留历史版本与审计\"]\n    Inactive --> CleanPrompt[\"消除上下文污染 / 保持Prompt精炼\"]\n"}, {"id": "sub_lc_task_fsm", "title": "Task 六状态与需求自动完成条件", "tagline": "保留原六状态；最后一条关联需求归档后 Task 自动完成，旧 Task 可人工管理", "type": "mermaid", "badge": "任务状态机", "color": "#38bdf8", "mermaid": "stateDiagram-v2\n    [*] --> active : 当前新建默认状态\n    state draft\n    state active\n    state testing\n    state paused\n    state released\n    state archived\n    active --> paused : 显式暂停\n    testing --> paused : 显式暂停\n    paused --> active : 恢复先前状态\n    paused --> testing : 恢复先前状态\n    active --> archived : 当前显式归档\n    testing --> archived : 当前显式归档\n    released --> archived : 当前显式归档\n    note right of archived : 关联需求全部归档后自动完成\n"}]}, {"id": "node_jit", "title": "03 多维过滤与自适应 JIT 认知装配引擎", "tagline": "支持按文件/分类/意图/优先级多维精准检索，智能去重与行动清单化装配，绝不乱塞垃圾上下文", "type": "sub_canvas", "badge": "上下文装配", "color": "#4ade80", "note": "<h3>当前 JIT 与尚未覆盖的语义边界</h3><p>支持多文件、显式类别、意图、优先级与清单/详细模式；P0 完整保留，已知规则单行化，预算超限列明未下发项。不同 ID 的相似条款不做未经证明的合并；只有已有语义诊断中与当前规则版本一致的冲突才作为待核查提示，热路径不发起模型调用。</p>", "mermaid": "flowchart TD\n    subgraph MultiFilter [\"强大的多维上下文查询探针 codeneuro_get_context\"]\n        P1[\"目标路径: files=['src/pay/refund.py']\"]\n        P2[\"优先级过滤: min_priority='P1'\"]\n        P3[\"类别指定: categories=['business','security','gotcha']\"]\n        P4[\"当前意图: intent='debugging' / 'implementing'\"]\n        P5[\"期望模式: mode='checklist' / 'detailed'\"]\n    end\n\n    subgraph AssemblyEngine [\"五步智能认知装配流水线 (Intelligent Assembly Pipeline)\"]\n        F1[\"1. 多维倒排检索: 路径Glob + 分类标签 + 优先级交叉过滤\"]\n        F2[\"2. 意图感知加权: 调试时加权排坑经验 / 编码时加权契约\"]\n        F3[\"3. 语义去重与冲突仲裁: 消除冗余规则 标出矛盾项\"]\n        F4[\"4. 认知压缩与预算调度: 已知知识单行化 / P0绝对保留\"]\n        F5[\"5. 结构化行动清单封装: 按 Checklist 格式组装\"]\n    end\n\n    subgraph StructuredDelivery [\"结构化输出信封 (Structured Context Envelope)\"]\n        O1[\"承重墙红线: must_obey_contracts (P0)\"]\n        O2[\"任务执行项: task_actionable_checklist (P1)\"]\n        O3[\"模块避坑便签: module_gotchas (踩坑预警)\"]\n        O4[\"跟踪凭据: delivery_id + 当前 Task 进度指引\"]\n    end\n\n    MultiFilter --> F1\n    F1 --> F2\n    F2 --> F3\n    F3 --> F4\n    F4 --> F5\n    F5 --> StructuredDelivery\n\n    style MultiFilter fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#fff\n    style AssemblyEngine fill:#1e1b4b,stroke:#a855f7,stroke-width:2px,color:#fff\n    style StructuredDelivery fill:#064e3b,stroke:#4ade80,stroke-width:2px,color:#fff\n", "children": [{"id": "sub_jit_params", "title": "五维探针参数规格", "tagline": "files, intent, categories, min_priority, mode", "type": "note", "badge": "参数设计", "color": "#38bdf8", "note": "<h3>多维探针参数设计</h3><p>支持按关联文件列表、操作意图（编码 vs 调试）、分类标签（业务/安全/避坑）、优先级下限、输出模式（清单 vs 规范）精准索取上下文。</p>"}, {"id": "sub_jit_assembly", "title": "意图加权与去重装配机制", "tagline": "调试时加权 Gotchas / 编码时加权契约；消除规则冲突与冗余", "type": "mermaid", "badge": "装配引擎", "color": "#4ade80", "mermaid": "flowchart TD\n    Candidates[\"检索出的候选规则集\"] --> IntentWeight{\"当前操作意图感知\"}\n    IntentWeight -->|debugging| BoostGotcha[\"提升排坑便签优先级\"]\n    IntentWeight -->|implementing| BoostContracts[\"提升业务契约与P0优先级\"]\n    BoostGotcha --> Dedup[\"语义去重与冗余条款消除\"]\n    BoostContracts --> Dedup\n    Dedup --> OutputEnvelope[\"封装为 Actionable Checklist\"]\n"}]}, {"id": "node_gotchas", "title": "04 运行时经验沉淀与排坑记事本", "tagline": "Agent 踩坑自愈后顺手沉淀便签，后续自动预警，告别长程遗忘与重蹈覆辙", "type": "sub_canvas", "badge": "避坑便签", "color": "#fbbf24", "note": "<h3>外挂避坑记事本</h3><p>Agent 在长程编码中难免踩坑。解决 Bug 后顺手调用工具记下一条 Finding，后续轮次或相邻分支再碰该文件时自动提醒，防止同一处暗坑反复踩。</p>", "mermaid": "flowchart TD\n    AgentStumble[\"Agent 在实际编码排错中<br/>推翻旧假设 / 摸索出避坑技巧\"] --> RecordFinding[\"调用 codeneuro_record_finding<br/>随手记录排坑便签\"]\n\n    RecordFinding --> TaskScratchpad[(\"当前任务认知便签库\")]\n\n    TaskScratchpad --> SubsequentRounds[\"后续轮次或同一任务其他会话<br/>访问相同模块\"]\n    SubsequentRounds --> AutoRemind[\"JIT 视口自动追加排坑警示<br/>避免重蹈覆辙!\"]\n\n    TaskScratchpad --> EvalCheck{\"该经验是否具备<br/>跨任务普适性?\"}\n    EvalCheck -->|是: 通用架构经验| PromoteToRule[\"Agent 调用生命周期工具<br/>升级为项目级长期规则!\"]\n    EvalCheck -->|否: 一次性补丁| RetireWithTask[\"随当前任务交付安全归档\"]\n\n    style RecordFinding fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#fff\n    style AutoRemind fill:#064e3b,stroke:#4ade80,stroke-width:2px,color:#fff\n    style PromoteToRule fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff\n", "children": [{"id": "sub_gotcha_record", "title": "零心智负担便签记录", "tagline": "codeneuro_record_finding 随手写下避坑指南", "type": "note", "badge": "记录便签", "color": "#fbbf24", "note": "<h3>便签记录哲学</h3><p>当 Agent 解决了某个奇葩报错时，顺手调工具记下一条便签，无需长篇大论，仅需记录核心诱因与避坑方法。</p>"}, {"id": "sub_gotcha_remind", "title": "跨会话自动场景预警", "tagline": "后续访问相同模块时，JIT 视口自动附带警示便签", "type": "mermaid", "badge": "场景预警", "color": "#4ade80", "mermaid": "flowchart LR\n    NextAgent[\"后续轮次 Agent 触碰文件\"] --> Query[\"JIT 探针检索\"]\n    Query --> Inject[\"自动将历史 Finding 作为 Gotchas 注入 Prompt\"]\n    Inject --> Prevent[\"成功避坑，杜绝重蹈覆辙!\"]\n"}]}, {"id": "node_central_db", "title": "05 数据库统一管理与 Agent 深度调试工具箱", "tagline": "彻底摒弃分散烂规范（如 CLAUDE.md），数据库统一持久化 + Agent 真实评分与缺陷上报闭环", "type": "sub_canvas", "badge": "统一基座", "color": "#06b6d4", "note": "<h3>单一真实事实源 (Single Source of Truth)</h3><p>彻底废除在每个工作区散落 CLAUDE.md 或 .cursorrules 的低劣做法。所有规则统一持久化在中心数据库，所有 Agent 无论在哪个分支实时同源共享！同时为 Agent 提供真实 Debug 评分与规则缺陷上报工具。</p>", "mermaid": "flowchart TD\n    subgraph CentralStorage [\"数据库统一管理中心 (唯一真实事实源)\"]\n        CentralDB[(\"统一持久化数据库 SQLite WAL<br/>所有工作区同源共享 实时一致<br/>彻底摒弃各个工作区 CLAUDE.md 混乱散落\")]\n    end\n\n    subgraph AgentHandheldTools [\"Agent 深度交互与调试工具箱 (MCP)\"]\n        T_Context[\"codeneuro_get_context<br/>(按路径与优先级查询规则)\"]\n        T_Req[\"codeneuro_submit_requirement<br/>(提出新需求/自动匹配任务)\"]\n        T_Promo[\"codeneuro_promote_rule<br/>(自动将临时规则晋升为长期 Rule)\"]\n        T_Arch[\"codeneuro_archive_requirement<br/>(标记已实现需求并归档)\"]\n        T_Rate[\"codeneuro_rate_rule<br/>(Debug 评分: 0=已知, 1=噪音, 5=关键)\"]\n        T_Issue[\"codeneuro_report_issue<br/>(主动上报规则冲突/过时缺陷)\"]\n    end\n\n    CentralDB <-->|实时读写与生命周期流转| T_Context\n    CentralDB <--> T_Req\n    CentralDB <--> T_Promo\n    CentralDB <--> T_Arch\n    CentralDB <--> T_Rate\n    CentralDB <--> T_Issue\n\n    style CentralDB fill:#1e1b4b,stroke:#a855f7,stroke-width:2px,color:#fff\n    style T_Rate fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#fff\n    style T_Issue fill:#881337,stroke:#f43f5e,stroke-width:2px,color:#fff\n", "children": [{"id": "sub_db_central", "title": "中心化数据库唯一真实事实源", "tagline": "拒绝工作区分散烂规范，跨多分支/多机器实时同源共享", "type": "note", "badge": "数据中枢", "color": "#a855f7", "note": "<h3>为什么彻底废除各个工作区 CLAUDE.md？</h3><p>静态文件散落在各个目录容易过时、冲突且难以维护；中心化数据库作为唯一真实源，所有分支的 Agent 实时拉取最新生效规则。</p>"}, {"id": "sub_tool_rate", "title": "Agent Debug 真实效用评分", "tagline": "codeneuro_rate_rule 真实效用打分 (0=已知降噪, 1=噪音, 5=关键)", "type": "mermaid", "badge": "评分工具", "color": "#fbbf24", "mermaid": "flowchart LR\n    AgentRate[\"Agent 调用 codeneuro_rate_rule(score=0~5)\"] --> ZeroScore{\"Score == 0 ?\"}\n    ZeroScore -->|是: 已掌握知识| AddKnown[\"录入 session_knowledge<br/>后续自动单行简写\"]\n    ZeroScore -->|否: 质量评分| UpdateAvg[\"更新规则平均分与噪音统计\"]\n"}, {"id": "sub_tool_issue", "title": "规则缺陷与矛盾主动上报", "tagline": "codeneuro_report_issue 上报规则冲突、过时或盲区缺陷", "type": "note", "badge": "缺陷上报", "color": "#f43f5e", "note": "<h3>主动缺陷上报机制</h3><p>当 Agent 发现两条规则互相打架矛盾、或者发现规则与代码库实际情况不符时，调用该工具向系统提单，供人类集中仲裁修复。</p>"}]}, {"id": "node_ledger", "title": "06 项目认知资产账本与全景看板", "tagline": "向人类展示代码库长期承重墙、活跃任务流转与需求演进全纪录，透明可溯", "type": "sub_canvas", "badge": "资产账本", "color": "#f43f5e", "note": "<h3>人类掌控与透明资产</h3><p>人类架构师打开 Web 看板，直观审视长期承重墙契约库、活跃任务雷达、以及规则演进时间线，随时把握项目整体认知健康度。</p>", "mermaid": "flowchart LR\n    subgraph AutonomousEvolution [\"Agent 自治流转与演进\"]\n        Ingestion[\"输入需求\"] --> TaskExec[\"任务推进\"]\n        TaskExec --> Promo[\"规则晋升长期\"]\n        TaskExec --> Arch[\"需求完成归档\"]\n    end\n\n    subgraph KnowledgeLedger [\"CodeNeuro 知识资产全景看板\"]\n        ArchWall[\"长期承重墙契约库<br/>(查看核心架构红线与目录密度)\"]\n        TaskRadar[\"活跃任务生命周期看板<br/>(看清当前进行中与已完成需求)\"]\n        TraceLog[\"规则演进时间线与溯源<br/>(追溯每条认知如何诞生与晋升)\"]\n    end\n\n    subgraph HumanSupervision [\"人类架构师全局掌控\"]\n        HumanReview[\"人类架构师随时审视\"] -->|微调规则定级 / 暂停任务| KnowledgeLedger\n    end\n\n    Promo --> ArchWall\n    Arch --> TaskRadar\n    AutonomousEvolution --> TraceLog\n\n    style KnowledgeLedger fill:#881337,stroke:#f43f5e,stroke-width:2px,color:#fff\n    style HumanSupervision fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#fff\n", "children": [{"id": "sub_ledger_wall", "title": "长期承重墙契约库视图", "tagline": "直观审视全局 P0 架构红线与各模块规则热力密度", "type": "note", "badge": "承重墙看板", "color": "#a855f7", "note": "<h3>承重墙矩阵视图</h3><p>集中展现所有 P0 长期架构红线，直观呈现哪些模块约束严密，防止产生架构黑洞。</p>"}, {"id": "sub_ledger_timeline", "title": "规则演进全链路溯源时间线", "tagline": "追溯一条规则从自然语言需求到长期架构资产的蜕变日志", "type": "mermaid", "badge": "溯源时间线", "color": "#38bdf8", "mermaid": "flowchart LR\n    T1[\"1. 用户提出需求\"] --> T2[\"2. 解构为临时规则\"]\n    T2 --> T3[\"3. Agent 编码验证\"]\n    T3 --> T4[\"4. 晋升为长期承重墙\"]\n    T4 --> T5[\"5. 任务安全归档\"]\n"}]}]}, {"id": "canvas_business_flow", "name": "02. 端到端运行业务逻辑流", "icon": "🔄", "tagline": "从用户一句话需求到长期架构资产的完整产品业务链路与状态转移", "root_nodes": [{"id": "flow_ingest", "title": "需求输入与智能匹配拆解业务流 (B1)", "tagline": "自然语言意图识别 -> Task 归属判定 -> 长短期规则自动解构", "type": "mermaid", "badge": "输入流", "color": "#a855f7", "note": "<h3>自然语言入口的现状</h3><p>Web 优先在浏览器对活跃 Task 完整标题作字面正则匹配；唯一匹配复用，多匹配要求选定，无匹配则事务内创建新 Task 与 Requirement。Agent 通过 list_tasks 自行正则检索标题与描述、明确选定 Task。语义分析为额外增强，失败会报错；不会自动激活长期契约。</p>", "mermaid": "sequenceDiagram\n    autonumber\n    actor User as 人类或 Coding Agent\n    participant UI as Web/Agent 输入\n    participant Task as 正则检索已有 Task\n    participant Hub as CodeNeuro\n    participant DB as 中央数据库\n    User->>UI: 提交自然语言需求原文\n    UI->>Task: 查询活跃任务标题/描述\n    alt 唯一匹配\n        Task-->>UI: 选定已有 Task\n    else 多候选\n        Task-->>UI: 请明确选择，不擅自挂载\n    else 无匹配\n        UI->>Hub: 请求新建 Task\n        Hub->>DB: 事务创建 Task\n    end\n    UI->>Hub: 提交原文至选定 Task\n    Hub->>DB: 原文作为独立 Requirement 持久化\n    Hub-->>User: 返回 Task 与 Requirement ID\n    Note over Hub: 语义分析可选，失败显式报错；不自动激活规则\n"}, {"id": "flow_jit", "title": "多维过滤与自适应 JIT 认知装配业务流 (B2)", "tagline": "多维参数探针 -> 意图加权 -> 去重仲裁 -> 预算动态调度 -> 结构化行动信封", "type": "mermaid", "badge": "装配流", "color": "#4ade80", "note": "<h3>装配流水线时序</h3><p>Agent 在准备读写代码时调用探针，系统完成五步装配并签发 delivery_id 下发结构化信封。</p>", "mermaid": "sequenceDiagram\n    autonumber\n    actor Agent as Coding Agent\n    participant Sidecar as 本地 MCP Sidecar\n    participant DB as 中心数据库\n    participant Synthesizer as 上下文合成器\n\n    Agent->>Sidecar: 请求规则 (文件: src/pay/refund.py, 优先级: P1)\n    Sidecar->>DB: 查询匹配路径且优先级高于等于 P1 的活跃规则\n    DB-->>Sidecar: 返回规则集 (长期契约 P0 + 活跃临时需求 P1)\n    Sidecar->>DB: 检查该会话已知规则 (session_knowledge)\n    DB-->>Sidecar: 返回已知规则版本列表\n    Sidecar->>Synthesizer: 组装 Prompt 上下文\n    Note over Synthesizer: 1. P0 规则强制完整保留<br/>2. 已知规则转为单行提醒<br/>3. 超出预算部分折叠\n    Synthesizer->>DB: 记录下发日志并生成 delivery_id\n    Synthesizer-->>Sidecar: 返回精炼规则 Markdown 与 delivery_id\n    Sidecar-->>Agent: 下发高质量上下文\n"}, {"id": "flow_evolve", "title": "Agent 对话驱动的规则晋升与归档业务流 (B3)", "tagline": "Agent 研判通用规范 -> 晋升长期 Rule；Agent 确认需求达成 -> 归档临时规则并推进 Task", "type": "mermaid", "badge": "演进流", "color": "#38bdf8", "note": "<h3>当前业务闭环</h3><p>Agent 自主晋升当前已启用短期 Rule、明确归档独立 Requirement，最后一条需求归档后 Task 自动完成。短期规则退出活跃下发；长期规则修改仍需审阅。CodeNeuro 不执行编码或测试。</p>", "mermaid": "stateDiagram-v2\n    [*] --> ActiveDemand : 需求解构生成\n\n    state \"临时需求活跃中\" as ActiveDemand {\n        [*] --> Coding : 编码实现中\n        Coding --> Verified : 验证通过\n    }\n\n    ActiveDemand --> LongTermRule : Agent 研判发现通用架构规范 (promote)\n    ActiveDemand --> ArchivedDemand : Agent 研判当前需求已全部达成 (archive)\n\n    state \"晋升为项目长期规则\" as LongTermRule {\n        [*] --> SkeletonDB : 长期承重墙契约库\n        SkeletonDB --> EffectiveAcrossTasks : 跨所有后续任务生效\n    }\n\n    state \"安全归档不再激活\" as ArchivedDemand {\n        [*] --> ExitPrompt : 退出活跃 Prompt\n        ExitPrompt --> CheckCompletion : 检查 Task 完成度\n    }\n\n    CheckCompletion --> TaskCompleted : 该 Task 所有需求均已归档\n    TaskCompleted --> [*]\n"}]}, {"id": "canvas_agent_mindset", "name": "03. Agent 认知心智与原子工具箱", "icon": "🤖", "tagline": "站在 Coding Agent 视角：心智触发场景、6 个原子生命周期工具与交互契约", "root_nodes": [{"id": "mindset_tree", "title": "Agent 心智模型与 5 大行为触发时机 (T1)", "tagline": "Agent 何时查、何时提、何时评、何时晋升、何时归档？", "type": "mermaid", "badge": "心智决策", "color": "#a855f7", "note": "<h3>Agent 自治决策树</h3><p>Agent 在编码探索过程中，根据当前发生的事件（读写文件、与人交谈、排查Bug、验证通过），自主触发对应的认知管理工具。</p>", "mermaid": "flowchart TD\n    subgraph AgentMindset [\"Coding Agent 的认知触发决策树\"]\n        Action[\"Agent 正在执行编码任务\"] --> DecisionPoint{\"当前发生什么?\"}\n\n        DecisionPoint -->|准备读写文件| A1[\"1. 调用 codeneuro_get_context<br/>获取优先级匹配规则\"]\n        DecisionPoint -->|交谈产生新需求| A2[\"2. 调用 codeneuro_submit_requirement<br/>录入系统自动路由\"]\n        DecisionPoint -->|排查自愈复杂Bug| A3[\"3. 调用 codeneuro_record_finding<br/>随手留下排坑便签\"]\n        DecisionPoint -->|摸索出通用架构模式| A4[\"4. 调用 codeneuro_promote_rule<br/>自动晋升为项目长期规则\"]\n        DecisionPoint -->|具体功能实现并通过| A5[\"5. 调用 codeneuro_archive_requirement<br/>归档需求并推进 Task\"]\n        DecisionPoint -->|发现规则打架或无效| A6[\"6. 调用 codeneuro_rate_rule<br/>反馈评分与缺陷\"]\n    end\n\n    style A1 fill:#064e3b,stroke:#4ade80,stroke-width:2px,color:#fff\n    style A4 fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff\n    style A5 fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#fff\n    style A6 fill:#881337,stroke:#f43f5e,stroke-width:2px,color:#fff\n"}, {"id": "mcp_contract", "title": "6 大原子生命周期工具输入输出契约 (T2)", "tagline": "轻量、强内聚、免配置的标准 stdio MCP 工具规范", "type": "mermaid", "badge": "工具规范", "color": "#06b6d4", "note": "<h3>MCP 工具箱与统一数据源</h3><p>轻量工具挂载至任何宿主（Cursor/Claude/Codex/Pi），底层统一读写中心数据库，保证各端实时同源。</p>", "mermaid": "classDiagram\n    class MCP_Server {\n        +get_context(file_path, min_priority)\n        +submit_requirement(prompt, task_id)\n        +promote_rule(rule_id, reason)\n        +archive_requirement(rule_id, summary)\n        +record_finding(target_path, finding_text)\n        +rate_rule(delivery_id, rule_id, score)\n        +report_issue(issue_type, description)\n    }\n\n    class Central_Database {\n        +projects\n        +tasks\n        +rules\n        +context_deliveries\n        +rule_evaluations\n    }\n\n    MCP_Server --> Central_Database : 统一持久化存储与双向流转\n"}]}, {"id": "canvas_human_ledger", "name": "04. 人类认知资产账本与治理看板", "icon": "📊", "tagline": "站在人类开发者视角：全局资产一览、任务雷达、规则溯源时间线与共治干预", "root_nodes": [{"id": "ledger_dashboard", "title": "项目认知资产与承重墙全景看板 (H1)", "tagline": "随时审阅项目沉淀了多少长期规则、目录约束密度与核心 P0 红线", "type": "mermaid", "badge": "资产一览", "color": "#f43f5e", "note": "<h3>三大核心看板视图</h3><p>直观审视长期承重墙契约库、活跃任务生命周期雷达、以及规则演进时间线。</p>", "mermaid": "flowchart LR\n    HumanArchitect[\"人类架构师\"] --> WebDashboard[\"WebUI 认知资产看板\"]\n\n    subgraph Views [\"全景看板三大核心视图\"]\n        V1[\"长期承重墙契约库<br/>(直观审视 P0 架构红线与核心规范)\"]\n        V2[\"需求任务生命周期雷达<br/>(查看当前进行中与已自动归档的任务)\"]\n        V3[\"规则演进时间线<br/>(追溯某条长期规则如何由哪次需求演进而来)\"]\n    end\n\n    WebDashboard --> V1\n    WebDashboard --> V2\n    WebDashboard --> V3\n\n    style WebDashboard fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#fff\n    style V1 fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff\n    style V2 fill:#064e3b,stroke:#4ade80,stroke-width:2px,color:#fff\n    style V3 fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#fff\n"}, {"id": "ledger_trace", "title": "规则演进透明审计与溯源时间线 (H2)", "tagline": "打破黑盒：清晰展现一条规则从一句话需求到长期架构资产的蜕变日志", "type": "mermaid", "badge": "溯源时间线", "color": "#38bdf8", "note": "<h3>全链路透明可溯</h3><p>从用户提出一句话需求，到系统解构为临时规则，再到 Agent 编码验证、晋升为长期承重墙，全流程可追溯。</p>", "mermaid": "flowchart TD\n    Event1[\"1. 用户在 Web 提交需求: 退款逻辑增加幂等校验\"] --> Event2[\"2. 系统解构生成临时需求: 必须检查 refund_id 防重\"]\n    Event2 --> Event3[\"3. Agent 在编码中发现并调用工具: 晋升为项目级长期 Rule\"]\n    Event3 --> Event4[\"4. 规则蜕变为长期承重墙: 所有金融退款操作必须具备幂等约束\"]\n    Event4 --> Event5[\"5. 任务随编码完成全自动归档!\"]\n\n    Event1 -.-> TraceLog[(\"审计溯源日志库\")]\n    Event2 -.-> TraceLog\n    Event3 -.-> TraceLog\n    Event4 -.-> TraceLog\n    Event5 -.-> TraceLog\n\n    style Event4 fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff\n    style TraceLog fill:#1e293b,stroke:#94a3b8,stroke-width:2px,color:#fff\n"}]}]}
+</script>
+
+<script>
+  let DATA = JSON.parse(document.getElementById('workbench-data-payload').textContent);
+
+  // State Management
+  const state = {
+    currentCanvasId: DATA.canvases[0].id,
+    pathStack: [], // Array of parent nodes for drilling down: [{ id, title, children }]
+    scale: 0.9,
+    panX: 80,
+    panY: 80,
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    selectedNodeId: null,
+    userChanges: new Map(),
+    drawerMermaidState: { scale: 1.0, x: 0, y: 0, isDragging: false, startX: 0, startY: 0 }
+  };
+
+  if (window.mermaid) {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#070a12',
+        primaryColor: '#1e293b',
+        primaryTextColor: '#f8fafc',
+        primaryBorderColor: '#38bdf8',
+        lineColor: '#64748b'
+      }
+    });
+  }
+
+  // DOM references
+  const container = document.getElementById('canvas-container');
+  const world = document.getElementById('world');
+  const nodesLayer = document.getElementById('nodes-layer');
+  const svgLayer = document.getElementById('svg-layer');
+  const breadcrumbBar = document.getElementById('breadcrumb-bar');
+  const canvasesList = document.getElementById('canvases-list');
+  const zoomText = document.getElementById('zoom-text');
+  const toast = document.getElementById('toast');
+  const modCounter = document.getElementById('mod-counter');
+  const drawer = document.getElementById('drawer');
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  function getActiveCanvas() {
+    return DATA.canvases.find(c => c.id === state.currentCanvasId) || DATA.canvases[0];
+  }
+
+  // Get Current Layer Nodes (Top-level root_nodes or children of current drilled node)
+  function getCurrentNodes() {
+    if (state.pathStack.length === 0) {
+      return getActiveCanvas().root_nodes || [];
+    }
+    const currentParent = state.pathStack[state.pathStack.length - 1];
+    return currentParent.children || [];
+  }
+
+  // Render Sidebar
+  function renderSidebar() {
+    canvasesList.innerHTML = '';
+    DATA.canvases.forEach(c => {
+      const item = document.createElement('div');
+      item.className = `canvas-nav-item ${c.id === state.currentCanvasId ? 'active' : ''}`;
+      item.innerHTML = `<span class="icon">${c.icon || '🎨'}</span><span>${escapeHtml(c.name)}</span>`;
+      item.onclick = () => {
+        state.currentCanvasId = c.id;
+        state.pathStack = [];
+        state.selectedNodeId = null;
+        renderSidebar();
+        renderBreadcrumb();
+        layoutAndRender();
+        fitView();
+      };
+      canvasesList.appendChild(item);
+    });
+  }
+
+  // Render Breadcrumb (Layer-by-Layer Navigation)
+  function renderBreadcrumb() {
+    breadcrumbBar.innerHTML = '';
+    const activeCanvas = getActiveCanvas();
+
+    const rootItem = document.createElement('div');
+    rootItem.className = `breadcrumb-item ${state.pathStack.length === 0 ? 'current' : ''}`;
+    rootItem.textContent = activeCanvas.name;
+    rootItem.onclick = () => {
+      if (state.pathStack.length > 0) {
+        state.pathStack = [];
+        state.selectedNodeId = null;
+        renderBreadcrumb();
+        layoutAndRender();
+        fitView();
+      }
+    };
+    breadcrumbBar.appendChild(rootItem);
+
+    state.pathStack.forEach((node, idx) => {
+      const sep = document.createElement('span');
+      sep.className = 'breadcrumb-sep';
+      sep.textContent = '>';
+      breadcrumbBar.appendChild(sep);
+
+      const isLast = idx === state.pathStack.length - 1;
+      const bItem = document.createElement('div');
+      bItem.className = `breadcrumb-item ${isLast ? 'current' : ''}`;
+      bItem.textContent = node.title;
+      bItem.onclick = () => {
+        if (!isLast) {
+          state.pathStack = state.pathStack.slice(0, idx + 1);
+          state.selectedNodeId = null;
+          renderBreadcrumb();
+          layoutAndRender();
+          fitView();
+        }
+      };
+      breadcrumbBar.appendChild(bItem);
+    });
+  }
+
+  // Drill Down into Next Layer
+  window.diveIntoNode = function(nodeId, e) {
+    if (e) e.stopPropagation();
+    const currentNodes = getCurrentNodes();
+    const target = currentNodes.find(n => n.id === nodeId);
+    if (!target) return;
+
+    target.children = target.children || [];
+    state.pathStack.push(target);
+    state.selectedNodeId = null;
+    closeDrawer();
+    renderBreadcrumb();
+    layoutAndRender();
+    fitView();
+    showToast(`已钻入下层设计: ${target.title}`);
+  };
+
+  // Layout Nodes on Canvas (Grid / Flow distribution)
+  function layoutAndRender() {
+    const nodes = getCurrentNodes();
+    nodesLayer.innerHTML = '';
+    svgLayer.innerHTML = '';
+
+    const CARD_W = 320;
+    const CARD_H = 160;
+    const GAP_X = 60;
+    const GAP_Y = 50;
+    const COLS = Math.max(2, Math.ceil(Math.sqrt(nodes.length * 1.5)));
+
+    nodes.forEach((node, idx) => {
+      const col = idx % COLS;
+      const row = Math.floor(idx / COLS);
+      const x = col * (CARD_W + GAP_X) + 60;
+      const y = row * (CARD_H + GAP_Y) + 60;
+
+      const card = document.createElement('div');
+      const isSelected = state.selectedNodeId === node.id;
+      const hasChildren = node.children && node.children.length > 0;
+      const isModified = state.userChanges.has(node.id);
+
+      card.className = `canvas-node ${isSelected ? 'selected' : ''}`;
+      card.style.left = `${x}px`;
+      card.style.top = `${y}px`;
+
+      const typeBadge = node.badge || (node.type === 'sub_canvas' ? '子画布' : (node.type === 'mermaid' ? '流程图' : '笔记'));
+      const childCountBadge = hasChildren ? `(${node.children.length} 个子设计)` : '';
+
+      card.innerHTML = `
+        <div class="node-top">
+          <div class="node-title-group">
+            <div class="node-title">${escapeHtml(node.title)}</div>
+            <div class="node-tagline">${escapeHtml(node.tagline || '')}</div>
+          </div>
+          <span class="node-badge" style="border-left:2px solid ${node.color || '#38bdf8'}">${typeBadge}</span>
+        </div>
+
+        <div class="node-foot">
+          <span>${childCountBadge}</span>
+          <button class="btn-dive" onclick="diveIntoNode('${node.id}', event)">钻入下层 ➔</button>
+        </div>
+      `;
+
+      card.onclick = (e) => {
+        e.stopPropagation();
+        selectNode(node.id);
+      };
+
+      card.ondblclick = (e) => {
+        diveIntoNode(node.id, e);
+      };
+
+      nodesLayer.appendChild(card);
+    });
+
+    updateTransform();
+    updateMinimap();
+  }
+
+  function updateTransform() {
+    world.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.scale})`;
+    zoomText.textContent = Math.round(state.scale * 100) + '%';
+  }
+
+  function fitView() {
+    state.scale = 0.95;
+    state.panX = 60;
+    state.panY = 60;
+    updateTransform();
+    updateMinimap();
+  }
+
+  // Select Node & Open Drawer
+  function selectNode(nodeId) {
+    state.selectedNodeId = nodeId;
+    const currentNodes = getCurrentNodes();
+    const node = currentNodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    document.getElementById('drawer-node-title').textContent = `${node.title}`;
+    document.getElementById('edit-title').value = node.title || '';
+    document.getElementById('edit-tagline').value = node.tagline || '';
+    document.getElementById('edit-note').innerHTML = node.note || '<p>可在本输入框输入该节点的产品设计思维...</p>';
+    document.getElementById('edit-user-notes').value = node.user_notes || '';
+
+    const mermaidSec = document.getElementById('drawer-mermaid-section');
+    if (node.mermaid) {
+      mermaidSec.style.display = 'flex';
+      document.getElementById('edit-mermaid').value = node.mermaid;
+      renderDrawerMermaid();
+    } else {
+      mermaidSec.style.display = 'none';
+      document.getElementById('edit-mermaid').value = '';
+    }
+
+    drawer.classList.add('open');
+    layoutAndRender();
+  }
+
+  window.closeDrawer = function() {
+    drawer.classList.remove('open');
+    state.selectedNodeId = null;
+    layoutAndRender();
+  };
+
+  // Render Mermaid in Drawer
+  window.renderDrawerMermaid = async function() {
+    const code = document.getElementById('edit-mermaid').value.trim();
+    const content = document.getElementById('drawer-mermaid-content');
+    if (!code || !window.mermaid) {
+      content.innerHTML = '<div style="color:#64748b;font-size:12px;">无流程图</div>';
+      return;
+    }
+    try {
+      const id = `svg_d_${Date.now()}`;
+      const { svg } = await mermaid.render(id, code);
+      content.innerHTML = svg;
+      const svgEl = content.querySelector('svg');
+      if (svgEl) {
+        svgEl.style.maxWidth = 'none';
+        svgEl.style.minWidth = '540px';
+      }
+      resetDrawerMermaid();
+    } catch (e) {
+      content.innerHTML = `<div style="color:#f87171;font-size:12px;padding:10px;">语法错误: ${escapeHtml(e.message || String(e))}</div>`;
+    }
+  };
+
+  // Save Drawer Edits
+  window.saveDrawerChanges = async function() {
+    if (!state.selectedNodeId) return;
+    const currentNodes = getCurrentNodes();
+    const node = currentNodes.find(n => n.id === state.selectedNodeId);
+    if (!node) return;
+
+    node.title = document.getElementById('edit-title').value.trim();
+    node.tagline = document.getElementById('edit-tagline').value.trim();
+    node.note = document.getElementById('edit-note').innerHTML;
+    node.user_notes = document.getElementById('edit-user-notes').value.trim();
+
+    const newMermaid = document.getElementById('edit-mermaid').value.trim();
+    if (newMermaid) {
+      node.mermaid = newMermaid;
+    }
+
+    state.userChanges.set(node.id, {
+      id: node.id,
+      title: node.title,
+      timestamp: new Date().toISOString()
+    });
+    modCounter.textContent = state.userChanges.size;
+
+    closeDrawer();
+    layoutAndRender();
+    showToast(`已保存节点修改: ${node.title}`);
+  };
+
+  // Add Node to Current Canvas Layer
+  document.getElementById('btn-add-node').onclick = () => {
+    const currentNodes = getCurrentNodes();
+    const newId = 'node_' + Date.now().toString(36);
+    const newNode = {
+      id: newId,
+      title: '新设计项 (点击编辑/钻入)',
+      tagline: '在此编写该层级的具体设计与职责...',
+      type: 'sub_canvas',
+      badge: '待细化',
+      color: '#38bdf8',
+      note: '<h3>新设计项说明</h3><p>点击右侧抽屉输入该项的产品设计逻辑...</p>',
+      children: []
+    };
+    currentNodes.push(newNode);
+    layoutAndRender();
+    selectNode(newId);
+    showToast('已在当前层级添加新设计项！');
+  };
+
+  // Pan & Zoom for Infinite Canvas
+  container.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.canvas-node') || e.target.closest('#minimap')) return;
+    state.isDragging = true;
+    state.startX = e.clientX - state.panX;
+    state.startY = e.clientY - state.panY;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!state.isDragging) return;
+    state.panX = e.clientX - state.startX;
+    state.panY = e.clientY - state.startY;
+    updateTransform();
+    updateMinimap();
+  });
+
+  window.addEventListener('mouseup', () => { state.isDragging = false; });
+
+  container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    const newScale = Math.min(Math.max(state.scale * factor, 0.25), 3.0);
+    const mouseX = e.clientX - 280; // Account for sidebar
+    const mouseY = e.clientY - 56;  // Account for header
+    state.panX = mouseX - (mouseX - state.panX) * (newScale / state.scale);
+    state.panY = mouseY - (mouseY - state.panY) * (newScale / state.scale);
+    state.scale = newScale;
+    updateTransform();
+    updateMinimap();
+  }, { passive: false });
+
+  document.getElementById('btn-zoom-in').onclick = () => {
+    state.scale = Math.min(state.scale * 1.2, 3.0);
+    updateTransform();
+    updateMinimap();
+  };
+  document.getElementById('btn-zoom-out').onclick = () => {
+    state.scale = Math.max(state.scale / 1.2, 0.25);
+    updateTransform();
+    updateMinimap();
+  };
+  document.getElementById('btn-fit').onclick = fitView;
+
+  // Drawer Mermaid Zoom & Pan
+  const dVp = document.getElementById('drawer-mermaid-viewport');
+  const dContent = document.getElementById('drawer-mermaid-content');
+  dVp.onwheel = (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    state.drawerMermaidState.scale = Math.min(Math.max(state.drawerMermaidState.scale * factor, 0.4), 3.5);
+    applyDrawerTransform();
+  };
+  dVp.onmousedown = (e) => {
+    state.drawerMermaidState.isDragging = true;
+    state.drawerMermaidState.startX = e.clientX - state.drawerMermaidState.x;
+    state.drawerMermaidState.startY = e.clientY - state.drawerMermaidState.y;
+  };
+  window.addEventListener('mousemove', (e) => {
+    if (!state.drawerMermaidState.isDragging) return;
+    state.drawerMermaidState.x = e.clientX - state.drawerMermaidState.startX;
+    state.drawerMermaidState.y = e.clientY - state.drawerMermaidState.startY;
+    applyDrawerTransform();
+  });
+  window.addEventListener('mouseup', () => { state.drawerMermaidState.isDragging = false; });
+
+  function applyDrawerTransform() {
+    dContent.style.transform = `translate(${state.drawerMermaidState.x}px, ${state.drawerMermaidState.y}px) scale(${state.drawerMermaidState.scale})`;
+  }
+  window.zoomDrawerMermaid = (factor) => {
+    state.drawerMermaidState.scale = Math.min(Math.max(state.drawerMermaidState.scale * factor, 0.4), 3.5);
+    applyDrawerTransform();
+  };
+  window.resetDrawerMermaid = () => {
+    state.drawerMermaidState.scale = 1.0; state.drawerMermaidState.x = 0; state.drawerMermaidState.y = 0;
+    applyDrawerTransform();
+  };
+
+  // Save to Project API
+  document.getElementById('btn-save-project').onclick = async () => {
+    const payload = {
+      canvases: DATA.canvases,
+      user_changes: Array.from(state.userChanges.values()),
+      saved_at: new Date().toISOString()
+    };
+    try {
+      const res = await fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        showToast('✅ 成功将全部嵌套画布设计保存至项目文件 (workbench_data.json)！');
+      } else {
+        downloadJson(payload);
+      }
+    } catch(e) {
+      downloadJson(payload);
+    }
+  };
+
+  function downloadJson(data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'codeneuro_nested_canvas_design.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('已导出设计文件 codeneuro_nested_canvas_design.json');
+  }
+
+  // Minimap
+  function updateMinimap() {
+    const mCanvas = document.getElementById('minimap-canvas');
+    const ctx = mCanvas.getContext('2d');
+    mCanvas.width = 180;
+    mCanvas.height = 120;
+    ctx.clearRect(0, 0, 180, 120);
+
+    const nodes = getCurrentNodes();
+    if (nodes.length === 0) return;
+
+    let maxX = 800, maxY = 600;
+    const scaleX = 180 / maxX;
+    const scaleY = 120 / maxY;
+    const mapScale = Math.min(scaleX, scaleY);
+
+    ctx.fillStyle = '#38bdf8';
+    const CARD_W = 320, CARD_H = 160, GAP_X = 60, GAP_Y = 50, COLS = Math.max(2, Math.ceil(Math.sqrt(nodes.length * 1.5)));
+    nodes.forEach((n, idx) => {
+      const col = idx % COLS;
+      const row = Math.floor(idx / COLS);
+      const nx = (col * (CARD_W + GAP_X) + 60) * mapScale;
+      const ny = (row * (CARD_H + GAP_Y) + 60) * mapScale;
+      ctx.fillRect(nx, ny, Math.max(CARD_W * mapScale, 4), Math.max(CARD_H * mapScale, 2));
+    });
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // Load Initial Data
+  async function loadInitialData() {
+    try {
+      const res = await fetch('/api/data');
+      if (res.ok) {
+        const remoteData = await res.json();
+        if (remoteData && remoteData.canvases) {
+          DATA = remoteData;
+        }
+      }
+    } catch(e) {}
+  }
+
+  window.addEventListener('load', async () => {
+    await loadInitialData();
+    renderSidebar();
+    renderBreadcrumb();
+    layoutAndRender();
+    fitView();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeDrawer();
+    }
+  });
+</script>
+</body>
+</html>

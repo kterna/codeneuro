@@ -28,8 +28,8 @@ def app(tmp_path):
                    cwd=root, capture_output=True, text=True, check=True)
     uow = SqliteUnitOfWork(filename)
     service = Product(uow)
-    human = Actor('human', frozenset({'p', 'q'}), 'human')
-    agent = Actor('agent', frozenset({'p'}))
+    human = Actor('human', 'human')
+    agent = Actor('agent')
     service.workspaces.register_project(human, 'p', 'repository')
     service.workspaces.register_project(human, 'q', 'unrelated')
     task = service.workspaces.create_task(agent, 'p', 'Implement payment', 'Preserve refund contract')
@@ -154,7 +154,7 @@ def test_checklist_preserves_full_clauses_and_same_query_retries(app):
         service.context.get_context(agent, session.id, ContextQuery(('src/module.py',), mode='detailed'), 'checklist')
 
 
-def test_versions_idempotence_and_actor_isolation(app):
+def test_versions_idempotence_and_unscoped_projects(app):
     service, _, _, agent, task, session, _ = app
     demand = service.requirements.submit_requirement(agent, session.id, 'Do it', 'once')
     with pytest.raises(Conflict):
@@ -165,11 +165,7 @@ def test_versions_idempotence_and_actor_isolation(app):
         service.context.get_context(agent, session.id, ContextQuery(('src/b.py',)), 'same')
     with pytest.raises(Conflict):
         service.requirements.archive_requirement(agent, session.id, demand.id, 3, 'Complete')
-    intruder = Actor('other-agent', frozenset({'p'}))
-    with pytest.raises(ProductError, match='different actor'):
-        service.requirements.archive_requirement(intruder, session.id, demand.id, 1, 'Complete')
-    with pytest.raises(ProductError):
-        service.workspaces.start_session(agent, 'q', 'other', None)
+    assert service.workspaces.start_session(agent, 'q', 'other', None).project_id == 'q'
 
 
 @pytest.mark.parametrize('blocked_status', ['paused', 'released'])
@@ -407,15 +403,28 @@ def test_failed_audit_rolls_back_requirement_and_task(app):
         assert tx.workspaces.get_task(task.id, 'p').status == TaskStatus.ACTIVE
 
 
-def test_finding_is_session_scoped_and_issue_is_debug_only(app):
+def test_finding_is_task_scoped_across_sessions_and_issue_is_debug_only(app):
     service, uow, _, agent, task, session, _ = app
     finding = service.context.record_finding(agent, session.id, 'src/**', 'Refunds may duplicate', Priority.P1)
     query = ContextQuery(('src/pay.py',), intent='debugging')
     delivered = service.context.get_context(agent, session.id, query, 'debugging')
     assert finding.id in delivered.markdown
     assert (finding.id, 1) in delivered.finding_refs
+    assert delivered.sections['module_gotchas'][0]['kind'] == 'finding'
     another = service.workspaces.start_session(agent, 'p', 'worktree-two', task.id, debug=True)
-    assert finding.id not in service.context.get_context(agent, another.id, query, 'other').markdown
+    shared = service.context.get_context(agent, another.id, query, 'other')
+    assert (finding.id, 1) in shared.finding_refs
+    assert 'Unreviewed Finding' in shared.markdown
+    assert finding.id not in service.context.get_context(agent, another.id,
+        ContextQuery(('docs/manual.md',), intent='debugging'), 'different-path').markdown
+    unrelated = service.workspaces.create_task(agent, 'p', 'Other task')
+    unrelated_session = service.workspaces.start_session(agent, 'p', 'worktree-three', unrelated.id)
+    assert finding.id not in service.context.get_context(agent, unrelated_session.id, query, 'other-task').markdown
+    ledger = service.ledger.project(agent, 'p')
+    assert any(item['id'] == finding.id and item['status'] == 'pending_review'
+               and item['task_id'] == task.id and item['session_id'] == session.id
+               for item in ledger['findings'])
+    assert service.ledger.project(agent, 'q')['findings'] == []
     issue = service.feedback.report_issue(agent, session.id, 'coverage', 'Missing module rule',
                                  'Observed uncovered behavior', 'src/pay.py')
     with uow.read() as tx:

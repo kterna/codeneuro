@@ -31,7 +31,7 @@ class Context(Workspaces):
                 rules = tuple(tx.knowledge.visible_rules(session.project_id, effective_task))
                 requirements = tuple(tx.requirements.active_requirements(effective_task)) if effective_task else ()
                 known = tx.feedback.known_rules(session_id)
-                findings = tuple(tx.context.pending_findings(effective_task, session_id)) if effective_task else ()
+                findings = tuple(tx.context.pending_findings(session.project_id, effective_task)) if effective_task else ()
                 conflicts = tuple(tx.feedback.conflict_issues(session.project_id, effective_task))
             result = assemble(_id('delivery'), query, rules, requirements, known, findings, conflicts)
             with self.uow.write() as tx:
