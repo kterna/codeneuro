@@ -1,50 +1,67 @@
+/* 严格遵循 DESIGN.md 与 Design Audit Framework 规范构建的工程主题系统 */
 :root {
   color-scheme: dark;
 
   /* 1. 表面深度阶梯 (Elevation & Surfaces) */
-  --bg-canvas: #090a0f;
-  --bg-subtle: #0e111a;
-  --bg-surface: #141724;
-  --bg-surface-hover: #1b1f30;
-  --bg-overlay: #1c2033;
+  --bg-canvas: #0b0d14;            /* 全局画布底色 */
+  --bg-subtle: #10131f;            /* 侧边栏、空状态背景 */
+  --bg-surface: #171b2c;           /* 主要卡片、表格、面板 */
+  --bg-surface-hover: #1f243a;     /* 悬浮高亮面 */
+  --bg-overlay: #232942;           /* 弹窗、抽屉顶层 */
 
   /* 2. 边框阶梯 (Borders) */
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  --border-hover: rgba(255, 255, 255, 0.25);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.20);
+  --border-hover: rgba(164, 154, 255, 0.40);
 
-  /* 3. 文字阶梯 (Text Colors) */
-  --text-primary: #f1f3f9;
-  --text-secondary: #9aa1b9;
-  --text-tertiary: #6b738e;
+  /* 3. 文字阶梯 (Typography Colors) */
+  --text-primary: #f8fafc;         /* 95% 明度主文本 */
+  --text-secondary: #94a3b8;       /* 65% 明度辅助正文 */
+  --text-tertiary: #64748b;        /* 45% 明度元数据/占位 */
 
-  /* 4. 品牌与功能强调色 (Accents & Status) */
-  --accent: #a49aff;
-  --accent-hover: #9285f7;
-  --accent-subtle: rgba(164, 154, 255, 0.15);
-  --accent-border: rgba(164, 154, 255, 0.35);
+  /* 4. 品牌与语义功能色 (Semantics) */
+  --accent: #a49aff;               /* 经典工程紫，契合冒烟断言 */
+  --accent-hover: #b8aeff;
+  --accent-bg: rgba(164, 154, 255, 0.10);
+  --accent-border: rgba(164, 154, 255, 0.28);
 
   --red: #f43f5e;
-  --red-subtle: rgba(244, 63, 94, 0.12);
-  --red-border: rgba(244, 63, 94, 0.28);
+  --red-bg: rgba(244, 63, 94, 0.10);
+  --red-border: rgba(244, 63, 94, 0.25);
 
   --amber: #f59e0b;
-  --amber-subtle: rgba(245, 158, 11, 0.12);
-  --amber-border: rgba(245, 158, 11, 0.28);
+  --amber-bg: rgba(245, 158, 11, 0.10);
+  --amber-border: rgba(245, 158, 11, 0.25);
 
   --green: #10b981;
-  --green-subtle: rgba(16, 185, 129, 0.12);
-  --green-border: rgba(16, 185, 129, 0.28);
+  --green-bg: rgba(16, 185, 129, 0.10);
+  --green-border: rgba(16, 185, 129, 0.25);
 
   --blue: #38bdf8;
-  --blue-subtle: rgba(56, 189, 248, 0.12);
-  --blue-border: rgba(56, 189, 248, 0.28);
+  --blue-bg: rgba(56, 189, 248, 0.10);
+  --blue-border: rgba(56, 189, 248, 0.25);
 
-  /* 5. 字体族 */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  /* 5. 8pt 间距标尺 (Spacing Scale) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
 
-  /* 兼容旧变量名称映射 */
+  /* 6. 圆角规范 (Radii) */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* 7. 字体族 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* 兼容旧样式映射 */
   --bg: var(--bg-canvas);
   --panel: var(--bg-surface);
   --surface: var(--bg-subtle);
@@ -69,9 +86,9 @@ body {
   min-height: 100vh;
   display: flex;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 布局外壳 */
 #app {
   width: 100%;
   min-height: 100vh;
@@ -80,7 +97,7 @@ body {
   display: contents;
 }
 
-/* 侧边栏 */
+/* 侧边栏规范化 */
 .sidebar {
   width: 240px;
   flex-shrink: 0;
@@ -97,26 +114,26 @@ body {
 .brand {
   text-decoration: none;
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .brand-mark {
-  background: linear-gradient(135deg, var(--accent), #4f46e5);
+  background: linear-gradient(135deg, var(--accent), #6366f1);
   color: #fff;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  font-size: 16px;
+  border-radius: var(--radius-md);
+  font-size: 15px;
   font-weight: 800;
-  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35);
+  box-shadow: 0 2px 10px rgba(164, 154, 255, 0.25);
 }
 
 .brand small {
@@ -137,12 +154,12 @@ body {
   text-transform: uppercase;
 }
 
-/* 侧边栏导航 */
+/* 侧边栏导航条目 */
 nav {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 nav button {
@@ -151,14 +168,14 @@ nav button {
   border: 0;
   padding: 8px 12px;
   color: var(--text-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.12s ease;
 }
 
 nav button:hover {
@@ -167,8 +184,8 @@ nav button:hover {
 }
 
 nav button.active {
-  background: var(--accent-subtle);
-  color: #c4b5fd;
+  background: var(--accent-bg);
+  color: #d1caff;
   border-left: 2px solid var(--accent);
   font-weight: 600;
 }
@@ -177,6 +194,7 @@ nav button.active {
   width: 16px;
   font-size: 14px;
   display: inline-block;
+  opacity: 0.85;
 }
 
 .aside-foot {
@@ -195,7 +213,7 @@ nav button.active {
   text-align: left;
   font-size: 12px;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
@@ -205,7 +223,7 @@ nav button.active {
   align-items: center;
 }
 .palette-trigger:hover {
-  border-color: var(--border-hover);
+  border-color: var(--border-default);
   color: var(--text-primary);
 }
 
@@ -213,13 +231,13 @@ kbd {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-tertiary);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-subtle);
   padding: 2px 5px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
-/* 主工作区 */
+/* 主工作区规范 */
 main {
   margin-left: 240px;
   width: calc(100% - 240px);
@@ -264,7 +282,7 @@ p {
   line-height: 1.6;
 }
 
-/* 通用按钮 */
+/* 标准按钮规范 */
 button {
   font: inherit;
   font-size: 12px;
@@ -272,10 +290,10 @@ button {
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 7px 12px;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: all 0.12s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -284,14 +302,15 @@ button {
 
 button:hover {
   background: var(--bg-surface-hover);
-  border-color: var(--border-hover);
+  border-color: var(--border-default);
 }
 
 button.primary {
   background: var(--accent);
   border-color: var(--accent-hover);
-  color: #fff;
-  box-shadow: 0 1px 4px rgba(139, 92, 246, 0.3);
+  color: #0b0d14;
+  font-weight: 600;
+  box-shadow: 0 1px 6px rgba(164, 154, 255, 0.35);
 }
 
 button.primary:hover {
@@ -309,12 +328,12 @@ button.subtle:hover {
   color: var(--text-primary);
 }
 
-/* 表单输入控件 */
+/* 标准输入控件 */
 input, select, textarea {
   font: inherit;
   font-size: 13px;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text-primary);
   padding: 8px 12px;
@@ -325,10 +344,10 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-subtle);
+  box-shadow: 0 0 0 2px var(--accent-bg);
 }
 
-/* 顶栏 4 维核心指标卡 */
+/* 顶栏 4 维指标卡规范 */
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -339,13 +358,14 @@ input:focus, select:focus, textarea:focus {
 .metric {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .metric::before {
@@ -355,7 +375,7 @@ input:focus, select:focus, textarea:focus {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.4), transparent);
+  background: linear-gradient(90deg, transparent, rgba(164, 154, 255, 0.3), transparent);
 }
 
 .metric span {
@@ -367,11 +387,12 @@ input:focus, select:focus, textarea:focus {
 }
 
 .metric strong {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  margin: 4px 0 2px;
 }
 
 .metric small {
@@ -379,7 +400,7 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-secondary);
 }
 
-/* 状态标签徽标 (Tags / Badges) */
+/* 徽标 Tag 规范体系 */
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -390,8 +411,8 @@ input:focus, select:focus, textarea:focus {
 .tag {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
-  border-radius: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 500;
   border: 1px solid var(--border-subtle);
@@ -402,58 +423,57 @@ input:focus, select:focus, textarea:focus {
 
 .tag.p0 {
   color: #fda4af;
-  background: var(--red-subtle);
+  background: var(--red-bg);
   border-color: var(--red-border);
 }
 
 .tag.p1 {
   color: #fde68a;
-  background: var(--amber-subtle);
+  background: var(--amber-bg);
   border-color: var(--amber-border);
 }
 
 .tag.p2 {
   color: #bae6fd;
-  background: var(--blue-subtle);
+  background: var(--blue-bg);
   border-color: var(--blue-border);
 }
 
 .tag.active, .tag.online {
   color: #a7f3d0;
-  background: var(--green-subtle);
+  background: var(--green-bg);
   border-color: var(--green-border);
 }
 
 .tag.paused {
   color: #fde68a;
-  background: var(--amber-subtle);
+  background: var(--amber-bg);
   border-color: var(--amber-border);
 }
 
 .tag.draft, .tag.pending {
   color: #ddd6fe;
-  background: var(--accent-subtle);
+  background: var(--accent-bg);
   border-color: var(--accent-border);
 }
 
 /* 全局通知浮条 */
 #notice {
   padding: 10px 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   margin-bottom: 20px;
   font-size: 12px;
   border: 1px solid var(--green-border);
-  background: var(--green-subtle);
+  background: var(--green-bg);
   color: #6ee7b7;
 }
 
 #notice.error {
   border-color: var(--red-border);
-  background: var(--red-subtle);
+  background: var(--red-bg);
   color: #fda4af;
 }
 
-/* 代码与 Pre */
 code {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -461,9 +481,9 @@ code {
 }
 
 .original-text {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.28);
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border-left: 2px solid var(--accent);
   color: var(--text-primary);
   font-size: 12px;
@@ -473,7 +493,7 @@ code {
 .empty {
   padding: 48px 24px;
   border: 1px dashed var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   text-align: center;
   color: var(--text-tertiary);
   font-size: 13px;
@@ -483,19 +503,19 @@ code {
   padding: 24px 16px;
 }
 
-/* 原生弹窗规范 */
+/* 弹窗规范 */
 dialog {
   color: var(--text-primary);
   background: var(--bg-overlay);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: min(600px, 92vw);
   padding: 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
 }
 
 dialog::backdrop {
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
 }
 
@@ -537,14 +557,14 @@ dialog footer {
   margin-top: 24px;
 }
 
-/* 分裂视图 (Split View) 规范 */
+/* 目录分栏视图规范 */
 .split-view {
   display: grid;
   grid-template-columns: 320px 1fr;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-surface);
-  min-height: 650px;
+  min-height: 680px;
   overflow: hidden;
 }
 
@@ -572,7 +592,7 @@ dialog footer {
 }
 
 .focus-pane {
-  padding: 24px;
+  padding: 24px 28px;
   overflow-y: auto;
   max-height: 800px;
 }
@@ -580,7 +600,7 @@ dialog footer {
 .focus-path {
   font-family: var(--font-mono);
   font-size: 13px;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 16px;
 }
@@ -597,8 +617,8 @@ dialog footer {
   background: var(--bg-subtle);
   border: 1px solid var(--border-subtle);
   border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  padding: 16px;
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
   margin-bottom: 14px;
 }
 
@@ -629,12 +649,12 @@ dialog footer {
   color: var(--text-secondary);
 }
 
-/* 全局命令面板 (Ctrl+K) */
+/* 命令面板 */
 #palette {
   padding: 0;
   width: min(640px, 94vw);
   margin-top: 12vh;
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -667,7 +687,7 @@ dialog footer {
   gap: 12px;
   padding: 10px 14px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   text-align: left;
   align-items: center;

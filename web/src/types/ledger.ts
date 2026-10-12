@@ -101,7 +101,7 @@ export type Ledger = {
   events: AuditEvent[]
 }
 
-export type TabId = 'explorer' | 'tasks' | 'rules' | 'review' | 'feedback' | 'activity'
+export type TabId = 'explorer' | 'tasks' | 'rules' | 'review' | 'feedback' | 'activity' | 'settings'
 
 export type TabItem = {
   id: TabId

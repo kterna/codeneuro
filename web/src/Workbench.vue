@@ -16,6 +16,7 @@ import RulesView from './components/views/RulesView.vue'
 import ReviewView from './components/views/ReviewView.vue'
 import FeedbackView from './components/views/FeedbackView.vue'
 import ActivityView from './components/views/ActivityView.vue'
+import ProjectSettingsView from './components/views/ProjectSettingsView.vue'
 
 const tabs: readonly TabItem[] = [
   { id: 'explorer', icon: '⌘', title: '规则作用域', subtitle: '按路径模式检索代码模块适用的工程规范与核心约束。' },
@@ -24,6 +25,7 @@ const tabs: readonly TabItem[] = [
   { id: 'review', icon: '◈', title: '规范变更审阅', subtitle: '人工审阅 Agent 提交的长期契约修改提案，按目标版本执行核准。' },
   { id: 'feedback', icon: '◎', title: '规则反馈与工作区', subtitle: '统计 Agent 对规则的真实效用评分，监控已连接的工作区实例。' },
   { id: 'activity', icon: '↗', title: '变更审计流水', subtitle: '全链路记录需求归档、规则演进与状态转换的持久化审计日志。' },
+  { id: 'settings', icon: '⚙', title: '项目设置与管理', subtitle: '集中查看项目元数据、在不同工程之间无缝切换，或执行安全级的数据清除。' },
 ]
 
 const tab = ref<TabId>('explorer')
@@ -93,16 +95,19 @@ async function handleSelectProject(id: string) {
   await refresh()
 }
 
-async function handleDeleteProject() {
-  if (!projectId.value) return
-  const currentProjectName = projects.value.find(p => p.id === projectId.value)?.name || projectId.value
-  if (!confirm(`确认要彻底删除项目【${currentProjectName}】吗？\n该项目下的所有任务、需求与规则都将被永久清除。`)) return
+async function handleDeleteProject(targetId?: string) {
+  const idToDelete = targetId || projectId.value
+  if (!idToDelete) return
+  const targetProject = projects.value.find(p => p.id === idToDelete)
+  const currentProjectName = targetProject?.name || idToDelete
   busy.value = true
   error.value = ''
   try {
-    await apiService.deleteProject(projectId.value)
-    notice.value = `项目【${currentProjectName}】已成功删除。`
-    projectId.value = ''
+    await apiService.deleteProject(idToDelete)
+    notice.value = `项目【${currentProjectName}】已安全永久删除。`
+    if (projectId.value === idToDelete) {
+      projectId.value = ''
+    }
     await connect()
   } catch (cause) {
     fail(cause)
@@ -332,6 +337,18 @@ onUnmounted(() => {
 
           <!-- 6. 变更审计流水 (Activity) -->
           <ActivityView v-else-if="tab === 'activity'" :ledger="ledger" />
+
+          <!-- 7. 项目设置与管理 (Settings) -->
+          <ProjectSettingsView
+            v-else-if="tab === 'settings'"
+            :projects="projects"
+            :current-project-id="projectId"
+            :ledger="ledger"
+            :busy="busy"
+            @select-project="handleSelectProject"
+            @open-create-project="openCreateProject"
+            @delete-project="handleDeleteProject"
+          />
         </template>
       </section>
     </main>
