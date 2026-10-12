@@ -7,66 +7,212 @@ defineProps<{
 </script>
 
 <template>
-  <div>
+  <div class="feedback-view-root">
     <div class="section-head">
-      <h2>规则效用反馈分布</h2>
-      <span class="caption">查看 Agent 对规则的真实反馈评分（0=已掌握知识、1=不相关噪音、5=核心必需；均分排除 0 分）</span>
-    </div>
-    <div class="grid">
-      <article v-for="rule in ledger.rules" :key="rule.id" class="card">
-        <div class="card-top">
-          <h3>{{ rule.title }}</h3>
-          <span class="tag" :class="rule.priority.toLowerCase()">{{ rule.priority }}</span>
-        </div>
-        <div class="distribution" style="margin: 12px 0">
-          <div class="score-cell filled" title="效用均分">{{ rule.avg_score ?? '—' }}</div>
-          <span class="muted" style="margin-left: 8px">
-            被 Agent 引用 {{ rule.eval_count }} 次 · 标记已知 {{ rule.known_count }} 次
-          </span>
-        </div>
-        <small class="muted">管辖路径：<code>{{ rule.patterns.join(' · ') }}</code></small>
-      </article>
+      <h2>规则效用反馈与开发避坑便签</h2>
+      <span class="caption">查看 Agent 对规矩的真实效用打分，以及在编码自愈后沉淀的模块避坑便签 (Gotchas)</span>
     </div>
 
-    <div class="section-head" style="margin-top: 35px">
-      <h2>开发避坑便签 (Findings / Gotchas)</h2>
-      <span class="caption">Agent 在排查自愈复杂问题后沉淀的模块便签，同任务后续访问相关路径时自动警示</span>
-    </div>
-    <div v-if="!ledger.findings?.length" class="empty">
-      当前任务暂无待审阅的避坑便签。
-    </div>
-    <div v-else class="grid">
-      <article v-for="f in ledger.findings" :key="f.id" class="card">
-        <div class="card-top">
-          <h3>{{ f.target_path }}</h3>
-          <span class="tag warning">{{ f.status }}</span>
+    <div class="feedback-dual-grid">
+      <!-- 左列：规则评分反馈矩阵 (GitHub 表格清单) -->
+      <section class="feedback-card-panel">
+        <div class="panel-header-line">
+          <h3>规矩效用评分清单 (0~5 分)</h3>
+          <span class="muted font-mono">{{ ledger.rules.length }} 条统计</span>
         </div>
-        <p>{{ f.text }}</p>
-        <small class="muted">来源任务：{{ f.task_id }} · 版本 v{{ f.version }}</small>
-      </article>
-    </div>
 
-    <div class="section-head" style="margin-top: 35px">
-      <h2>已登记工作区实例 (Worktree Instances)</h2>
-      <span class="caption">客户端环境声明 · 稳定 Worktree ID 隔离</span>
-    </div>
-    <div v-if="!ledger.worktrees.length" class="empty">
-      暂无已连接的工作区实例。
-    </div>
-    <div v-else class="grid">
-      <article v-for="wt in ledger.worktrees" :key="wt.id" class="card">
-        <div class="card-top">
-          <h3>{{ wt.machine_name }}</h3>
-          <span class="tag">{{ wt.platform }}</span>
+        <div class="panel-scroll-table">
+          <div v-if="!ledger.rules.length" class="empty compact">暂无规则反馈数据。</div>
+          <table v-else class="feedback-table">
+            <thead>
+              <tr>
+                <th>规矩标题</th>
+                <th style="width: 80px; text-align: center">效用均分</th>
+                <th style="width: 100px; text-align: right">反馈次数</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="rule in ledger.rules" :key="rule.id">
+                <td>
+                  <strong class="font-title">{{ rule.title }}</strong>
+                  <code class="font-sub-code">{{ rule.patterns[0] || '**' }}</code>
+                </td>
+                <td style="text-align: center">
+                  <span class="score-badge" :class="{ 'has-score': rule.avg_score }">
+                    {{ rule.avg_score ?? '—' }}
+                  </span>
+                </td>
+                <td style="text-align: right">
+                  <span class="muted font-mono">{{ rule.eval_count }} 次</span>
+                  <small class="muted" style="display: block">(已知 {{ rule.known_count }})</small>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <p><code>{{ wt.workspace }}</code></p>
-        <div class="definition">
-          <dt>Git 分支：</dt>
-          <dd>{{ wt.git_branch || '未上报' }}</dd>
-          <dt>实例标识：</dt>
-          <dd><code>{{ wt.id }}</code></dd>
+      </section>
+
+      <!-- 右列：开发避坑便签 (Gotchas / Findings) -->
+      <section class="feedback-card-panel">
+        <div class="panel-header-line">
+          <h3>开发避坑便签 (Gotchas / Findings)</h3>
+          <span class="muted font-mono">{{ ledger.findings?.length ?? 0 }} 条便签</span>
         </div>
-      </article>
+
+        <div class="panel-scroll-cards">
+          <div v-if="!ledger.findings?.length" class="empty compact">
+            当前工程暂无沉淀的避坑便签。Agent 在解决排错后调用工具记录的便签将展示在此。
+          </div>
+          <div v-else class="findings-cards-flow">
+            <article v-for="f in ledger.findings" :key="f.id" class="gotcha-article">
+              <div class="gotcha-header">
+                <span class="tag warning">Gotcha</span>
+                <code class="gotcha-path">{{ f.target_path }}</code>
+              </div>
+              <p class="gotcha-body-text">{{ f.text }}</p>
+              <div class="gotcha-footer">
+                <span class="muted">来源任务: {{ f.task_id }}</span>
+                <span class="tag mini">{{ f.status }}</span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
+
+<style scoped>
+.feedback-view-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.feedback-dual-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.feedback-card-panel {
+  background: var(--color-canvas-subtle);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header-line {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-default);
+  background: #161b22;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.panel-header-line h3 {
+  font-size: 13px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.panel-scroll-table, .panel-scroll-cards {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+.feedback-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.feedback-table th {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--color-fg-muted);
+  border-bottom: 1px solid var(--color-border-default);
+  text-align: left;
+}
+.feedback-table td {
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--color-border-muted);
+  vertical-align: middle;
+}
+
+.font-title {
+  display: block;
+  font-size: 12px;
+  color: var(--color-fg-default);
+}
+.font-sub-code {
+  font-size: 10px;
+  color: var(--color-accent-fg);
+}
+
+.score-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--color-canvas-inset);
+  color: var(--color-fg-subtle);
+  font-weight: 600;
+  font-size: 12px;
+}
+.score-badge.has-score {
+  background: var(--color-success-subtle);
+  color: var(--color-success-fg);
+}
+
+.findings-cards-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gotcha-article {
+  background: var(--color-canvas-inset);
+  border: 1px solid var(--color-border-muted);
+  border-left: 3px solid var(--color-attention-fg);
+  border-radius: 4px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gotcha-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gotcha-path {
+  font-size: 11px;
+  color: var(--color-fg-default);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.gotcha-body-text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-fg-default);
+  margin: 0;
+}
+
+.gotcha-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: 6px;
+}
+</style>
