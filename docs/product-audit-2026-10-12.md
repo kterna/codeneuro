@@ -1,0 +1,439 @@
+# CodeNeuro 产品完整性审查
+
+审查日期：2026-10-12。代码基线：`c30cd63c20f74c0b52c76d510b24bac0e4cc51a2`。范围：当前工作区的现行产品、全部 7 个工作台页面、共享组件、HTTP/MCP、持久化、导入、备份、测试与文档。本次只审查，未修改产品实现。
+
+配套文件：[256 项验收清单](D:/1/github/codeneuro/docs/product-audit-checklist-2026-10-12.md)、[证据说明与索引](D:/1/github/codeneuro/docs/audit-2026-10-12/README.md)。
+
+## 1. 总体判断
+
+项目采用 Python/FastAPI、SQLAlchemy、SQLite/Alembic 后端，以及 Vue 3、TypeScript、Vite 工作台；通过 stdio 和 streamable HTTP 提供 MCP。主要实现按领域策略、业务工作流、端口和适配器分层，工作台通过 HTTP 读取账本并提交业务动作。
+
+**当前适合受控的内部试用，尚不适合按“稳定、完整、精致的日常产品”验收。** 后端的领域边界、规则版本、上下文下发凭据和事务一致性已有较扎实基础；主要短板是业务闭环中的少数漏洞、前后端语义不一致，以及工作台的可操作性。页面已经覆盖主要概念，但“有页面”与“能可靠完成工作”之间仍有明显距离。
+
+本次确认 **32 项具体问题：11 项 P1、21 项 P2**。没有把未经验证的风险列成 P0；没有用清单通过比例推算产品完成百分比。另列 **12 项能力补全建议**，与已确认缺陷分开。相同问题可能影响多个页面，因此清单中的未通过项数不等于缺陷数量。
+
+| 评估维度 | 当前判断 | 依据及实际影响 |
+| --- | --- | --- |
+| 产品定位 | 清楚 | 为 Coding Agent 管理任务、原始需求、规则和 JIT 上下文；编码、执行测试由宿主负责 |
+| 核心领域正确性 | 基础较好，存在关键例外 | 版本、回滚、P0 保留、任务隔离有测试；归档需求关联草稿仍可复活，导入破坏版本链 |
+| 工作流程完整性 | 部分闭环 | 正常录入、归档、审批可以执行；空任务完成、Issue 处理、草稿交接、初始契约管理不足 |
+| 页面功能性 | 页面齐备，操作可靠性不足 | 项目响应竞态、审批结果标错、输入丢失、非空项目删除失败 |
+| 易用性 | 需要明显改善 | 桌面下仍有内容无法滚动触达；错误提示、历史追踪、导航恢复不完善 |
+| 视觉一致性与优雅度 | 有一致方向，落实不完整 | 深色工作台框架成立，但缺失 CSS 变量、全局样式污染、透明抽屉、弱对比文字破坏观感与阅读 |
+| 工程质量 | 后端保障较好，前端保障薄弱 | 49 个现有测试通过，构建通过；这些检查未覆盖本次发现的多处真实页面缺陷 |
+| 发布与运维 | 本机基础可用，外部实证不足 | 隔离库备份恢复成功；全新安装、跨机器、生产负载、其他浏览器仍待验证 |
+
+最优先应解决的是：项目和内容对应关系、归档后规则生命周期、审批可信度、导入完整性，以及桌面基础可操作性。继续添加页面或装饰，不能抵消这些问题。
+
+## 2. 审查基准与证据边界
+
+### 2.1 以什么作为“应该完成”的依据
+
+以 [现行产品契约](D:/1/github/codeneuro/docs/product-contract.md)、[架构](D:/1/github/codeneuro/docs/architecture.md)、[规则治理](D:/1/github/codeneuro/docs/governance.md)、[标准 MCP 接入](D:/1/github/codeneuro/docs/agent-integrations.md) 和当前入口代码为准。历史全产品计划只作为背景。
+
+以下不是本次缺陷：取消的宿主专用钩子、静态规则文件导出、CodeNeuro 代跑测试、强制 LLM 集成。无鉴权是明确的可信本机/可信网络部署选择，本报告不把缺少登录、计费、多租户等 SaaS 能力视为当前产品未完成。真实人工身份不可核实仍是该选择的已知边界。
+
+### 2.2 已执行的验证
+
+| 编号 | 检查 | 实际结果 | 证明范围 |
+| --- | --- | --- | --- |
+| V01 | 隔离源码快照运行现有 pytest | **49 passed，54.71 秒** | 现有后端、事务、MCP 和 HTTP 测试；不代表全部用户流程通过 |
+| V02 | `vue-tsc --noEmit && vite build` | 通过 | 类型检查及打包；不能发现错误业务标签或不可达布局 |
+| V03 | 重建资源与提交资源比对 | JS/CSS SHA-256 一致 | 当前提交的前端静态产物与源码相符 |
+| V04 | 仓库 `scripts/browser_smoke.py` | 本轮页面动作及清理均通过，0 JS 异常 | 单次冒烟结果；README 记载的历史清理风险不等于本轮失败 |
+| V05 | 专项 Playwright 检查全部 7 页 | 检查脚本无执行异常、无 pageerror；发现多项业务/布局错误 | Chrome 浏览器实际运行、故障注入、请求乱序、操作及布局检查 |
+| V06 | 专项后端/导入探针 | 复现归档草稿、删除、远程路径、导入等问题 | 隔离合成数据，不涉及真实业务库 |
+| V07 | 备份并重新打开副本 | `integrity_check=ok`，无外键违规 | 本轮合成 SQLite 库备份可用；不是生产灾备演练 |
+| V08 | 静态样式及类型审查 | 17 个未定义变量、44 处引用，缺失共享类 | 结合稳定截图和 computed style 佐证实际影响 |
+
+运行环境为 Windows、Python 3.11.13、Node/Vite 和 Chrome。页面检查使用 1440×900、1280×720、768×1024、390×844 的浏览器视口模拟，**不是实体设备测试**。
+
+测试在 Git 快照和临时新库执行，浏览器操作及导入删除均只针对合成项目。现有 `dist_batches/` 的 270 个文件未修改、未作为真实导入目标执行。保存了 5 份原始 JSON、42 张截图和 5 个探针脚本。原始 pytest/构建完整终端日志未纳入证据包，执行结果单独标记为本轮记录，避免与原始输出混淆。
+
+未验证：全新 wheel 安装、Linux 实际运行、跨机器真实部署、真实 Agent 长任务、生产数据规模、断电恢复、其他浏览器、实体移动设备。当前环境缺少 hatchling，未将打包发布列为通过。
+
+## 3. 从业务到工作流程
+
+### 3.1 产品真正提供的价值
+
+CodeNeuro 的价值链应当是：保存人类原始需求 → 明确归属任务 → Agent 获得当前文件真正适用的规则 → 下发记录可追踪 → 测试报告和反馈支持规则治理 → 人类审阅长期契约变更 → 完成需求、退出旧约束。数据模型已经支持这条链的大部分节点，工作台尚未完整呈现节点间的证据与状态。
+
+| 对象 | 应承担的业务职责 | 当前状态 |
+| --- | --- | --- |
+| Project | 规则、任务、工作区的隔离边界 | 后端隔离较好；前端竞态和导入回退会破坏使用者对归属的判断 |
+| Task | 工作单元与规则作用域 | 模型有六态，但公开入口只覆盖部分转换；空需求任务无法正常完成 |
+| Requirement | 不可变原文、归档摘要、活跃上下文 | 正常归档和最终任务完成有事务；关联草稿存在归档后再激活漏洞 |
+| Worktree / Session | 客户端声明的工作环境及调用会话 | 身份稳定校验有基础；UI 默认取第一工作区，HTTP 文件树错误读取 Hub 磁盘 |
+| Rule | 长期契约或任务临时约束，带版本及范围 | 治理机制较完整；UI 状态、范围匹配、引用统计与后端含义脱节 |
+| Finding | 同任务内未审阅的经验提醒 | 能保存、按作用域下发并入账；不能等同已批准的长期规则 |
+| Delivery / Feedback | 真实下发凭据及该版本的实际评价 | 核心校验存在；默认会话的反馈开关文档缺失，UI 把反馈次数说成引用次数 |
+| Proposal / Audit | 人工决议与可追溯历史 | 审批版本冲突受保护；审阅内容不完整、结果显示错、审计最多展示 100 条 |
+
+### 3.2 谁负责哪一步
+
+| 工作 | 人类工作台 | Agent / MCP | 当前闭环判断 |
+| --- | --- | --- | --- |
+| 注册项目 | 有 | 列表/使用已有项目 | 能建立项目；重复 ID、特殊 ID、删除待修 |
+| 选择或建立 Task | 文本录入自动匹配、歧义选择 | 列表返回标题描述，Agent 明确选取或创建 | Web 手动选择能力不足，自动匹配不能替代明确决策 |
+| 提交需求 | 有 | 有 | 正常成功；Web 请求失败丢失输入 |
+| 绑定会话和工作区 | 主要只读展示 | 有 | 缺少对多工作区、会话状态和声明来源的完整展示 |
+| 获取文件上下文 | Explorer 提供概览 | JIT 是真正的下发入口 | 两者匹配结果不一致；概览不能当作下发预览 |
+| 记录测试和激活草稿 | 无完整证据面板 | 有；只记录宿主报告 | Agent 流程能跑；人类难以复核证据，归档草稿存在漏洞 |
+| 晋升为长期规则 | 来源可部分查看 | 有 | 按版本原样晋升有测试；历史详情欠缺 |
+| 修改既有长期契约 | 批准/拒绝 | 提交提案 | 后端保护有效；审阅页面不足以支持可靠决策 |
+| 评分、报告问题 | 展示部分统计 | Debug 会话内可提交 | 开关文档缺失；Issue 没有人工处理闭环 |
+| 完成与追溯 | 归档、时间线 | 归档需求 | 最后一条归档能完成；空任务和长历史不足 |
+
+### 3.3 主要用户旅程验收
+
+1. **新项目 → 第一次成功获得上下文：部分闭环。** 能注册项目和接入 MCP；页面缺少循序渐进的首次使用引导，初始契约的人工管理入口缺失。MCP 草稿→证据→激活→晋升是一条存在的路径，不能说规则完全无法创建。
+2. **一句话需求 → 暂停/恢复 → 完成：正常路径可用，异常路径不完整。** 实测提交、暂停、恢复和归档成功；失败提交丢输入，详情抽屉保留旧状态，空任务完成入口缺失。
+3. **规则下发 → 反馈 → 改进：核心协议可用，人工闭环不足。** 有真实下发资格校验与评分语义；默认 Debug 门槛缺少说明，Issue、证据和版本链难以在 Web 复核。
+4. **Agent 提案 → 人工审阅 → 长期契约更新：存在高风险呈现缺陷。** 批准、拒绝、过期冲突已实测；批准后显示拒绝，优先级和类别变更未预览，不能认为审批产品已完成。
+5. **需求归档 → 不再影响后续任务：存在生命周期漏洞。** 已激活关联规则按正常路径退出，但草稿可以在归档后激活；需要验证完整状态组合。
+6. **导入资产 → 日常使用 → 备份/清理：尚不闭环。** 合成库备份可恢复；导入报成功后缺版本快照导致首次下发失败，非空项目删除失败。
+
+## 4. 全部页面审查结论
+
+| 页面/组件 | 已具备的功能 | 关键不足 | 优雅度与下一步 |
+| --- | --- | --- | --- |
+| Explorer / 规则作用域 | 目录展示、选择路径、规则概览和计数 | D04、D05、D11、D15、D16；错误读取工作区、错误匹配、仅三层、搜索失效 | 先统一真实数据来源与匹配语义，再做递归树、可读密度和有效滚动 |
+| Tasks / 需求与任务看板 | 需求录入、泳道/列表、搜索、进度、抽屉、暂停恢复归档 | D09、D19、D22；录入失败丢文本、详情过期、状态流程不闭合；G05 手动选任务不足 | 提交确认、失败恢复、明确状态动作比继续增加卡片样式更重要 |
+| Rules / 项目规则库 | 文本/状态/长期短期过滤、条款和范围详情、晋升来源字段 | D10、D13、D14、D24；停用与草稿混淆、次数命名错、透明抽屉、键盘不可用 | 统一状态字典，区分下发/评价，显示版本和证据入口 |
+| Review / 长期契约审阅 | 目标版本、拟议条款、原因、批准/拒绝 | D06、D07、D08；批准显示拒绝、重要变更缺失、列表下方不可达 | 做完整前后差异、决议状态、冲突后的刷新与重新审阅 |
+| Feedback / 反馈与工作区 | 规则评价汇总、已知反馈、任务内 Finding；本页正确标注反馈次数 | D10；G02、G03、G06；缺少 Issue、证据、真正的工作区/会话信息 | 调整页面信息架构，使标题与实际内容一致，提供处理入口 |
+| Activity / 变更审计 | 事件动作、时间、实体 ID、序列 | D08、D20；100 条截断、无分页、内容不可滚达，缺 actor/details | 分页、筛选、详情和实体跳转才能支持排查问题 |
+| Settings / 项目配置 | 项目选择、注册、声明工作区信息、输入项目 ID 确认删除 | D03、D08、D17、D29；非空删除失败、危险区不可达、错误 ID、默认第一工作区 | 说明工作区为客户端声明；让配置和危险操作稳定可达 |
+| Workbench / Sidebar / MetricBar | 项目切换、7 页导航、摘要指标、消息提示 | D01、D11、D12、D27、D28；响应串页、布局偏移、指标错、误报断连、刷新丢位置 | 全局状态、请求生命周期和指标词典需要统一设计 |
+| CommandPalette / ActionDialog / 抽屉 | 快捷键唤出、命令搜索、确认表单、详情 | D18、D23、D24；方向键提示无实现、无障碍不完整、错误解析泄露技术文案 | 键盘路径、焦点恢复、明确错误和待提交状态要成为共享能力 |
+
+全部页面的截图保存在 [证据目录](D:/1/github/codeneuro/docs/audit-2026-10-12/README.md)。截图反映合成数据与指定视口；不是对真实业务数据或全部状态的穷尽证明。
+
+## 5. 缺陷分级与总表
+
+P1：阻断主要工作、让用户作出错误治理决策，或破坏产品明确的数据/工作区边界，应在扩大试用前解决。P2：功能语义、可用性、可追溯性、交付保障或视觉一致性问题，应排入稳定版验收。P1/P2 是本报告的问题优先级，与产品规则的 P0/P1/P2 无关。
+
+| ID | 级别 | 问题 | 证实方式 |
+| --- | --- | --- | --- |
+| D01 | P1 | 切换项目后旧响应覆盖当前账本 | 浏览器请求乱序 |
+| D02 | P1 | 已归档需求的草稿规则可重新激活 | 后端运行复现 |
+| D03 | P1 | 非空项目删除返回 500 | API + 浏览器 |
+| D04 | P1 | 客户端声明路径被当作 Hub 本地目录扫描 | 合成 Hub 目录复现 |
+| D05 | P1 | Explorer 的范围匹配与真正 JIT 不一致 | 后端对照 + 浏览器 |
+| D06 | P1 | 已批准提案显示为已拒绝 | 真实审批 + 浏览器 |
+| D07 | P1 | 审批界面不展示会生效的优先级和类别变更 | 真实审批 + 源码 |
+| D08 | P1 | 桌面页面底部关键内容无法滚动触达 | 几何测量 + 鼠标滚轮 |
+| D09 | P1 | 需求提交失败仍清空输入 | 503 故障注入 |
+| D10 | P2 | 缺失 CSS 变量和共享样式 | 静态扫描 + computed style |
+| D11 | P2 | 全局 main 和 skip-link 污染布局 | 源码 + 几何测量 |
+| D12 | P2 | P0 指标实际统计所有长期规则 | 合成账本 + 浏览器 |
+| D13 | P2 | 反馈次数被标成引用次数 | 111 次下发/1 次反馈对照 |
+| D14 | P2 | 规则草稿、已弃用、撤销状态展示不完整 | 浏览器 + 源码 |
+| D15 | P2 | 目录树只渲染三层 | 深层合成目录 |
+| D16 | P2 | 文件搜索仅过滤根节点 | 搜索现有嵌套文件 |
+| D17 | P2 | 项目 ID 可创建却不可路由，重复 ID 返回 500 | API + 浏览器 |
+| D18 | P2 | 非 JSON 错误被转换成解析异常 | API + 浏览器 |
+| D19 | P2 | 任务详情持有旧对象，归档后仍显示 active | 完整归档流程 |
+| D20 | P2 | 审计只返回最新 100 条且无分页 | 163 条记录对照 |
+| D21 | P2 | 默认会话无法反馈，但文档遗漏 Debug 前提 | 后端 + 文档对照 |
+| D22 | P2 | 六态任务模型缺少完整公开状态流程 | 公共入口/契约核对 |
+| D23 | P2 | 命令面板宣称方向键选择，实际无实现 | 键盘处理源码 |
+| D24 | P2 | 详情抽屉及表单的键盘/无障碍行为不完整 | DOM + Escape + 源码 |
+| D25 | P2 | 窄屏下全部页面内容高度归零 | 390×844 浏览器视口 |
+| D26 | P2 | 小号辅助文字对比度不足 | 颜色计算 + computed style |
+| D27 | P2 | 业务错误被显示为服务连接异常 | 真实 409 冲突 |
+| D28 | P2 | 刷新丢失项目和页面位置 | 浏览器刷新 |
+| D29 | P2 | 工作区展示默认取 ID 排序第一条 | 源码与查询排序 |
+| D30 | P2 | 架构依赖测试漏掉相对导入 | AST 检查源码 |
+| D31 | P1 | 批量导入成功后 JIT 因缺版本快照失败 | 隔离导入及首次下发 |
+| D32 | P1 | 导入对未知项目/任务静默回退，改变归属 | 隔离导入 + 源码 |
+
+### 5.1 P1：业务正确性与主要操作
+
+<a id="d01"></a>
+#### D01 · 切换项目后旧响应覆盖当前账本
+
+- **复现/结果：** 延迟 B 项目的账本响应，切回 A 后再释放 B 响应。选择器和面包屑显示 A，规则列表却显示 B 的专属规则。
+- **影响：** 用户无法相信“当前正在查看哪个项目”，指标、列表和后续操作上下文可能相互矛盾。后端仍有项目作用域校验，本次没有证明越权写入。
+- **原因/位置：** [Workbench.vue:87](D:/1/github/codeneuro/web/src/Workbench.vue:87) 直接把任意完成的请求写入共享 `ledger`，没有核对请求项目和代次。
+- **修复方向：** 捕获请求项目及序号，丢弃旧响应或取消旧请求；切换时同步清理或遮蔽旧数据，弹窗目标也应绑定项目。
+- **验收：** A→B→A、快慢响应反转、请求失败等组合中，项目名、账本、指标、可用动作始终属于同一项目。
+- **证据：** [browser-results.json](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json) 的 `tests.project_switch_race`；[截图](D:/1/github/codeneuro/docs/audit-2026-10-12/screenshots/project-response-race.png)。
+
+<a id="d02"></a>
+#### D02 · 已归档需求的草稿规则可重新激活
+
+- **复现/结果：** 同一 Task 有 R1/R2，草稿关联 R1；归档 R1 后 Task 因 R2 仍活跃。再提供两份成功报告并激活草稿，该规则重新进入实际下发。
+- **影响：** 已完成需求还能通过遗留草稿重新施加约束，破坏“归档后退出上下文”的生命周期预期。
+- **原因/位置：** [requirements.py:92](D:/1/github/codeneuro/src/codeneuro/workflows/requirements.py:92) 只处理 [关联的 active 规则](D:/1/github/codeneuro/src/codeneuro/adapters/sqlite/requirements.py:52)；[governance.py:136](D:/1/github/codeneuro/src/codeneuro/workflows/governance.py:136) 激活时检查 Task，未重核关联 Requirement。
+- **修复方向：** 明确归档需求关联草稿的终态；在激活和归档的事务边界重核关系及状态。
+- **验收：** 归档前后的 active/draft、单需求/多需求、激活与归档并发组合均不能让失效需求关联规则再次下发；不影响其他活跃需求的规则。
+- **证据：** [backend-results.json](D:/1/github/codeneuro/docs/audit-2026-10-12/backend-results.json) 的 `probes.archived_requirement_draft_reactivation`。
+
+<a id="d03"></a>
+#### D03 · 非空项目删除返回 500
+
+- **复现/结果：** 项目仅包含一个 Rule 或一个 Requirement 时删除即可触发外键错误；空项目删除成功。失败后项目仍存在，观察到事务回滚，没有观察到部分删除。
+- **影响：** 产品提供的清理入口无法完成正常项目的清理，用户只看到 JSON 解析异常。
+- **原因/位置：** [workspaces.py:18](D:/1/github/codeneuro/src/codeneuro/adapters/sqlite/workspaces.py:18) 手工删除主实体，遗漏版本、Delivery、关联、证据等依赖，并且顺序不完整。
+- **修复方向：** 明确支持删除还是归档项目；若保留硬删除，完整处理外键依赖并原子提交，返回领域化错误。
+- **验收：** 含需求版本、规则版本、提案、下发、反馈、证据、会话和 Finding 的项目均按策略处理；失败不留下半删数据；其他项目不受影响。
+- **证据：** [后端结果](D:/1/github/codeneuro/docs/audit-2026-10-12/backend-results.json) 的 `delete_*`、`delete_failure_rollback`；[页面结果](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-followup.json) 的 `deletePopulated`。
+
+<a id="d04"></a>
+#### D04 · 客户端声明路径被当作 Hub 本地目录扫描
+
+- **复现/结果：** 将声称来自另一台机器的 Worktree 路径指向隔离 Hub 合成目录，`/tree` 返回了 Hub 专属标记文件名。
+- **影响：** 工作台展示的可能是服务器同路径文件，而非远端代码；违背明确的工作区边界。扫描还没有数量/深度上限。本次只触碰合成目录，未验证或声称读取真实用户私有文件。
+- **原因/位置：** [api.py:98](D:/1/github/codeneuro/src/codeneuro/adapters/http/api.py:98) 取第一 Worktree 的 `workspace` 并直接 `os.walk`；业务与文件系统访问留在 HTTP 适配器。
+- **修复方向：** 文件树来源改为明确、可验证且有界的索引或客户端清单；若支持 Hub 本地扫描，需要独立确认本地归属和允许范围，不能靠客户端字符串推断。
+- **验收：** 远程声明路径绝不访问 Hub 同名目录；无索引时解释不可用；真实索引标明 Worktree、来源、时间和截断情况。
+- **证据：** [backend-results.json](D:/1/github/codeneuro/docs/audit-2026-10-12/backend-results.json) 的 `probes.remote_path_scan`；[契约工作区边界](D:/1/github/codeneuro/docs/product-contract.md)。
+
+<a id="d05"></a>
+#### D05 · Explorer 的范围匹配与真正 JIT 不一致
+
+- **复现/结果：** `src/pay/**` 错误匹配 `src/payment/charge.py`；`src/**/*.py` 对应 Python 文件却未显示；单星号 `*` 被当全局范围。节点还把非 P0 一律记为 P1，混入 P2。
+- **影响：** 用户对文件必须遵守哪些规则产生错误判断。项目概览同时展示不同 Task 的规则，应明确它是概览，不能暗示等同当前任务实际下发。
+- **原因/位置：** [ExplorerView.vue:142](D:/1/github/codeneuro/web/src/components/views/ExplorerView.vue:142) 使用前后缀启发式；[节点计数:103](D:/1/github/codeneuro/web/src/components/views/ExplorerView.vue:103) 不区分 P2。真正策略是 [knowledge.py:69](D:/1/github/codeneuro/src/codeneuro/modules/knowledge.py:69) 的锚定分段匹配。
+- **修复方向：** 共用匹配契约或通过只读预览用例取数；区分目录范围概览与具体 Task/文件的 JIT 预览。
+- **验收：** `*`、`**`、扩展名、同名前缀目录、根路径、不同 Task 的组合与后端逐项一致；P0/P1/P2 计数有明确含义。
+- **证据：** [浏览器结果](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json) 的 `explorer_backend_mismatch`、[后端对照](D:/1/github/codeneuro/docs/audit-2026-10-12/backend-results.json) 的 `scope_reference`。
+
+<a id="d06"></a>
+#### D06 · 已批准提案显示为已拒绝
+
+- **复现/结果：** 实际批准成功，后端状态为 `approved`，页面标签显示“已拒绝”；预置批准记录同样复现。
+- **影响：** 人类无法从页面判断契约是否已生效，直接损害治理可信度。
+- **原因/位置：** [ReviewView.vue:30](D:/1/github/codeneuro/web/src/components/views/ReviewView.vue:30) 只识别 `applied`；[ledger.ts:50](D:/1/github/codeneuro/web/src/types/ledger.ts:50) 的 `| string` 掩盖状态不一致。后端 [knowledge.py:72](D:/1/github/codeneuro/src/codeneuro/workflows/knowledge.py:72) 返回 `approved`。
+- **修复方向：** 使用统一状态枚举和穷尽映射；未知状态显示明确异常，不能默认归为拒绝。
+- **验收：** pending/approved/rejected 的文字、颜色、按钮、筛选、刷新后状态与后端一致。
+- **证据：** [browser-followup.json](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-followup.json) 的 `approval.afterTag`；[批准后截图](D:/1/github/codeneuro/docs/audit-2026-10-12/screenshots/approval-success-wrong-label.png)。
+
+<a id="d07"></a>
+#### D07 · 审批预览不展示重要的生效变更
+
+- **复现/结果：** 提案改变规则 priority/category，审批页面只显示标题、条款、路径及理由；实际批准会应用这些未展示的字段。复现包含 P1→P2 的优先级变更。
+- **影响：** 用户无法作出充分知情的审批决定，旧值与新值也无法并排核对。
+- **原因/位置：** [ReviewView.vue:33](D:/1/github/codeneuro/web/src/components/views/ReviewView.vue:33)、[Proposal DTO](D:/1/github/codeneuro/web/src/types/ledger.ts:52) 不完整；[knowledge.py:83](D:/1/github/codeneuro/src/codeneuro/workflows/knowledge.py:83) 会写入 priority/category。
+- **修复方向：** 展示目标快照与拟议快照的完整差异，至少覆盖标题、条款、路径、优先级、类别和版本，突出约束扩大或减弱。
+- **验收：** 逐个字段单独变化及多字段组合变化均能在批准前看见；版本已过期必须重新加载并重新审阅。
+- **证据：** [browser-followup.json](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-followup.json) 的 `approval.previewIncludesPriority` / `previewIncludesCategory`。
+
+<a id="d08"></a>
+#### D08 · 桌面关键内容无法通过滚轮触达
+
+- **复现/结果：** 1440×900 下设置危险区顶部 y=1042.5，删除按钮 y=1179.78，滚轮前后位置不变；审阅和审计长列表也被截断。Explorer 的最低高度和 800px 内层超出可用区域。
+- **影响：** 常见桌面视口无法完成正常操作，属于功能性问题。自动化强制定位元素不等于普通用户能看见并操作。
+- **原因/位置：** [style.css:252](D:/1/github/codeneuro/web/src/style.css:252)、[style.css:338](D:/1/github/codeneuro/web/src/style.css:338) 与根容器多层 `overflow:hidden`，部分页面未建立可用的滚动层；[ExplorerView.vue:533](D:/1/github/codeneuro/web/src/components/views/ExplorerView.vue:533)。
+- **修复方向：** 统一工作台滚动责任，合理使用 `min-height:0`；页头、内容、抽屉分别拥有清楚的尺寸和滚动边界。
+- **验收：** 1280×720、1440×900 下用真实滚轮和键盘可到达每页最后一项及危险区；长内容、提示条出现后仍成立。
+- **证据：** [browser-results.json](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json) 的 `pages` / `settings_wheel_reachability`；[滚轮后截图](D:/1/github/codeneuro/docs/audit-2026-10-12/screenshots/settings-after-wheel.png)。
+
+<a id="d09"></a>
+#### D09 · 需求提交失败后输入被清空
+
+- **复现/结果：** 对需求提交注入 503，页面显示失败，但原始文本和任务选择已经被清空。
+- **影响：** 用户必须重写需求，尤其容易丢失长文本和准确业务措辞。
+- **原因/位置：** [TasksView.vue:43](D:/1/github/codeneuro/web/src/components/views/TasksView.vue:43) 发出事件后立即清空本地状态，未等待父级请求结果。
+- **修复方向：** 仅在确认成功后清空；失败保留文本、选择、错误与重试机会；同一提交重试保持请求身份。
+- **验收：** 400/409/500/503、网络异常、慢响应均保留失败输入；成功只创建一次需求；请求中不会误清除新输入。
+- **证据：** [browser-results.json](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json) 的 `failed_intake_loses_input`；[失败截图](D:/1/github/codeneuro/docs/audit-2026-10-12/screenshots/intake-failure.png)。
+
+<a id="d31"></a>
+#### D31 · 批量导入宣告成功，但新数据不能正常 JIT 下发
+
+- **复现/结果：** 隔离批次导入退出码为 0 并打印 SUCCESS；得到 1 条 Rule、3 条 Requirement，但 `rule_versions`、`requirement_versions`、audit 都为 0。首次上下文下发在插入 `delivery_rules` 时发生外键 IntegrityError。
+- **影响：** 导入统计给出“成功”的错误保障；常规数据库 integrity check 为 ok 也不能证明业务版本链完整。
+- **原因/位置：** [load_batches_into_codeneuro.py:150](D:/1/github/codeneuro/scripts/load_batches_into_codeneuro.py:150)、[规则插入:180](D:/1/github/codeneuro/scripts/load_batches_into_codeneuro.py:180) 直接写主表，绕开快照、修订、来源和审计不变量。
+- **修复方向：** 建立显式导入用例，完整写入版本/修订/来源；导入后进行业务自检，不仅统计插入行数。
+- **验收：** 新库合成导入后可 JIT、反馈、归档、审阅并追溯原始版本；失败报告具体批次并回滚约定范围。修复前不能据此脚本宣称真实旧资产可用。
+- **证据：** [import-results.json](D:/1/github/codeneuro/docs/audit-2026-10-12/import-results.json)。本轮没有执行现有真实 `dist_batches/`。
+
+<a id="d32"></a>
+#### D32 · 导入对未知项目/任务静默回退，改变业务归属
+
+- **复现/结果：** Task 声明 `not-a-project`，脚本仍报成功，实际归属变成 `import-b`。源码还把未知 Rule.task_id 改成 None，Finding 的回退候选未按所属项目筛选。后两种为源码确认，没有伪称全部路径已实测。
+- **影响：** 输入错误可能变成跨项目错误资产；任务规则可能被转换为长期全局规则，影响范围扩大。`set` 的首项也不是稳定业务选择。
+- **原因/位置：** [项目回退:108](D:/1/github/codeneuro/scripts/load_batches_into_codeneuro.py:108)、[规则回退:170](D:/1/github/codeneuro/scripts/load_batches_into_codeneuro.py:170)、[Finding 回退:204](D:/1/github/codeneuro/scripts/load_batches_into_codeneuro.py:204)。
+- **修复方向：** 未知引用明确拒绝/隔离，产生可审阅的映射报告；必须校验 project→task→session 一致性，禁止自动扩大 Rule 作用域。
+- **验收：** 未知 ID、跨项目引用、不同输入顺序、重复批次都给出稳定明确结果；未经过显式映射的记录不落入其他项目或全局规则。
+- **证据：** [import-results.json](D:/1/github/codeneuro/docs/audit-2026-10-12/import-results.json) 的 `unknown_project_task_owner` 及上述源码。
+
+### 5.2 P2：功能语义、可用性与工程保障
+
+<a id="d10"></a>
+#### D10 · CSS 变量和共享样式缺失
+
+静态扫描找到 **17 个未定义变量、44 处引用**，包括 `--color-*`、`--radius-lg`、`--surface`；`.section-head/.grid/.panel/.card/.skip-link` 的共享规则也缺失。稳定状态规则抽屉 computed background 为透明，文字和背景层次受到实际影响。位置：[RulesView.vue:287](D:/1/github/codeneuro/web/src/components/views/RulesView.vue:287)、[ReviewView.vue:35](D:/1/github/codeneuro/web/src/components/views/ReviewView.vue:35)。
+
+修复应统一现有 token 命名和共享组件，而不是逐处任意补色。验收要求所有引用可解析，抽屉背景不透明、边框和选中态一致，7 页空态/长内容保持层级。证据：[静态结果](D:/1/github/codeneuro/docs/audit-2026-10-12/static-results.json)、[稳定抽屉截图](D:/1/github/codeneuro/docs/audit-2026-10-12/screenshots/rule-drawer-stable.png)。旧 `rule-drawer.png` 截在动画中，不用于认定持续横向裁切。
+
+<a id="d11"></a>
+#### D11 · 全局 main 与 skip-link 污染布局
+
+[style.css:252](D:/1/github/codeneuro/web/src/style.css:252) 对所有 main 设置 240px 左边距，Explorer 内部 main 也被命中；[Workbench.vue:256](D:/1/github/codeneuro/web/src/Workbench.vue:256) 的 skip-link 未定位隐藏，作为 flex 子元素占宽 84.25px。1440px 下工作台主区 x=324.25，Explorer 内部主区 x=897.25。
+
+应将布局样式限定在工作台外壳，内部区域使用明确类名；skip-link 只在获得焦点时出现在可见位置。验收要求主区相对侧栏位置正确、内部无重复侧栏留白、跳转链接键盘可用。[布局证据](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-followup.json)：`layout`。
+
+<a id="d12"></a>
+#### D12 · “核心契约(P0)”实际统计全部活跃长期规则
+
+[Workbench.vue:126](D:/1/github/codeneuro/web/src/Workbench.vue:126) 只筛 task_id/status，[MetricBar.vue:31](D:/1/github/codeneuro/web/src/components/layout/MetricBar.vue:31) 却标为 P0。合成项目实际 1 条 P0，页面显示 5。应明确统计所有长期契约，或真正按 P0 过滤，名称、解释和算法一致。验收用不同优先级、状态、任务归属的组合核对。[浏览器证据](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json)：`tests.metrics`。
+
+<a id="d13"></a>
+#### D13 · 反馈次数被标成“引用次数/实际引用”
+
+[feedback.py:15](D:/1/github/codeneuro/src/codeneuro/adapters/sqlite/feedback.py:15) 的 eval_count 统计 Feedback；[RulesView.vue:111](D:/1/github/codeneuro/web/src/components/views/RulesView.vue:111) 等页面把它解释为引用。合成记录有 111 次实际下发、1 次反馈，页面显示 1 次引用。
+
+应分别呈现实际下发次数、反馈次数、已知次数和排除 0 的效用均分，并说明版本口径。验收要求未评分下发也计入下发次数，预览不计入，反馈不伪装为引用。[后端证据](D:/1/github/codeneuro/docs/audit-2026-10-12/backend-results.json)：`score_label`。
+
+<a id="d14"></a>
+#### D14 · 规则生命周期在 UI 中失真
+
+[RulesView.vue:9](D:/1/github/codeneuro/web/src/components/views/RulesView.vue:9) 的“已停用”仅选 revoked，deprecated 不在其中；draft 被显示成停用，用户无法区分等待验证、主动撤销、需求完成退出及晋升来源失活。宽泛 [类型定义](D:/1/github/codeneuro/web/src/types/ledger.ts:34) 进一步隐藏了问题。
+
+应统一状态枚举和业务说明，提供完整筛选。验收用 active/draft/revoked/deprecated 及晋升/归档来源逐一核对，避免把不同状态都映射成“停用”。[浏览器证据](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json)：`rule_states_and_drawer_keyboard`。
+
+<a id="d15"></a>
+#### D15 · 目录树仅支持三层
+
+[ExplorerView.vue:210](D:/1/github/codeneuro/web/src/components/views/ExplorerView.vue:210)、[第三层:263](D:/1/github/codeneuro/web/src/components/views/ExplorerView.vue:263) 使用固定三层模板。数据中第四层真实存在，但第三层没有展开器、第四层未渲染。应使用递归树组件并设置合理的加载边界。验收至少包含 1/3/6 层及空目录，深层叶子能展开、选择并展示完整路径。[浏览器证据](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json)：`level3Expander/level4Exists`。
+
+<a id="d16"></a>
+#### D16 · 文件搜索不遍历后代
+
+[ExplorerView.vue:161](D:/1/github/codeneuro/web/src/components/views/ExplorerView.vue:161) 只过滤根节点；搜索已经存在的 `refund.py` 得到 0 行。应递归检索，保留匹配节点的祖先路径并展开；搜索结果应区分无数据与无匹配。验收覆盖文件名、完整相对路径、大小写和清空搜索后的恢复。[截图](D:/1/github/codeneuro/docs/audit-2026-10-12/screenshots/explorer-nested-search.png)。
+
+<a id="d17"></a>
+#### D17 · 项目 ID 校验与路由不一致，重复 ID 返回 500
+
+[api.py:19](D:/1/github/codeneuro/src/codeneuro/adapters/http/api.py:19) 仅校验长度，创建 `bad/project` 返回 200，编码后读取/删除仍是 404；重复项目插入未转换冲突错误，返回 raw 500。应定义前后端共享的 ID 字符契约，保证可路由；重复 ID 返回结构化 409，不能创建不可管理资产。验收涵盖允许字符、斜杠、空白、重复和边界长度。[后端证据](D:/1/github/codeneuro/docs/audit-2026-10-12/backend-results.json)：`slash_project_*` / `duplicate_project`。
+
+<a id="d18"></a>
+#### D18 · 错误响应先解析 JSON，掩盖真实失败
+
+[client.ts:9](D:/1/github/codeneuro/web/src/api/client.ts:9) 在检查 status 前调用 `response.json()`；raw 500 变成 `Unexpected token 'I' ... is not valid JSON`。这不利于用户重试，也丢失有用的状态信息。应按 Content-Type 安全读取、保留 HTTP 状态、显示可行动的错误，不将技术解析栈作为主文案。验收覆盖 JSON、纯文本、HTML、空响应和网络中断。[删除错误截图](D:/1/github/codeneuro/docs/audit-2026-10-12/screenshots/delete-populated-error.png)。
+
+<a id="d19"></a>
+#### D19 · 任务详情保留旧对象
+
+[TasksView.vue:22](D:/1/github/codeneuro/web/src/components/views/TasksView.vue:22)、[打开详情:75](D:/1/github/codeneuro/web/src/components/views/TasksView.vue:75) 缓存 Task 对象。归档最后一条需求后后端 Task=archived，抽屉头仍为 active。应只保留 task ID，并从最新 ledger 派生详情；处理对象消失、项目切换。验收要求暂停/恢复/归档/刷新后卡片、详情、指标同步。[截图](D:/1/github/codeneuro/docs/audit-2026-10-12/screenshots/task-archived-stale-drawer.png)。
+
+<a id="d20"></a>
+#### D20 · 审计历史静默截断为 100 条
+
+[audit.py:9](D:/1/github/codeneuro/src/codeneuro/adapters/sqlite/audit.py:9) 默认 limit=100，上层无游标或分页。合成库保存 163 条，API 仅返回 100，页面不解释历史截断。应提供稳定排序的分页/游标、可用的下一页与范围提示。验收大于 100 条、多页并发新增时没有遗漏或重复，最早记录仍可找到。actor/details 的展示补全另见 G08。[后端证据](D:/1/github/codeneuro/docs/audit-2026-10-12/backend-results.json)：`audit_truncation`。
+
+<a id="d21"></a>
+#### D21 · 文档工作流遗漏 Debug 反馈门槛
+
+[MCP start_session](D:/1/github/codeneuro/src/codeneuro/adapters/mcp/tools.py:61) 默认 debug=False；[feedback.py:19](D:/1/github/codeneuro/src/codeneuro/workflows/feedback.py:19) 和 Issue 入口要求 Debug。按 README 正常启动并取得真实下发后，评分仍被拒绝。该门槛是现有测试确认的有意设计，本问题是默认流程和说明不一致，**不建议未经产品决策就移除保护**。
+
+应在快速开始、MCP 示例、错误说明中明确何时及如何启用 Debug，或统一产品默认策略。验收按照文档原样走完“启动→下发→评分/Issue”，成功或明确预期拒绝，不能隐藏必要参数。[后端证据](D:/1/github/codeneuro/docs/audit-2026-10-12/backend-results.json)：`default_feedback`。
+
+<a id="d22"></a>
+#### D22 · 六态任务模型缺少完整公开流程
+
+[TaskStatus](D:/1/github/codeneuro/web/src/types/ledger.ts:6) 包含六态，[Workspaces 公共用例](D:/1/github/codeneuro/src/codeneuro/workflows/workspaces.py:48) 主要支持创建 active、暂停和恢复；归档依赖 Requirement。没有公开操作完成零需求 Task，也没有完整 draft/testing/released 转换。现行契约明确允许无需求历史任务人工完成。
+
+应确定实际支持的状态图及每条边的操作者、版本、条件；可以简化状态模型，也可以补齐入口。验收要求 MCP 新建但未提交需求的任务可按明确策略结束；页面不展示无法通过产品路径抵达的假流程。证据为公共 HTTP/MCP/工作流入口与[契约](D:/1/github/codeneuro/docs/product-contract.md)对照，未声称每个非法状态组合都已运行。
+
+<a id="d23"></a>
+#### D23 · 命令面板宣称方向键选择，实际 Enter 固定打开第一项
+
+[CommandPalette.vue:50](D:/1/github/codeneuro/web/src/components/common/CommandPalette.vue:50) 直接 `choose(results[0].id)`，没有 ArrowUp/ArrowDown 处理或当前选中索引；[页脚:67](D:/1/github/codeneuro/web/src/components/common/CommandPalette.vue:67) 却提示方向键选择。浏览器记录只有一次向下操作，不能单凭它断言“必须选择第二项”；缺陷依据是键盘逻辑确实缺失。
+
+应实现与提示一致的选中、边界和 Enter 行为，或移除错误提示。验收多次上下移动可选择任意结果，搜索后重置合法索引，无结果时不触发命令，Escape 关闭并恢复焦点。
+
+<a id="d24"></a>
+#### D24 · 抽屉与对话框的无障碍契约不完整
+
+[Rules 抽屉](D:/1/github/codeneuro/web/src/components/views/RulesView.vue:119) 和 Tasks 详情是自定义容器，缺少完整 dialog 语义、焦点约束及恢复；实测 Escape 不关闭规则抽屉。可点击行/卡片没有等价键盘按钮语义。[ActionDialog.vue:51](D:/1/github/codeneuro/web/src/components/common/ActionDialog.vue:51) 使用原生 dialog，但未关联可访问名称。
+
+应统一 modal/drawer 组件，处理标题、焦点、Escape、Tab 循环、关闭后返回触发项，并给行内动作提供键盘入口。验收使用纯键盘完成打开、阅读、操作和关闭；屏幕阅读器仍需独立实机验证，不能因 DOM 修复就宣称已通过。[浏览器证据](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json)：`rule_states_and_drawer_keyboard` / `project_dialog_and_duplicate`。
+
+<a id="d25"></a>
+#### D25 · 窄屏下工作台不可用
+
+390×844 下全部 7 页 `#content` 高度为 0、可用宽度约 42px。固定 240px 侧栏、4 列指标及全局裁切共同挤占空间；静态扫描无媒体查询。应定义支持宽度并提供可折叠导航、指标换行和可达内容。若产品明确仅服务桌面，可降低移动适配优先级，但 D08 的笔记本问题仍必须解决。
+
+验收已声明的最低桌面宽度可完成全流程；若声明移动支持，再用窄屏和实体设备验证。证据：[浏览器结果](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json) 的 `narrow_viewports`、[窄屏任务页](D:/1/github/codeneuro/docs/audit-2026-10-12/screenshots/width-390-tasks.png)。
+
+<a id="d26"></a>
+#### D26 · 小号弱化文本对比度不足
+
+[style.css:24](D:/1/github/codeneuro/web/src/style.css:24) 的 `#656d76` 在 `#161b22` 背景对比为 **3.297:1**，在 canvas 为 **3.607:1**；实测相关 caption 为 11px，低于普通正文 4.5:1 的验收标准。应分开设计正文、辅助信息、禁用态颜色，不用过低对比表达信息层级。验收所有承载必要信息的小号文字达到至少 4.5:1，并检查 hover/focus/selected 等状态。此项不是完整 WCAG 合规审计。[静态证据](D:/1/github/codeneuro/docs/audit-2026-10-12/static-results.json)。
+
+<a id="d27"></a>
+#### D27 · 业务错误被当作服务断连
+
+[Sidebar.vue:57](D:/1/github/codeneuro/web/src/components/layout/Sidebar.vue:57) 的健康显示依赖全局 error。真实 stale proposal 返回 409 后，健康状态显示“服务连接异常”，即使请求正常到达并被业务层拒绝；首次连接尚未确认时也缺少独立连接状态。
+
+应分离连接中/健康/网络失败与业务错误；409 应引导刷新重审，校验失败应引导修正输入。验收 400/403/409 不改变已证实健康的连接标记，真实网络失败才展示连接问题，并有重试恢复。[后续浏览器证据](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-followup.json)：`staleReview`。
+
+<a id="d28"></a>
+#### D28 · 刷新丢失项目和当前页面
+
+[Workbench.vue:31](D:/1/github/codeneuro/web/src/Workbench.vue:31)、[项目初始化:68](D:/1/github/codeneuro/web/src/Workbench.vue:68) 仅保存在内存。B 项目 Feedback 刷新后回到 A 项目 Explorer，URL 无法表达位置。应通过 URL 表达项目/页面并处理项目不存在时的回退，详情可按需要渐进支持。验收刷新、复制链接、前进后退和无效 ID 的行为明确且不串项目。[浏览器证据](D:/1/github/codeneuro/docs/audit-2026-10-12/browser-results.json)：`reload_loses_location`。
+
+<a id="d29"></a>
+#### D29 · “当前工作区”实际只是排序第一条
+
+[ProjectSettingsView.vue:26](D:/1/github/codeneuro/web/src/components/views/ProjectSettingsView.vue:26) 取 `worktrees[0]`，树 API 同样如此；仓储 [workspaces.py:87](D:/1/github/codeneuro/src/codeneuro/adapters/sqlite/workspaces.py:87) 按 ID 排序，不代表最近活跃、当前机器或用户选择。应提供明确 Worktree 选择和来源说明，区分项目共享契约与特定工作区视角。
+
+验收至少两个 Worktree、不同机器/分支时切换结果可解释，不能误称第一条为当前本地目录。此项是源码证实的选择逻辑问题，真实跨机器行为仍未验收。
+
+<a id="d30"></a>
+#### D30 · 架构测试忽略相对导入
+
+[test_architecture.py:37](D:/1/github/codeneuro/tests/test_architecture.py:37) 只处理 `ImportFrom.level == 0`。项目大量使用相对导入，违规的 `from ..adapters...` 依赖可绕过这种检查，不能用当前测试通过证明全部分层边界成立。HTTP 层直接执行目录扫描也是职责偏移的实际例子。
+
+应解析相对导入为完整模块路径，再按来源层制定允许关系，加入有意义的违规样本。验收合法相对依赖通过、领域指向适配器等反向依赖失败；不把所有内部导入简单禁止。证据为检查源码，未声称已改测试或执行变异测试。
+
+## 6. 能力补全清单：与缺陷分开管理
+
+这些项目不计入 32 个缺陷。它们是达到更完整日常产品的建议；其中是否进入下一版，需要结合产品目标决定。已被现行契约明确承诺却缺失的空 Task 完成，已在 D22 中按缺陷记录。
+
+| ID | 能力缺口与依据 | 建议完成标准 | 优先顺序 |
+| --- | --- | --- | --- |
+| <a id="g01"></a>G01 | Web 无人工建立初始契约的完整入口；内部 Knowledge.create_rule 存在，MCP 草稿激活晋升路径也存在 | 人类能以明确权限建立首批契约，必填条款/范围/优先级，产生版本与审计；直接修改既有契约仍遵循治理策略 | 日常可用阶段 |
+| <a id="g02"></a>G02 | Issue 可由 MCP 保存，但 ledger 无 Issue 集合，Web 无列表/处理/关闭 | 能查看来源会话和相关版本，分派或说明处理结论，关闭后保留历史，不自动修改长期契约 | 日常可用阶段 |
+| <a id="g03"></a>G03 | 规则激活依赖测试报告、观察和置信度，人类页面看不到完整证据 | 展示 client_reported 来源、时间、命令、路径、退出码、关联版本和支持/反证；不声称 Hub 已执行测试 | 日常可用阶段 |
+| <a id="g04"></a>G04 | 草稿只能由原始 Session 变更，关闭会话后新会话接手被拒绝 | 设计显式交接/管理员恢复，保留版本与审计，明确不放宽默认作用域校验 | 日常可用阶段 |
+| <a id="g05"></a>G05 | Web 只以“输入包含完整任务标题”匹配；无任意选 Task 或强制新建入口 | 提交前可明确选择已有任务或新建，看到标题/描述/状态；多候选不自动绑定 | 日常可用阶段 |
+| <a id="g06"></a>G06 | Feedback 页面标题包含工作区，内容缺 Worktree/Session 监测 | 展示所有声明工作区和会话状态、debug 开关、来源与更新时间；不把客户端声明写成服务器验证 | 日常可用阶段 |
+| <a id="g07"></a>G07 | 规则仅有部分来源字段，缺版本历史、Delivery 和晋升链详情 | 能从当前规则回溯版本、来源、提案和实际下发，分别说明“当前版本评价”和历史数据 | 日常可用阶段 |
+| <a id="g08"></a>G08 | Activity 只展示动作、时间、实体 ID；不显示 actor/details，也无筛选跳转 | 可按实体/操作/时间筛选，展开事务详情并跳转；无鉴权 actor 标签不伪称真实身份 | 日常可用阶段 |
+| <a id="g09"></a>G09 | 产品内首次使用引导不足，依赖外部 README | 空项目引导完成注册、MCP 连接、Task/Session、首次上下文，并解释主动调用及 Debug 前提 | 易用性阶段 |
+| <a id="g10"></a>G10 | 请求未形成超时、重试、取消、分页加载及提交幂等的完整 UX | 按请求类型处理等待、失败与重试；保留同一提交 request_id；操作状态可解释，加载大列表有界 | 稳定性阶段 |
+| <a id="g11"></a>G11 | Web 仅 build 脚本；CI 主要运行 pytest，专项页面验收未固化 | 纳入前端构建、关键端到端行为、匹配/枚举契约、有限的布局检查；避免只测实现细节 | 稳定性阶段 |
+| <a id="g12"></a>G12 | 本机能运行和备份，但发布、恢复和服务健康说明不完整 | 全新安装演练、明确支持环境、可读健康状态、备份恢复规程及最小运维检查 | 发布阶段 |
+
+主要依据：[ledger 投影](D:/1/github/codeneuro/src/codeneuro/workflows/ledger.py:11)、[草稿会话限制](D:/1/github/codeneuro/src/codeneuro/workflows/governance.py:18)、[任务匹配](D:/1/github/codeneuro/web/src/components/views/TasksView.vue:35)、[请求封装](D:/1/github/codeneuro/web/src/api/client.ts:3)、[CI 配置](D:/1/github/codeneuro/.github/workflows/cross-platform.yml)。G04 的跨会话拒绝已在 `session_handoff` 探针复现，其余缺口主要是入口、投影和 UI 的静态覆盖核对。
+
+## 7. 推荐修复顺序与验收门槛
+
+不预估没有排期依据的完成天数。按依赖顺序推进，每阶段均有具体退出条件。
+
+| 阶段 | 内容 | 退出条件 |
+| --- | --- | --- |
+| 1：恢复业务可信度 | D01/D02/D04/D05/D06/D07/D09/D31/D32 | 项目与内容一致；归档不复活；路径不误读 Hub；JIT 预览语义一致；审批看得见且显示真实结果；失败不丢输入；导入保持版本及归属 |
+| 2：恢复桌面可操作性 | D03/D08/D10/D11/D17/D18/D19/D23/D24/D27 | 1280×720 与 1440×900 可完成所有主要动作；错误可解释；删除符合明确策略；抽屉/键盘/详情状态正常 |
+| 3：补齐状态与追踪 | D12/D13/D14/D15/D16/D20/D21/D22/D28/D29；G02–G08 | 指标与术语真实，树/搜索有效，历史可找，状态流程完整，人员能理解证据及工作区来源 |
+| 4：形成稳定交付 | D25/D26/D30；G01/G09–G12 | 明确支持范围；可读视觉与可访问性基线；回归覆盖关键失败路径；完成干净安装和恢复演练 |
+
+建议稳定版至少设置以下发布门槛：
+
+1. 11 项 P1 全部修复并具有对应复现用例；不能只看单元测试总数。
+2. 在两个桌面视口，以普通点击、滚轮、键盘走完“新项目→录入→暂停/恢复→归档→审阅→查看历史”。
+3. 后端状态枚举、作用域语义、指标口径和 Web 显示一致；重要决策可看完整前后差异。
+4. 导入先 dry-run/映射检查，再在新库进行实际下发、归档和反馈；已有真实资产未经该流程不得宣布迁移完成。
+5. 备份恢复与全新安装可按文档重复执行；跨机器和性能范围以实证声明。
+6. 将有价值的本次用例进入仓库回归：项目响应乱序、归档草稿、非空删除、远程路径边界、审批枚举/差异、错误保留输入、深层树与滚动可达。
+
+## 8. 如何使用这份报告
+
+[验收清单](D:/1/github/codeneuro/docs/product-audit-checklist-2026-10-12.md) 给出从产品边界到页面细节的 256 个检查点。通过项只代表其注明的证据范围；静态存在不等同完整实机验证。缺陷项链接 D 编号，能力补全项链接 G 编号，待验证项保留明确验证方式。
+
+后续修复应保留本报告的原始基线结论，在清单旁记录修复提交和复测证据。这样可以区分“原来就通过”“现已修好”和“尚未证明”，避免把一轮构建通过当成产品验收完成。

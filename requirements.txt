@@ -1,6 +1,2 @@
-fastapi
-uvicorn[standard]
-pydantic
-mcp
-pytest
-httpx
+-e .[dev]
+-c requirements.lock

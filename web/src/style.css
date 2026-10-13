@@ -1,0 +1,1792 @@
+/* ==========================================================================
+   CodeNeuro GitHub Primer Dark 完整统一设计系统
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* GitHub 官方表面色阶 */
+  --gh-canvas-default: #0d1117;     /* 全局最底层画布 (深黑) */
+  --gh-canvas-subtle: #161b22;      /* 侧边栏、托盘底色、表头 */
+  --gh-canvas-inset: #010409;       /* 输入框背景、代码块底色 */
+  --gh-canvas-overlay: #1c2128;     /* 抽屉、模态弹窗表面 */
+  --gh-surface-card: #21262d;       /* 悬浮卡片表面 */
+  --gh-surface-card-hover: #292e36; /* 卡片悬浮状态 */
+
+  /* GitHub 官方边框色阶 */
+  --gh-border-default: #30363d;     /* 主分割线、外边框 */
+  --gh-border-muted: #21262d;       /* 托盘内微弱线 */
+  --gh-border-subtle: rgba(240, 246, 252, 0.10);
+
+  /* GitHub 官方前景色阶 (增强对比度，满足 hover 及小字 >= 4.5:1) */
+  --gh-fg-default: #e6edf3;         /* 主正文白 */
+  --gh-fg-muted: #9ea8b3;           /* 辅助说明灰，在各底色及悬浮底色 #292e36 下对比度均 >= 5.62:1 */
+  --gh-fg-subtle: #a8b4be;          /* 弱化元数据，深色底对比度 >= 6.4:1 */
+
+  /* GitHub 功能强调与状态色 */
+  --gh-accent-fg: #58a6ff;          /* 经典 GitHub 蓝 */
+  --gh-accent-emphasis: #1f6feb;    /* 强调动作蓝 */
+  --gh-accent-subtle: rgba(56, 139, 253, 0.15);
+
+  --gh-success-fg: #3fb950;         /* 成功绿 */
+  --gh-success-emphasis: #238636;   /* 绿按钮 */
+  --gh-success-subtle: rgba(46, 160, 67, 0.15);
+
+  --gh-attention-fg: #d29922;       /* 警示金 */
+  --gh-attention-subtle: rgba(187, 128, 9, 0.15);
+
+  --gh-danger-fg: #f85149;          /* 危险红 */
+  --gh-danger-emphasis: #da3633;    /* 危险操作按钮红 */
+  --gh-danger-subtle: rgba(248, 81, 73, 0.15);
+
+  --gh-done-purple: #a371f7;        /* 归档紫 */
+  --gh-done-subtle: rgba(163, 113, 247, 0.15);
+
+  /* 通用设计系统 Token 别名 (补齐 D10 变量缺失) */
+  --surface: var(--gh-canvas-subtle);
+  --surface-card: var(--gh-surface-card);
+  --surface-card-hover: var(--gh-surface-card-hover);
+  --surface-overlay: var(--gh-canvas-overlay);
+  --surface-inset: var(--gh-canvas-inset);
+
+  --radius-lg: 8px;
+  --radius-md: 6px;
+  --radius-sm: 4px;
+  --radius-xs: 2px;
+  --radius-full: 9999px;
+  --radius: var(--radius-md);
+
+  --color-border: var(--gh-border-default);
+  --color-border-default: var(--gh-border-default);
+  --color-border-muted: var(--gh-border-muted);
+  --color-border-subtle: var(--gh-border-subtle);
+  --color-border-strong: var(--gh-border-default);
+  --color-text: var(--gh-fg-default);
+  --color-text-muted: var(--gh-fg-muted);
+  --color-text-subtle: var(--gh-fg-subtle);
+  --color-fg-default: var(--gh-fg-default);
+  --color-fg-muted: var(--gh-fg-muted);
+  --color-fg-subtle: var(--gh-fg-subtle);
+  --color-bg: var(--gh-canvas-default);
+  --color-surface: var(--gh-canvas-subtle);
+  --color-canvas-default: var(--gh-canvas-default);
+  --color-canvas-subtle: var(--gh-canvas-subtle);
+  --color-canvas-inset: var(--gh-canvas-inset);
+  --color-canvas-overlay: var(--gh-canvas-overlay);
+  --color-surface-card: var(--gh-surface-card);
+  --color-surface-card-hover: var(--gh-surface-card-hover);
+  --color-primary: var(--gh-accent-fg);
+  --color-accent-fg: var(--gh-accent-fg);
+  --color-danger: var(--gh-danger-fg);
+  --color-danger-fg: var(--gh-danger-fg);
+  --color-danger-subtle: var(--gh-danger-subtle);
+  --color-success: var(--gh-success-fg);
+  --color-success-fg: var(--gh-success-fg);
+  --color-success-subtle: var(--gh-success-subtle);
+  --color-warning: var(--gh-attention-fg);
+  --color-attention-fg: var(--gh-attention-fg);
+  --color-attention-subtle: var(--gh-attention-subtle);
+  --accent-subtle: var(--gh-accent-subtle);
+
+  /* 自动化测试与旧样式兼容变量 */
+  --accent: #a49aff;
+  --accent-hover: #b8aeff;
+  --bg-canvas: var(--gh-canvas-default);
+  --bg-subtle: var(--gh-canvas-subtle);
+  --bg-surface: var(--gh-canvas-subtle);
+  --bg-surface-hover: var(--gh-surface-card-hover);
+  --bg-overlay: var(--gh-canvas-overlay);
+
+  --border-subtle: var(--gh-border-muted);
+  --border-default: var(--gh-border-default);
+  --border-strong: var(--gh-border-default);
+  --border-hover: var(--gh-accent-fg);
+
+  --text-primary: var(--gh-fg-default);
+  --text-secondary: var(--gh-fg-muted);
+  --text-tertiary: var(--gh-fg-subtle);
+
+  --red: var(--gh-danger-fg);
+  --red-bg: var(--gh-danger-subtle);
+  --red-border: rgba(248, 81, 73, 0.4);
+
+  --amber: var(--gh-attention-fg);
+  --amber-bg: var(--gh-attention-subtle);
+  --amber-border: rgba(210, 153, 34, 0.4);
+
+  --green: var(--gh-success-fg);
+  --green-bg: var(--gh-success-subtle);
+  --green-border: rgba(63, 185, 80, 0.4);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* 核心原则：消除 html/body 裁切溢出问题，保证内容自适应与各视口触达 (D08/D25) */
+html, body {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background: var(--gh-canvas-default);
+  color: var(--gh-fg-default);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+}
+
+.workbench {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* 侧边栏：桌面端默认 fixed 240px */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  height: 100vh;
+  position: fixed;
+  inset: 0 auto 0 0;
+  padding: 20px 14px;
+  border-right: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  overflow: hidden;
+}
+
+.sidebar-brand-project {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-action-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#new-project {
+  margin-top: 6px;
+  width: 100%;
+}
+
+.brand {
+  text-decoration: none;
+  color: var(--gh-fg-default);
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.brand-mark {
+  background: var(--gh-canvas-inset);
+  border: 1px solid var(--gh-border-default);
+  color: var(--accent);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.brand small {
+  display: block;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--gh-fg-subtle);
+  margin-top: 1px;
+}
+
+.caption {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gh-fg-subtle);
+  margin-bottom: 6px;
+  text-transform: none !important;
+  white-space: normal;
+  min-width: 0;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* 侧边栏导航条目 */
+nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+nav button {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 7px 10px;
+  color: var(--gh-fg-muted);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+nav button:hover {
+  background: rgba(177, 186, 196, 0.12);
+  color: var(--gh-fg-default);
+}
+
+nav button.active {
+  background: rgba(177, 186, 196, 0.20);
+  color: var(--gh-fg-default);
+  font-weight: 600;
+}
+
+.nav-icon {
+  width: 16px;
+  font-size: 13px;
+  display: inline-block;
+}
+
+.aside-foot {
+  font-size: 11px;
+  color: var(--gh-fg-subtle);
+  padding-top: 14px;
+  border-top: 1px solid var(--gh-border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.palette-trigger {
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--gh-canvas-default);
+  border: 1px solid var(--gh-border-default);
+  color: var(--gh-fg-muted);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.palette-trigger:hover {
+  border-color: var(--gh-fg-muted);
+  color: var(--gh-fg-default);
+}
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--gh-fg-subtle);
+  background: rgba(110, 118, 129, 0.2);
+  border: 1px solid var(--gh-border-default);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* 跳至内容无障碍链接 (默认隐藏，获得焦点时可见) */
+.skip-link {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  z-index: 1000;
+  padding: 8px 14px;
+  background: var(--gh-accent-emphasis);
+  color: #fff;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 14px;
+  left: 254px;
+}
+
+/* 主内容视口：仅限定在 workbench 的直接子元素 main，避免污染内层 main (D11) */
+.workbench > main {
+  margin-left: 240px;
+  width: calc(100vw - 240px);
+  min-width: 0;
+  height: 100vh;
+  padding: 24px 32px 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--gh-fg-default);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--gh-fg-default);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--gh-fg-default);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+p {
+  color: var(--gh-fg-muted);
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+}
+
+/* 短标签、徽标、短字段标签、按钮、表头与状态文字防断行 (Requirement 1) */
+.tag,
+.badge-count,
+.score-val,
+.code-badge,
+.status-dot,
+.filter-check,
+.stat-pill span,
+.metric span,
+th,
+button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 仅在明确为简短键名表单/项目标签时保持整段，长说明类 caption 保持正常折行 */
+label.caption,
+.sidebar .caption,
+.stat-pill .caption,
+.req-block-label,
+.section-label {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 长 ID、哈希与路径防溢出 (Requirement 2) */
+code,
+pre,
+.path-mono,
+.meta-value-code code {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+/* 顶栏 4 维指标卡 (Requirement 4) */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.metric {
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric > div,
+.metric .metric-content {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gh-fg-subtle);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.metric strong {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--gh-fg-default);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.metric small,
+.metric .metric-caption {
+  font-size: 11px;
+  color: var(--gh-fg-muted);
+  line-height: 1.45;
+  text-wrap: pretty;
+  word-break: break-word;
+}
+
+/* 核心内容区容器：min-height: 0 保证 flex 子项计算，支持内部滚轮触达底部 (D08) */
+section#content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 32px;
+}
+
+/* 保持桌面端 Review / Activity / Settings 等长内容可滚到最底 (D08) */
+.review-view-root,
+.activity-view-root,
+.settings-view {
+  min-height: 100%;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.timeline-container {
+  overflow-y: visible !important;
+  height: auto !important;
+}
+
+.proposals-list {
+  padding-bottom: 32px;
+}
+
+.settings-view {
+  padding-bottom: 32px;
+}
+
+/* 修复卡片关闭状态对比度：取消整体 opacity，确保 .task-desc.muted 对比度 >= 4.5:1 */
+.card-closed,
+.task-card.card-closed,
+.col-closed .task-card,
+.kanban-col.col-closed .task-card {
+  opacity: 1 !important;
+}
+
+.card-closed:hover,
+.task-card.card-closed:hover,
+.col-closed .task-card:hover {
+  opacity: 1 !important;
+}
+
+.card-closed .task-desc,
+.card-closed .task-desc.muted,
+.task-card.card-closed .task-desc,
+.task-card.card-closed .task-desc.muted,
+.col-closed .task-desc,
+.col-closed .task-desc.muted {
+  opacity: 1 !important;
+  color: var(--gh-fg-muted) !important;
+}
+
+/* Review 契约变更条款对比：单列正文至少保障 >= 420px，1440 宽屏并列，空间不足时上下对照 (Requirement 3) */
+.diff-clauses-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+
+@media (min-width: 1440px) {
+  .diff-clauses-grid {
+    display: grid !important;
+    grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr) !important;
+    gap: 24px !important;
+  }
+}
+
+.clauses-column {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.clauses-column .points-list {
+  padding-left: 18px;
+  margin: 6px 0;
+}
+
+.clauses-column .points-list li {
+  margin-bottom: 6px;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+/* Feedback 评分与便签双栏：避免横向溢出，1280 及以下上下排，1440 宽屏保障长便签正文 >= 420px (Requirement 3) */
+.feedback-dual-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+@media (min-width: 1440px) {
+  .feedback-dual-grid {
+    display: grid !important;
+    grid-template-columns: minmax(460px, 1fr) minmax(460px, 1fr) !important;
+    gap: 20px !important;
+  }
+}
+
+.feedback-card-panel {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+/* Settings 统计条目 (Requirement 4) */
+.stats-overview-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+/* 精准为固定说明栏设置 text-wrap: balance，消除行尾孤字 (Item 2) */
+.section-head,
+.section-head > div,
+.intake-title {
+  min-width: 0 !important;
+}
+
+.section-head .caption,
+.intake-title .caption {
+  display: block !important;
+  text-wrap: balance !important;
+  white-space: normal !important;
+  line-height: 1.5 !important;
+}
+
+/* 规则适用检查标题与说明布局，保证标题整词不折单字 (Item 1) */
+.inspect-title-row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: baseline !important;
+  gap: 4px 12px !important;
+}
+
+.inspect-title-row strong {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.inspect-title-row .caption {
+  flex: 1 1 100% !important;
+  min-width: 0 !important;
+  white-space: normal !important;
+  margin-top: 2px !important;
+}
+
+/* 共享通用布局容器类 (D10) */
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.panel {
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.card {
+  background: var(--gh-surface-card);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.card-top, .card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.card-body {
+  font-size: 13px;
+  color: var(--gh-fg-default);
+}
+
+/* ==========================================================================
+   全局通用组件规范（表格、卡片、抽屉、表单）
+   ========================================================================== */
+
+/* 标准按钮 */
+button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gh-fg-default);
+  border: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+button:hover {
+  background: var(--gh-surface-card);
+  border-color: #8b949e;
+}
+
+button.primary {
+  background: var(--gh-success-emphasis);
+  border-color: rgba(240, 246, 252, 0.1);
+  color: #fff;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: #2ea043;
+}
+
+button.subtle {
+  background: transparent;
+  border-color: transparent;
+  color: var(--gh-fg-muted);
+}
+
+button.subtle:hover {
+  background: var(--gh-canvas-subtle);
+  color: var(--gh-fg-default);
+}
+
+/* 标准输入框 */
+input, select, textarea {
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  background: var(--gh-canvas-inset);
+  color: var(--gh-fg-default);
+  padding: 6px 10px;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--gh-accent-fg);
+  box-shadow: 0 0 0 2px var(--gh-accent-subtle);
+}
+
+/* 标签 Tags */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-inset);
+  color: var(--gh-fg-muted);
+  line-height: 1.4;
+}
+
+.tag.p0 {
+  color: var(--gh-danger-fg);
+  background: var(--gh-danger-subtle);
+  border-color: rgba(248, 81, 73, 0.4);
+}
+
+.tag.p1 {
+  color: var(--gh-attention-fg);
+  background: var(--gh-attention-subtle);
+  border-color: rgba(210, 153, 34, 0.4);
+}
+
+.tag.p2 {
+  color: #79c0ff;
+  background: rgba(56, 139, 253, 0.15);
+  border-color: rgba(56, 139, 253, 0.4);
+}
+
+.tag.active, .tag.online {
+  color: var(--gh-success-fg);
+  background: var(--gh-success-subtle);
+  border-color: rgba(46, 160, 67, 0.4);
+}
+
+.tag.paused {
+  color: var(--gh-attention-fg);
+  background: var(--gh-attention-subtle);
+}
+
+.tag.draft, .tag.pending {
+  color: var(--gh-done-purple);
+  background: var(--gh-done-subtle);
+  border-color: rgba(163, 113, 247, 0.4);
+}
+
+/* 全局通用 GitHub 风格表格封装体系 (.gh-table-wrap) */
+.gh-table-wrap, .table-wrap {
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  background: var(--gh-canvas-subtle);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.gh-table, .rules-table, .projects-table, .feedback-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.gh-table th, .rules-table th, .projects-table th, .feedback-table th {
+  background: var(--gh-canvas-subtle);
+  border-bottom: 1px solid var(--gh-border-default);
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gh-fg-muted);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  text-transform: uppercase;
+}
+
+.gh-table td, .rules-table td, .projects-table td, .feedback-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gh-border-muted);
+  vertical-align: middle;
+  font-size: 12px;
+}
+
+.gh-table tr:hover, .rules-table tr:hover, .projects-table tr:hover, .feedback-table tr:hover {
+  background: rgba(177, 186, 196, 0.05);
+}
+
+/* 通用通知浮条 */
+#notice {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  border: 1px solid rgba(46, 160, 67, 0.4);
+  background: var(--gh-success-subtle);
+  color: #3fb950;
+  flex-shrink: 0;
+}
+
+#notice.error {
+  border-color: rgba(248, 81, 73, 0.4);
+  background: var(--gh-danger-subtle);
+  color: #f85149;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #79c0ff;
+}
+
+.original-text {
+  background: var(--gh-canvas-inset);
+  padding: 8px 12px;
+  border-radius: 4px;
+  border-left: 2px solid var(--accent);
+  color: var(--gh-fg-default);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.empty {
+  padding: 40px 20px;
+  border: 1px dashed var(--gh-border-default);
+  border-radius: 6px;
+  text-align: center;
+  color: var(--gh-fg-subtle);
+  font-size: 12px;
+}
+
+.empty.compact {
+  padding: 20px 14px;
+}
+
+/* ==========================================================================
+   全局统一 GitHub 风格模态弹窗 (<dialog>) 与右侧滑出抽屉 (.gh-drawer)
+   ========================================================================== */
+
+/* 1. 原生模态弹窗规范 (<dialog>) */
+dialog {
+  color: var(--gh-fg-default);
+  background: #161b22;
+  border: 1px solid var(--gh-border-default);
+  border-radius: 8px;
+  width: min(560px, 92vw);
+  padding: 0;
+  box-shadow: 0 16px 36px rgba(1, 4, 9, 0.85);
+  overflow: hidden;
+}
+
+dialog::backdrop {
+  background: rgba(1, 4, 9, 0.75);
+  backdrop-filter: blur(3px);
+}
+
+.dialog-head {
+  padding: 16px 20px;
+  background: #161b22;
+  border-bottom: 1px solid var(--gh-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dialog-head h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--gh-fg-default);
+}
+
+.dialog-head button {
+  background: transparent;
+  border: 0;
+  font-size: 16px;
+  color: var(--gh-fg-muted);
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.dialog-head button:hover {
+  background: rgba(177, 186, 196, 0.12);
+  color: var(--gh-fg-default);
+}
+
+dialog form {
+  padding: 20px;
+}
+
+.field {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gh-fg-muted);
+  margin-bottom: 16px;
+}
+
+.field input, .field textarea, .field select {
+  margin-top: 6px;
+  background: #010409;
+  border: 1px solid var(--gh-border-default);
+  color: var(--gh-fg-default);
+}
+
+dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gh-border-muted);
+}
+
+/* 2. 通用右侧滑出大抽屉体系 (.gh-drawer-overlay / .gh-drawer-content) */
+.gh-drawer-overlay, .task-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(1, 4, 9, 0.7);
+  backdrop-filter: blur(3px);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.gh-drawer-content, .task-drawer-content, .detail-drawer {
+  width: min(720px, 94vw) !important;
+  max-width: 94vw !important;
+  background: #161b22;
+  border-left: 1px solid var(--gh-border-default);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -12px 0 36px rgba(1, 4, 9, 0.9);
+  animation: ghDrawerSlide 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ghDrawerSlide {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--gh-border-default);
+  background: #161b22;
+  flex-shrink: 0;
+}
+
+.drawer-header-top, .card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drawer-header h3, .drawer-header h2 {
+  color: var(--gh-fg-default);
+  margin: 0;
+}
+
+.drawer-body, .drawer-content-scroll {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #0d1117;
+}
+
+.drawer-footer {
+  padding: 14px 24px;
+  border-top: 1px solid var(--gh-border-default);
+  background: #161b22;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* 抽屉内卡片条目 */
+.drawer-req-item {
+  background: #161b22;
+  border: 1px solid var(--gh-border-default);
+  border-left: 3px solid var(--gh-accent-fg);
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drawer-req-item.is-archived {
+  border-left-color: var(--gh-success-fg);
+}
+
+.req-block-label, .section-label {
+  font-size: 11px;
+  color: var(--gh-fg-subtle);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.req-original-block .original-text {
+  background: #010409;
+  border: 1px solid var(--gh-border-muted);
+  border-left: 2px solid var(--gh-accent-fg);
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: var(--gh-fg-default);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.req-summary-block .summary-text {
+  background: var(--gh-success-subtle);
+  border: 1px solid rgba(46, 160, 67, 0.3);
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: var(--gh-success-fg);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* 命令面板 */
+#palette {
+  padding: 0;
+  width: min(600px, 94vw);
+  margin-top: 10vh;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.palette-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+}
+
+.palette-search input {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+}
+
+.palette-results {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.command {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  align-items: center;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.command:hover {
+  background: rgba(177, 186, 196, 0.12);
+}
+
+.command.selected {
+  background: rgba(177, 186, 196, 0.22);
+  border-left: 3px solid var(--gh-accent-fg);
+  color: var(--gh-fg-default);
+}
+
+.palette-footer {
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--gh-fg-subtle);
+  border-top: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+}
+
+/* 抽屉不透明背景与层次修饰 (D10) */
+.task-drawer-overlay, .gh-drawer-overlay {
+  background: rgba(1, 4, 9, 0.7);
+  backdrop-filter: blur(2px);
+}
+.task-drawer-content, .detail-drawer {
+  background: var(--gh-canvas-subtle) !important;
+  opacity: 1 !important;
+  border-left: 1px solid var(--gh-border-default);
+  box-shadow: -6px 0 28px rgba(0, 0, 0, 0.5);
+}
+
+/* ==========================================================================
+   响应式适配：平板 768x1024 与手机 390x844 视口 (D25)
+   ========================================================================== */
+@media (max-width: 1024px) {
+  /* 移动端滚动容器架构：由 html (documentElement) 作为唯一滚动容器，body 绝不 overflow 剪裁 */
+  html {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-x: clip !important;
+    overflow-y: auto !important;
+  }
+
+  body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  #app {
+    height: auto !important;
+    min-height: 100vh !important;
+    width: 100% !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .workbench {
+    height: auto !important;
+    min-height: 100vh !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: visible !important;
+  }
+
+  /* 侧边栏：移动端真正 position: sticky 在视口顶部可见 */
+  .sidebar {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    padding: 10px 14px 6px !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--gh-border-default) !important;
+    background: var(--gh-canvas-subtle) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    z-index: 100 !important;
+    overflow: visible !important;
+  }
+
+  /* 避免 scrollIntoView(#content) 或聚焦将 sticky 导航推至屏幕外并遮挡标题 */
+  #content,
+  header,
+  h1,
+  h2,
+  .section-head,
+  [tabindex="-1"] {
+    scroll-margin-top: 130px !important;
+  }
+
+  .sidebar-brand-project {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .brand {
+    margin-bottom: 0;
+    font-size: 13px;
+    gap: 8px;
+  }
+
+  .brand-mark {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .project-box {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+
+  .project-box .caption {
+    display: none;
+  }
+
+  .project-action-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #project {
+    width: auto;
+    min-width: 100px;
+    max-width: 160px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  #new-project {
+    width: auto !important;
+    margin-top: 0 !important;
+    padding: 4px 8px;
+    font-size: 12px;
+    white-space: nowrap !important;
+    flex-shrink: 0;
+  }
+
+  /* 顶部紧凑导航：横滚，7个按钮可点 */
+  nav#navigation {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    gap: 6px !important;
+    padding: 6px 0 !important;
+    margin: 6px 0 !important;
+    flex: none !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  nav#navigation button {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    min-height: 34px !important;
+    border: 1px solid var(--gh-border-default) !important;
+    background: var(--gh-canvas-default) !important;
+  }
+
+  nav#navigation button.active {
+    background: rgba(177, 186, 196, 0.20) !important;
+    border-color: var(--gh-accent-fg) !important;
+    color: var(--gh-fg-default) !important;
+    font-weight: 600 !important;
+  }
+
+  .aside-foot {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 4px;
+    border-top: 1px solid var(--gh-border-muted);
+  }
+
+  .aside-foot .palette-trigger {
+    width: auto;
+    flex: 0 0 auto;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .aside-foot #health {
+    flex: 0 0 auto;
+    font-size: 11px;
+  }
+
+  .aside-foot .aside-note {
+    display: none;
+  }
+
+  /* 主区全宽自适应 */
+  .workbench > main {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 12px 16px 32px !important;
+    height: auto !important;
+    min-height: calc(100vh - 120px) !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .header-actions {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  /* 移动端 4 维指标必须呈现为 2 列 */
+  .metrics {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .metric {
+    padding: 8px 12px !important;
+  }
+
+  .metric > div,
+  .metric .metric-content {
+    display: flex !important;
+    align-items: baseline !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+  }
+
+  .metric strong {
+    font-size: 18px !important;
+  }
+
+  /* 移动端精简卡片与抽屉内边距，释放正文阅读宽度 (Requirement 3 & 4) */
+  .panel,
+  .card,
+  .settings-card,
+  .intake-panel {
+    padding: 12px 14px !important;
+  }
+
+  /* 移动端削减 Review 条款对照嵌套边距，让 li 正文达到 >= 280px */
+  .diff-container.panel {
+    padding: 10px 4px !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+
+  .proposal-card.card {
+    padding: 12px 8px !important;
+  }
+
+  .clauses-column {
+    padding: 8px 10px !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .clauses-column .points-list {
+    padding-left: 14px !important;
+    margin: 4px 0 !important;
+  }
+
+  .clauses-column .points-list li {
+    font-size: 12px !important;
+    line-height: 1.55 !important;
+    margin-bottom: 6px !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* 移动端削减 Feedback 嵌套内边距，让便签正文达到 >= 280px */
+  .feedback-card-panel {
+    padding: 10px 8px !important;
+  }
+
+  .panel-scroll-cards,
+  .findings-cards-flow {
+    padding: 0 !important;
+  }
+
+  .gotcha-article {
+    padding: 10px 12px !important;
+    box-sizing: border-box !important;
+  }
+
+  .gotcha-body-text {
+    font-size: 12px !important;
+    line-height: 1.6 !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* 移动端 Settings 删除区域排版：改用纵向 column 布局，input 占满全宽 (Item 2) */
+  .danger-form-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+
+  .danger-confirm-input {
+    max-width: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .btn-danger-confirm {
+    width: 100% !important;
+    white-space: nowrap !important;
+    padding: 8px 14px !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+
+  .danger-zone-card {
+    padding: 12px !important;
+  }
+
+  .danger-header {
+    margin-bottom: 12px !important;
+    gap: 10px !important;
+  }
+
+  .danger-action-box {
+    padding: 10px 12px !important;
+  }
+
+  .drawer-body,
+  .drawer-content-scroll {
+    padding: 12px 14px !important;
+    gap: 12px !important;
+  }
+
+  .drawer-header {
+    padding: 12px 14px !important;
+  }
+
+  .drawer-footer {
+    padding: 10px 14px !important;
+  }
+
+  .drawer-req-item,
+  .drawer-section {
+    padding: 10px 12px !important;
+  }
+
+  /* 设置页统计项在移动端采用 2 列布局 (Requirement 4) */
+  .stats-overview-bar {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .stat-pill {
+    padding: 8px 12px !important;
+  }
+
+  .stat-pill span {
+    white-space: nowrap !important;
+  }
+
+  .stat-pill strong {
+    white-space: nowrap !important;
+  }
+
+  /* 核心内容区容器：390px 下宽度 >= 330px */
+  section#content {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 0 auto !important;
+    min-height: 300px !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding-bottom: 24px !important;
+  }
+
+  /* 修复 Tasks .board-header 挤压变形 */
+  .board-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+
+  .board-header-left {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex: none !important;
+  }
+
+  .board-header-left h2 {
+    font-size: 15px !important;
+    margin: 0 0 2px 0 !important;
+    line-height: 1.4 !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+
+  .board-header-left .muted {
+    display: block !important;
+    font-size: 11px !important;
+    white-space: normal !important;
+  }
+
+  .board-header-right {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 10px !important;
+    flex: none !important;
+  }
+
+  .board-header-right input {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .board-header-right .filter-check {
+    display: inline-flex !important;
+    align-items: center !important;
+    white-space: nowrap !important;
+    font-size: 12px !important;
+    gap: 6px !important;
+    flex: 0 0 auto !important;
+  }
+
+  .board-header-right .view-toggle {
+    display: inline-flex !important;
+    white-space: nowrap !important;
+    margin-left: auto !important;
+    flex: 0 0 auto !important;
+  }
+
+  .board-header-right .view-toggle button {
+    white-space: nowrap !important;
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+  }
+
+  /* 工具栏与表单换行 */
+  .toolbar,
+  .filter-bar,
+  .actions-bar,
+  .section-head,
+  .form-row,
+  .intake-footer,
+  .card-head,
+  .card-top,
+  .drawer-header-top {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  /* 表格内部横滚体系与 Rules 表格最小宽规范 (消除竖排挤压) */
+  .rules-table-container,
+  .table-wrap,
+  .gh-table-wrap,
+  .projects-card,
+  .feedback-table-container,
+  .kanban-wrapper {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .github-rules-table {
+    min-width: 880px !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+  }
+
+  .github-rules-table th {
+    white-space: nowrap !important;
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+    height: auto !important;
+    max-height: 48px !important;
+    line-height: 1.4 !important;
+  }
+
+  .github-rules-table td {
+    padding: 10px 12px !important;
+    vertical-align: middle !important;
+    line-height: 1.4 !important;
+  }
+
+  .github-rules-table th:nth-child(1),
+  .github-rules-table td:nth-child(1) {
+    width: 75px !important;
+    min-width: 75px !important;
+    white-space: nowrap !important;
+  }
+
+  .github-rules-table th:nth-child(2),
+  .github-rules-table td:nth-child(2) {
+    min-width: 300px !important;
+  }
+
+  .github-rules-table th:nth-child(3),
+  .github-rules-table td:nth-child(3) {
+    width: 190px !important;
+    min-width: 190px !important;
+    white-space: nowrap !important;
+  }
+
+  .github-rules-table th:nth-child(4),
+  .github-rules-table td:nth-child(4) {
+    width: 175px !important;
+    min-width: 175px !important;
+    white-space: nowrap !important;
+  }
+
+  .github-rules-table th:nth-child(5),
+  .github-rules-table td:nth-child(5) {
+    width: 140px !important;
+    min-width: 140px !important;
+    white-space: nowrap !important;
+    text-align: right !important;
+  }
+
+  .github-rules-table .tag,
+  .github-rules-table code,
+  .github-rules-table .score-val {
+    white-space: nowrap !important;
+  }
+
+  .rules-table,
+  .projects-table,
+  .feedback-table,
+  .gh-table {
+    min-width: 580px;
+  }
+
+  /* 抽屉宽度适配与任务抽屉头部元素换行 / 关闭按钮可点 */
+  .gh-drawer-content,
+  .task-drawer-content,
+  .detail-drawer {
+    width: 100% !important;
+    max-width: 100vw !important;
+  }
+
+  .task-drawer-content .drawer-header .card-top,
+  .detail-drawer .drawer-header .drawer-header-top {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+  }
+
+  .task-drawer-content .drawer-header .card-top > div,
+  .detail-drawer .drawer-header .drawer-header-top > div {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 44px) !important;
+  }
+
+  /* 仅针对抽屉右上角关闭按钮设置大点击区，不污染流转状态等其他 subtle 按钮 (Item 3) */
+  .task-drawer-content .drawer-header .card-top button[aria-label="关闭窗口"],
+  .detail-drawer .drawer-header button.close-btn {
+    flex-shrink: 0 !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 6px !important;
+    font-size: 18px !important;
+    cursor: pointer !important;
+    z-index: 20 !important;
+    position: relative !important;
+  }
+
+  .task-drawer-content .drawer-header .card-top button.action-btn,
+  .task-drawer-content .drawer-header .card-top button:not([aria-label="关闭窗口"]) {
+    font-size: 11px !important;
+    padding: 3px 8px !important;
+    min-width: auto !important;
+    min-height: auto !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+
+  .task-drawer-content .drawer-header h2,
+  .detail-drawer .drawer-header h3 {
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    white-space: normal !important;
+  }
+
+  dialog {
+    width: min(540px, 94vw) !important;
+    max-width: 96vw !important;
+  }
+
+  /* 作用域拆分面板垂直堆叠 */
+  .explorer-split-container {
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .tree-sidebar-panel {
+    width: 100% !important;
+    max-height: 260px !important;
+  }
+
+  /* 反馈页双栏网格改为单列 */
+  .feedback-dual-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 各 view root 在移动端适配 auto 高度与滚动 */
+  .tasks-view-root,
+  .rules-view-root,
+  .feedback-view-root,
+  .review-view-root,
+  .activity-view-root,
+  .settings-view {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+}

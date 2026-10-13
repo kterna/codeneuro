@@ -1,0 +1,524 @@
+{
+  "verified_date": "2026-10-13",
+  "data": "synthetic isolated QA database",
+  "base_commit": "c30cd63c20f74c0b52c76d510b24bac0e4cc51a2",
+  "browser_functional_groups": 20,
+  "visual_page_viewport_groups": 28,
+  "files": [
+    {
+      "path": "browser-fix-results.json",
+      "bytes": 10910,
+      "sha256": "706e26d6b537a06cf85f801c8255ae66f7aecca33bd8f63dba0cb57c570ba662"
+    },
+    {
+      "path": "browser-fix.log",
+      "bytes": 282,
+      "sha256": "387251bd27c252bd0e10225d6e34401264c9f2093fbc94de95f9f72fcd2921cd"
+    },
+    {
+      "path": "browser-more-results.json",
+      "bytes": 7783,
+      "sha256": "87e6f3437695f64cb66e01a6dd426e4209862670490f97129f86c61259d1aed1"
+    },
+    {
+      "path": "browser-more.log",
+      "bytes": 532,
+      "sha256": "7f2bd48b137bab8db12b352ebd48102ffc00a7703b06c9a7447310d2960b1ca8"
+    },
+    {
+      "path": "browser-smoke.log",
+      "bytes": 80,
+      "sha256": "301a040ac131995ef39e76bfd935b20bcc81316b306d165807b38624549b2828"
+    },
+    {
+      "path": "browser-visual-results.json",
+      "bytes": 8475,
+      "sha256": "1dea350de466a26a12c41c101fc5a999181fb4d3f9bb76501f6d550184457122"
+    },
+    {
+      "path": "browser-visual.log",
+      "bytes": 61,
+      "sha256": "5eb25f683588b01ad376ecff8e4ec35ce24f07a3a9bd094c4081597dd102ce7e"
+    },
+    {
+      "path": "build-final.log",
+      "bytes": 467,
+      "sha256": "5038c5f04faf5b7ffbf386d87e7029e90c6716808613e7728f5e2f0c6dc4b4c3"
+    },
+    {
+      "path": "preservation-results.json",
+      "bytes": 93,
+      "sha256": "685c4e55241af6a58b43a4531d66b6077794f5932a97102ccadef02b9469d438"
+    },
+    {
+      "path": "pytest-final.log",
+      "bytes": 183,
+      "sha256": "560a6f0e4844abc15c659718ddcc0a92a63ef7feea3d0bbdb4115ea17f62edbb"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4159,
+      "sha256": "42a14e24e83c4885e13f2f2ab0441b5d221a97dd412516360c0367bff9a2dff9"
+    },
+    {
+      "path": "repro/browser_fix_checks.cjs",
+      "bytes": 12181,
+      "sha256": "02b7f5de89350c311eeac95fde630259bb027a2f88f09697e277bfa94d6fa6a7"
+    },
+    {
+      "path": "repro/browser_more_checks.cjs",
+      "bytes": 22554,
+      "sha256": "e654c26ad9ebcc192319f8307c8a35cdef9ba61db7f47d172250017b6c2bb5d3"
+    },
+    {
+      "path": "repro/browser_visual_checks.cjs",
+      "bytes": 8825,
+      "sha256": "8dcad242b06185bc7c817e1d19637e9bbfab9a0fa19cff03eb8b2b9c3e37bb5b"
+    },
+    {
+      "path": "repro/seed.py",
+      "bytes": 7228,
+      "sha256": "f9eadf020ec8c41e016bb83ff2f294e94a2f30a37ba741f90c8dad53e40ff2be"
+    },
+    {
+      "path": "repro/static_quality.py",
+      "bytes": 2140,
+      "sha256": "1d17c884359d87af29be581188ac4c7df879d4684d23f4e2c5066cc153169467"
+    },
+    {
+      "path": "repro/verify_preservation.py",
+      "bytes": 911,
+      "sha256": "3053132d5e7cdda500a7b123eb99f12863838aead363cdd1cfdc7faa0abcded0"
+    },
+    {
+      "path": "screenshots/fixed-desktop-1280-activity-bottom.png",
+      "bytes": 58896,
+      "sha256": "8ce5001489bdc0c124429d5627694ec80dcd00cc26d8309ce8f1ab50aba47b99"
+    },
+    {
+      "path": "screenshots/fixed-desktop-1280-review-bottom.png",
+      "bytes": 77504,
+      "sha256": "7913f1cdb9c12c41d6f65b480b75e3b632469c1810bb96c80e60a1f963fcbbb1"
+    },
+    {
+      "path": "screenshots/fixed-desktop-1280-settings-bottom.png",
+      "bytes": 68604,
+      "sha256": "466a33c8550608b2338bcbdab97e7e684834ac83b8b5c8562e951e7d3a3e18bc"
+    },
+    {
+      "path": "screenshots/fixed-desktop-1440-activity-bottom.png",
+      "bytes": 68718,
+      "sha256": "acd8e4b1671dbc714bcd80357485bb094c308231126b89093e7f95010f02e9d3"
+    },
+    {
+      "path": "screenshots/fixed-desktop-1440-review-bottom.png",
+      "bytes": 96315,
+      "sha256": "8369fdd28875d49531b7964809838b26fbe71ffe1650cf23fe1fe7e347dd1f3e"
+    },
+    {
+      "path": "screenshots/fixed-desktop-1440-settings-bottom.png",
+      "bytes": 80456,
+      "sha256": "f4516bf0f9944475b54cef930090c72395fddc042259e71c8734fc5d9c1d62c0"
+    },
+    {
+      "path": "screenshots/fixed-explorer.png",
+      "bytes": 87088,
+      "sha256": "b209db2f429d65af98bef34f2ceec79b5bd69827eefde1dff0c496b668ceff85"
+    },
+    {
+      "path": "screenshots/fixed-mobile-activity.png",
+      "bytes": 56257,
+      "sha256": "db3b13c5cc47c21d55ca6dec4f6e1d0d4ef7e34bf78682f9559393409930a673"
+    },
+    {
+      "path": "screenshots/fixed-mobile-explorer.png",
+      "bytes": 48989,
+      "sha256": "2cccfe44abcaefb5a7cb28838f6eb5fcb745cad40b9c04b6d510ceae86d1902b"
+    },
+    {
+      "path": "screenshots/fixed-mobile-feedback.png",
+      "bytes": 45716,
+      "sha256": "220544ca2289d78c81e779f9ed740e70075ddae44b258e483a01f7477736e9fe"
+    },
+    {
+      "path": "screenshots/fixed-mobile-review.png",
+      "bytes": 57794,
+      "sha256": "3ed8ff0e7409b99ccf78256eb422e122f80ffc3905ea49e1bff885602e18fc35"
+    },
+    {
+      "path": "screenshots/fixed-mobile-rules.png",
+      "bytes": 56507,
+      "sha256": "64fed99710851a55efb9cc4ac13ae9cc63ca03d979b4976c835b11038df86ead"
+    },
+    {
+      "path": "screenshots/fixed-mobile-settings.png",
+      "bytes": 47388,
+      "sha256": "cb00340bbdb586e4e5114bdc2887c90c8d14cd2b2d0d512d8bfd0be4f24344f9"
+    },
+    {
+      "path": "screenshots/fixed-mobile-tasks.png",
+      "bytes": 48611,
+      "sha256": "5399a9874ffa1631f9c403348d39bb94a34c847e148102c4286916f17387a3ad"
+    },
+    {
+      "path": "screenshots/fixed-review.png",
+      "bytes": 98184,
+      "sha256": "dc1550b6b0438960d305f9ddc7713944f420cbff1242fb82a98edcffbcdf8c10"
+    },
+    {
+      "path": "screenshots/polished-1280-activity.png",
+      "bytes": 72117,
+      "sha256": "a7633a5ab3cb3aa0baf66a0ebac3b9e46a3911d12522b9303fe591604949c5bf"
+    },
+    {
+      "path": "screenshots/polished-1280-explorer.png",
+      "bytes": 72217,
+      "sha256": "0fe81c8379158c0f44e0e8339f60113cfca1f00bafeb2e31461e0e850db4afcd"
+    },
+    {
+      "path": "screenshots/polished-1280-feedback-content.png",
+      "bytes": 70984,
+      "sha256": "0eb5369b26ad74f945bcd6911e83861251ec1624ef08ccd025eeed00d84b9ded"
+    },
+    {
+      "path": "screenshots/polished-1280-feedback.png",
+      "bytes": 67852,
+      "sha256": "530f9453960e23d31c014c6c9d1b8590fa227114e53983e007586c6e769e4caf"
+    },
+    {
+      "path": "screenshots/polished-1280-project-dialog.png",
+      "bytes": 111334,
+      "sha256": "12ee9959eb948c8712b3cf854bf7050aa2acba062f59eb4b8b34ce8277b87414"
+    },
+    {
+      "path": "screenshots/polished-1280-review-content.png",
+      "bytes": 73155,
+      "sha256": "73f2329a69b70bf1bc1fa669f1266f03cf0ab1258de0d8d7bff2d0a21080da7b"
+    },
+    {
+      "path": "screenshots/polished-1280-review.png",
+      "bytes": 81412,
+      "sha256": "2a352bae49ab74e28104d522ee6da6889e858acec20fc3f4f3e0fb3d725a6a8a"
+    },
+    {
+      "path": "screenshots/polished-1280-rules-drawer.png",
+      "bytes": 124598,
+      "sha256": "2374ccf7d0bbb6708237e1bb779c7d9f39791b8f62aadcd0c21a1a656f3b6575"
+    },
+    {
+      "path": "screenshots/polished-1280-rules.png",
+      "bytes": 102230,
+      "sha256": "bebb0e16536c5aeec248c80c6d3cd048e988716bdb97dce9e03e852455aa4716"
+    },
+    {
+      "path": "screenshots/polished-1280-settings-content.png",
+      "bytes": 68609,
+      "sha256": "d73b1214bc83da1e4aee1c2ae32963aa3baa46035a5737d7beb18154184be1d6"
+    },
+    {
+      "path": "screenshots/polished-1280-settings.png",
+      "bytes": 64766,
+      "sha256": "07628bb4a765133ede53a49753f4840b8870fb518c64d2399455b202305b7169"
+    },
+    {
+      "path": "screenshots/polished-1280-status-dialog.png",
+      "bytes": 71257,
+      "sha256": "ea23941afc885acfcbf14d2b3e1a7dde848f9fea66899ae6817ade4df0e9a4fb"
+    },
+    {
+      "path": "screenshots/polished-1280-tasks-content.png",
+      "bytes": 80242,
+      "sha256": "a397d55f9f054b3d97605a97788213c3ef3baced58f2541731045f834b327a03"
+    },
+    {
+      "path": "screenshots/polished-1280-tasks-drawer.png",
+      "bytes": 100528,
+      "sha256": "925c5309e2ab2814da580037f0fa3e988b2e4d85f438ad63291dd999a7168abc"
+    },
+    {
+      "path": "screenshots/polished-1280-tasks.png",
+      "bytes": 80242,
+      "sha256": "a397d55f9f054b3d97605a97788213c3ef3baced58f2541731045f834b327a03"
+    },
+    {
+      "path": "screenshots/polished-1440-activity.png",
+      "bytes": 85714,
+      "sha256": "1fb7a6bf54963ffbd81003757cdc25743d9ce65b39c1ce802b51969d98907c91"
+    },
+    {
+      "path": "screenshots/polished-1440-explorer.png",
+      "bytes": 78348,
+      "sha256": "f9edba62f268f9414ed348b723fe352822c2f77ebb62155e0caddbe67edfebb0"
+    },
+    {
+      "path": "screenshots/polished-1440-feedback-content.png",
+      "bytes": 127973,
+      "sha256": "6d688e21af4fd3ee49678ddedcd4e2af5d09351fde4e62bc9c62baff5ae87ed5"
+    },
+    {
+      "path": "screenshots/polished-1440-feedback.png",
+      "bytes": 127973,
+      "sha256": "6d688e21af4fd3ee49678ddedcd4e2af5d09351fde4e62bc9c62baff5ae87ed5"
+    },
+    {
+      "path": "screenshots/polished-1440-project-dialog.png",
+      "bytes": 144430,
+      "sha256": "dc4264da5c579da41545c8e2dcbd4e7ec765b46832313cc9b5122bb4ec08ad1a"
+    },
+    {
+      "path": "screenshots/polished-1440-review-content.png",
+      "bytes": 99456,
+      "sha256": "6095d26e6883cb326a6f9f1675e35c6dee6b465fb43665fff78dc523d70ccab0"
+    },
+    {
+      "path": "screenshots/polished-1440-review.png",
+      "bytes": 98552,
+      "sha256": "48bdbe8ba30558a47c6515445e157a7a15fc9daf8c53aa74d719c4a5332c0675"
+    },
+    {
+      "path": "screenshots/polished-1440-rules-drawer.png",
+      "bytes": 148571,
+      "sha256": "c67e5d6c4a5aa94bd1968148797d89cd11b8ad93b440648b5781afd13d13e581"
+    },
+    {
+      "path": "screenshots/polished-1440-rules.png",
+      "bytes": 122989,
+      "sha256": "531514627f6ec08e44cb2fac86e2e5a05bb32f5952655fb37336c52c84b7d7ba"
+    },
+    {
+      "path": "screenshots/polished-1440-settings-content.png",
+      "bytes": 80571,
+      "sha256": "c485e3ac65b48af4a7371296a383cd989f567cef17049df305b49e93b621afca"
+    },
+    {
+      "path": "screenshots/polished-1440-settings.png",
+      "bytes": 79219,
+      "sha256": "2eef858e6514064935425ed413fb986b3000c24c1b0e6bc5cd3c85e3df0de882"
+    },
+    {
+      "path": "screenshots/polished-1440-status-dialog.png",
+      "bytes": 92108,
+      "sha256": "16abc5994dcd72813e475487e130e86b8701923cd884b8e5b9f8c205df43f886"
+    },
+    {
+      "path": "screenshots/polished-1440-tasks-content.png",
+      "bytes": 95939,
+      "sha256": "efcfbb4e569f8240783ec7801b1ee708c3b309ab71e0d3d6c7b5019a2bb08447"
+    },
+    {
+      "path": "screenshots/polished-1440-tasks-drawer.png",
+      "bytes": 128018,
+      "sha256": "dc2c9c1675613159d8de9821aba3d48e74c395c4276a0521337189c69d556d8e"
+    },
+    {
+      "path": "screenshots/polished-1440-tasks.png",
+      "bytes": 95939,
+      "sha256": "efcfbb4e569f8240783ec7801b1ee708c3b309ab71e0d3d6c7b5019a2bb08447"
+    },
+    {
+      "path": "screenshots/polished-390-activity.png",
+      "bytes": 54918,
+      "sha256": "a1eee808cb679bee9930974bdff9de3041a0e493ba81842ad4f958450168d734"
+    },
+    {
+      "path": "screenshots/polished-390-explorer.png",
+      "bytes": 48979,
+      "sha256": "cb85635d777a52f769bd82f0511ee132156b48b5b7d7f7f907a709da9dc8ddc0"
+    },
+    {
+      "path": "screenshots/polished-390-feedback-content.png",
+      "bytes": 49928,
+      "sha256": "8a5329fa57a731c9938103ba296621823101206cbb2763579de831198d24ef84"
+    },
+    {
+      "path": "screenshots/polished-390-feedback.png",
+      "bytes": 45047,
+      "sha256": "d809e3416e8c6c81a4453d2be9d52cf8c1cfdd55c70ea827facf9666446560a0"
+    },
+    {
+      "path": "screenshots/polished-390-project-dialog.png",
+      "bytes": 63241,
+      "sha256": "f6284936a922131599eaefc775b922d734d68299037db9068914dddc919d57e0"
+    },
+    {
+      "path": "screenshots/polished-390-review-content.png",
+      "bytes": 52679,
+      "sha256": "20fac79cf0c842d019f4eb3d89cc56f8497798ae6f5035c0f2a7ecb3daf7d292"
+    },
+    {
+      "path": "screenshots/polished-390-review.png",
+      "bytes": 57231,
+      "sha256": "584212080c717b73085d785ff660fbac4b581e24355ee54fb78e2f1753aa78af"
+    },
+    {
+      "path": "screenshots/polished-390-rules-drawer.png",
+      "bytes": 30311,
+      "sha256": "be2c0d0f7818fea838f68e3e09cbf0f70fec445cd7407c11a9a5c7ca4ba5b5cb"
+    },
+    {
+      "path": "screenshots/polished-390-rules.png",
+      "bytes": 56378,
+      "sha256": "3f1bad6e7d87feb0fab578fc3313b2e1dd388f0fa6c60b1ef95d03624fc906d7"
+    },
+    {
+      "path": "screenshots/polished-390-settings-content.png",
+      "bytes": 40363,
+      "sha256": "9b6de5e220601f30be48803b7c98e53f0aed807c8f5f1ef9afbfc6e7304cfe50"
+    },
+    {
+      "path": "screenshots/polished-390-settings.png",
+      "bytes": 46209,
+      "sha256": "ea16ca8eae81c58bc0e296da54e1192e0cf28f8faa1bf888231133637f54d07d"
+    },
+    {
+      "path": "screenshots/polished-390-status-dialog.png",
+      "bytes": 36615,
+      "sha256": "7ef667f07895023e6652e94567f4f3e8724840bfc54f72ab2a2d718043586fe9"
+    },
+    {
+      "path": "screenshots/polished-390-tasks-content.png",
+      "bytes": 48611,
+      "sha256": "5ee7d6c243c10a5231f6bce37ec5bde6b269d5e74377d16134f9d41c27b82a06"
+    },
+    {
+      "path": "screenshots/polished-390-tasks-drawer.png",
+      "bytes": 29486,
+      "sha256": "a4e6babc97193bbc2c88469b510b8040afc43ef312c23e3c4e535fe6964408bc"
+    },
+    {
+      "path": "screenshots/polished-390-tasks.png",
+      "bytes": 48611,
+      "sha256": "5ee7d6c243c10a5231f6bce37ec5bde6b269d5e74377d16134f9d41c27b82a06"
+    },
+    {
+      "path": "screenshots/polished-768-activity.png",
+      "bytes": 72526,
+      "sha256": "98e3c91e9a828c2c4beca0eb806eed30d88d3c6db8cb346bea8cd030561305d8"
+    },
+    {
+      "path": "screenshots/polished-768-explorer.png",
+      "bytes": 60559,
+      "sha256": "c499723cab49f75cfc9dfdff5d8df8cd6afa7cb9ccfe2ef9bb8aafe87d40ded1"
+    },
+    {
+      "path": "screenshots/polished-768-feedback-content.png",
+      "bytes": 77819,
+      "sha256": "c779afe72570c23ad5c40b4eb77c205fd01acf7910b1b0773222679aff4708c4"
+    },
+    {
+      "path": "screenshots/polished-768-feedback.png",
+      "bytes": 69942,
+      "sha256": "5394bc45e1f4de8c5d76f84e2b607d463e5daa49ec1149f6e3b11ed0b3bad81e"
+    },
+    {
+      "path": "screenshots/polished-768-project-dialog.png",
+      "bytes": 111298,
+      "sha256": "2c166ca8f8c20d294227f172c950f8cb05e5a3dea9c689272c88d8fbc6bbfc99"
+    },
+    {
+      "path": "screenshots/polished-768-review-content.png",
+      "bytes": 85705,
+      "sha256": "f9e6c54e4804b204868d6897e2ed1630d45d74a2fbbe275d5bee30093b9da50e"
+    },
+    {
+      "path": "screenshots/polished-768-review.png",
+      "bytes": 82576,
+      "sha256": "9e89a3c81d3d21ddac1d48edb8a95ce5edef17d5f49ef9b981dd8e216674ac1d"
+    },
+    {
+      "path": "screenshots/polished-768-rules-drawer.png",
+      "bytes": 33664,
+      "sha256": "dea8abdcbb0bbafafbde7df74ada1826eb7a632a137135fd5fa349b74f770af8"
+    },
+    {
+      "path": "screenshots/polished-768-rules.png",
+      "bytes": 102677,
+      "sha256": "08d7b73fb02c8f27cfad48ebe2ae58893115a1c564e9b560ac1eb79cd1aabaea"
+    },
+    {
+      "path": "screenshots/polished-768-settings-content.png",
+      "bytes": 59619,
+      "sha256": "5a4798493a4ed8114abe19e29ce5582bcfe890d98a0f12516c412e5d796cd5bb"
+    },
+    {
+      "path": "screenshots/polished-768-settings.png",
+      "bytes": 61185,
+      "sha256": "9de6c82cefebe43c3e6b5098fe6b76447342ff927d127f93d3a9ac92776ffde1"
+    },
+    {
+      "path": "screenshots/polished-768-status-dialog.png",
+      "bytes": 53402,
+      "sha256": "548eee10bfd8a485cb5578cd032f23ed8b70f602fb3c3f063dc55b4a29595516"
+    },
+    {
+      "path": "screenshots/polished-768-tasks-content.png",
+      "bytes": 73354,
+      "sha256": "b35d817d603e67f0c0cf760a4bc265f319726a32469b31f35b8e6f308e1c4803"
+    },
+    {
+      "path": "screenshots/polished-768-tasks-drawer.png",
+      "bytes": 32951,
+      "sha256": "735f975fcc79e62971981ebe26bfe9d976a19940aeb59f39f0ee40ffecbd88f3"
+    },
+    {
+      "path": "screenshots/polished-768-tasks.png",
+      "bytes": 73354,
+      "sha256": "b35d817d603e67f0c0cf760a4bc265f319726a32469b31f35b8e6f308e1c4803"
+    },
+    {
+      "path": "screenshots/verified-mobile-0.png",
+      "bytes": 41823,
+      "sha256": "2f2a769ff1ae766677283facd6063969859dd053da810627b44dbf9c3e39514b"
+    },
+    {
+      "path": "screenshots/verified-mobile-1.png",
+      "bytes": 34700,
+      "sha256": "7df28cd671523aee98697f68b6042b1440961038b6a60b63e19ef9e5d35b7cb0"
+    },
+    {
+      "path": "screenshots/verified-mobile-2.png",
+      "bytes": 59152,
+      "sha256": "8315a070d01d13a72128262304ebf5fdd509931198bc1eafe7990eb0c0dafb2b"
+    },
+    {
+      "path": "screenshots/verified-mobile-3.png",
+      "bytes": 57195,
+      "sha256": "53773350143847914bf42aaae1b7519413a04f56f12b9f2f93dd573eb24e2cd3"
+    },
+    {
+      "path": "screenshots/verified-mobile-4.png",
+      "bytes": 36445,
+      "sha256": "2b9e2542f0fe2cb5b8a3c825087e11a64d4f124c675036b48e2f9ab856ec2251"
+    },
+    {
+      "path": "screenshots/verified-mobile-5.png",
+      "bytes": 51696,
+      "sha256": "1c5d65124763ce744ce3c8a83627d13d38e8b5eac4526d738a29fca178e6f9db"
+    },
+    {
+      "path": "screenshots/verified-mobile-6.png",
+      "bytes": 41291,
+      "sha256": "db99a48fba463c3bed4c7803db86d69004e793081e75562189766ead53b9c5b6"
+    },
+    {
+      "path": "screenshots/verified-mobile-rule-drawer.png",
+      "bytes": 28960,
+      "sha256": "e67e0076cae5616353b483eab3a44c9c229f5636c6a7b618e9f34843f9963878"
+    },
+    {
+      "path": "screenshots/verified-mobile-task-drawer.png",
+      "bytes": 29486,
+      "sha256": "a4e6babc97193bbc2c88469b510b8040afc43ef312c23e3c4e535fe6964408bc"
+    },
+    {
+      "path": "static-results.json",
+      "bytes": 622,
+      "sha256": "e6e078e8f80c411c59d531579ff3a6daaf56741ac22b5a8a15ffe7d581402a65"
+    },
+    {
+      "path": "visual-review.md",
+      "bytes": 2054,
+      "sha256": "5577caa168c80396d4e0a8cb019a42854c13c5889055205c03bd4e22fc762edf"
+    }
+  ]
+}

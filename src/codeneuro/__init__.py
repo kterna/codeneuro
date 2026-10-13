@@ -1,3 +1,1 @@
-"""CodeNeuro - Cognitive Context & Scoped Rules Engine for Autonomous Coding Agents."""
-
-__version__ = "0.1.0"
+"""Staged CodeNeuro modular-monolith rebuild. No imports from the legacy package."""

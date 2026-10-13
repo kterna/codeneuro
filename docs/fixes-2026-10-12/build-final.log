@@ -1,0 +1,13 @@
+
+> codeneuro-workbench@0.1.0 build
+> vue-tsc --noEmit && vite build
+
+vite v7.0.6 building for production...
+transforming...
+✓ 45 modules transformed.
+rendering chunks...
+computing gzip size...
+../src/codeneuro/static/index.html                   0.38 kB │ gzip:  0.30 kB
+../src/codeneuro/static/assets/index-D76WGwYK.css   53.46 kB │ gzip:  9.27 kB
+../src/codeneuro/static/assets/index-DeZ8GR9N.js   142.48 kB │ gzip: 50.07 kB
+✓ built in 762ms

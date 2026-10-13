@@ -1,0 +1,155 @@
+{
+  "base_commit": "c30cd63c20f74c0b52c76d510b24bac0e4cc51a2",
+  "fixtures": {
+    "project": "audit-a",
+    "task": "task_cf6f8291a9554406a631708fd509c9bd",
+    "session": "session_d5d3eccb91d7433e99c0d332e9e0dca8",
+    "requirements": [
+      "requirement_969aa3b29cc740b897d31672d68fe156",
+      "requirement_c351c08c39354e90afee78f1d7b8ab89"
+    ],
+    "rules": {
+      "global": "rule_50c9bf6c3b6f4901a90417f960809273",
+      "pay": "rule_17ccbe28330e4a70807fd5729cdd1ee7",
+      "python": "rule_45880f86b3ee42c38824d608f1285ed0",
+      "root": "rule_86d3d5ba66664de99fb1643d97993724",
+      "deep": "rule_2be1a8e56d6847eaacfdeebdd084d628",
+      "deprecated": "rule_83656cb9fb4d476b9820989a4ad93383",
+      "draft": "rule_b4a292a421024150948dd9e0508075b1",
+      "revoked": "rule_a0e61c0e5aa449a49a49fe3ed4483196"
+    },
+    "approved": "proposal_a58ff64e75b643aba66f6a486dbfb960",
+    "pending": [
+      "proposal_2ddf1d401952494a876f8f7b11f46d4b",
+      "proposal_1276d891897a4429912c3788a6b04f5b",
+      "proposal_59b83f1c8626428e9b5b912c27a33e02",
+      "proposal_c8388e04a8a14fedbf5dbf43bef31339",
+      "proposal_8898b1928f4542b983bec42cf4ef0590",
+      "proposal_bf18efad10a8454bba3a8d77b02e5360"
+    ],
+    "issue": "issue_a2e509f2807a44a2a6c275abba24e7a9"
+  },
+  "probes": {
+    "audit_truncation": {
+      "stored": 163,
+      "api_count": 100,
+      "has_pagination": false
+    },
+    "score_label": {
+      "actual_delivery_count": 111,
+      "eval_count": 1
+    },
+    "ledger_missing_evidence": {
+      "keys": [
+        "project_id",
+        "tasks",
+        "worktrees",
+        "requirements",
+        "findings",
+        "rules",
+        "scope_density",
+        "proposals",
+        "events"
+      ],
+      "issue_id": "issue_a2e509f2807a44a2a6c275abba24e7a9",
+      "contains_issue": false,
+      "test_reports_included": false
+    },
+    "scope_reference": {
+      "src/pay/**": {
+        "src/pay/refund.py": true,
+        "src/payment/charge.py": false,
+        "src/lib/helper.py": false
+      },
+      "src/**/*.py": {
+        "src/pay/refund.py": true,
+        "src/payment/charge.py": true,
+        "src/lib/helper.py": true
+      },
+      "*": {
+        "src/pay/refund.py": false,
+        "src/payment/charge.py": false,
+        "src/lib/helper.py": false
+      }
+    },
+    "default_feedback": {
+      "accepted": false,
+      "error": "Debug feedback is not enabled.",
+      "code": "forbidden"
+    },
+    "archived_requirement_draft_reactivation": {
+      "archived_requirement": "requirement_3fc7239c5b23486492d3f6a7a80180b5",
+      "rule_status": "active",
+      "delivered_again": true
+    },
+    "session_handoff": {
+      "accepted": false,
+      "error": "Only its originating Agent session may mutate this draft.",
+      "code": "forbidden"
+    },
+    "duplicate_project": {
+      "status": 500,
+      "body": "Internal Server Error"
+    },
+    "slash_project_create": {
+      "status": 200,
+      "body": {
+        "id": "bad/project",
+        "name": "slash id"
+      }
+    },
+    "slash_project_read": {
+      "status": 404,
+      "body": {
+        "detail": "Not Found"
+      }
+    },
+    "slash_project_delete": {
+      "status": 404,
+      "body": {
+        "detail": "Not Found"
+      }
+    },
+    "delete_rule_project": {
+      "status": 500,
+      "body": "Internal Server Error"
+    },
+    "delete_requirement_project": {
+      "status": 500,
+      "body": "Internal Server Error"
+    },
+    "delete_empty_project": {
+      "status": 200,
+      "body": {
+        "deleted": true,
+        "id": "probe-delete-empty"
+      }
+    },
+    "delete_missing_project": {
+      "status": 200,
+      "body": {
+        "deleted": true,
+        "id": "does-not-exist"
+      }
+    },
+    "remote_path_scan": {
+      "status": 200,
+      "body": {
+        "workspace": "C:\\Users\\25692\\AppData\\Local\\Temp\\codeneuro-audit-a23987212a\\hub-only-fixture",
+        "tree": [
+          {
+            "path": "hub-only-synthetic-marker.txt",
+            "is_dir": false
+          }
+        ]
+      }
+    },
+    "database_integrity": {
+      "integrity": "ok",
+      "foreign_key_violations": []
+    },
+    "delete_failure_rollback": {
+      "rule_project_present": true
+    }
+  }
+}

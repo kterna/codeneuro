@@ -1,0 +1,101 @@
+{
+  "audit_date": "2026-10-12",
+  "timezone": "Asia/Shanghai",
+  "baseline": "c30cd63c20f74c0b52c76d510b24bac0e4cc51a2",
+  "purpose": "Recorded execution summary from this audit; not a raw terminal transcript.",
+  "isolation": {
+    "source": "Git archive snapshot of baseline",
+    "runtime_root": "C:/Users/25692/AppData/Local/Temp/codeneuro-audit-a23987212a",
+    "data": "Synthetic fixtures only",
+    "real_dist_batches_used": false,
+    "product_code_modified": false,
+    "production_database_included": false
+  },
+  "environment": {
+    "platform": "Windows",
+    "python": "3.11.13",
+    "python_executable": "D:/1/github/codeneuro/.venv/Scripts/python.exe",
+    "node_executable": "C:/Program Files/nodejs/node.exe",
+    "browser_executable": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "browser_viewports": [[1440, 900], [1280, 720], [768, 1024], [390, 844]],
+    "physical_mobile_devices_tested": false
+  },
+  "checks": [
+    {
+      "id": "V01",
+      "name": "Existing pytest suite",
+      "command": "python -B -m pytest -q -p no:cacheprovider",
+      "source_context": "Isolated baseline source with its src directory on PYTHONPATH",
+      "result": "passed",
+      "passed": 49,
+      "duration_seconds": 54.71,
+      "raw_terminal_transcript_included": false
+    },
+    {
+      "id": "V02",
+      "name": "Frontend type check and production build",
+      "command": "vue-tsc --noEmit && vite build",
+      "result": "passed",
+      "raw_terminal_transcript_included": false
+    },
+    {
+      "id": "V03",
+      "name": "Rebuilt and committed frontend assets byte match",
+      "result": "passed",
+      "raw_result": "static-results.json",
+      "assets": ["index-BPMUtY-t.js", "index-e_YfIbWA.css"]
+    },
+    {
+      "id": "V04",
+      "name": "Repository scripts/browser_smoke.py",
+      "result": "passed in this execution including cleanup",
+      "javascript_exceptions": 0,
+      "raw_terminal_transcript_included": false,
+      "limitation": "A successful single run does not disprove the historical cleanup issue documented in README."
+    },
+    {
+      "id": "V05",
+      "name": "Targeted browser audit",
+      "result": "Harness completed; product defects found",
+      "page_errors": 0,
+      "pages": ["explorer", "tasks", "rules", "review", "feedback", "activity", "settings"],
+      "screenshots": 42,
+      "raw_results": ["browser-results.json", "browser-followup.json"]
+    },
+    {
+      "id": "V06",
+      "name": "Targeted backend and import probes",
+      "result": "Completed; product defects reproduced",
+      "raw_results": ["backend-results.json", "import-results.json"]
+    },
+    {
+      "id": "V07",
+      "name": "Synthetic database backup and reopen",
+      "result": "passed",
+      "restored_integrity_check": "ok",
+      "restored_foreign_key_violations": [],
+      "raw_terminal_transcript_included": false,
+      "database_files_included": false,
+      "limitation": "Not a production disaster recovery or cross-machine restoration test."
+    },
+    {
+      "id": "V08",
+      "name": "Static style and UI type audit",
+      "result": "Completed; defects found",
+      "undefined_css_variables": 17,
+      "undefined_css_references": 44,
+      "raw_result": "static-results.json"
+    }
+  ],
+  "not_verified": [
+    "Clean wheel build and installation; hatchling absent in current environment",
+    "Linux runtime execution in this audit",
+    "Actual cross-machine MCP deployment",
+    "Real long-running Agent tasks and multi-repository outcomes",
+    "Browsers other than Chrome",
+    "Physical mobile or tablet devices",
+    "Production scale, long-duration load or fault injection",
+    "Production backup recovery",
+    "Complete WCAG audit or screen-reader validation"
+  ]
+}

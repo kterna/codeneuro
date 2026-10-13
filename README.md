@@ -1,141 +1,66 @@
-# 🧠 CodeNeuro (代码神经元中枢)
+# CodeNeuro
 
-> **AI 编程时代的协同认知中枢**：为自主 Coding Agent（Cursor、Claude Code、Hermes、Windsurf 等）提供多项目/多 Worktree 统一管理、作用域规则热力图、长短期双轨记忆分层，以及运行时 Agent 自治治理的端到端基础设施。
+CodeNeuro 是面向 Coding Agent 的任务、需求和规则上下文 Hub。Agent 自己编码和测试；CodeNeuro 管理 Requirement、Rule、按文件范围下发的 JIT 上下文、下发凭据与反馈。所有生效规则只来自 Hub 数据库，不生成工作区 `CLAUDE.md`、`.cursor/rules` 副本，也不安装宿主专用钩子。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![MCP Ready](https://img.shields.io/badge/MCP-Standard%20Ready-green.svg)](https://modelcontextprotocol.io)
+## 运行前提
 
----
+Python 3.11+；依赖见 `requirements.txt` 和 `requirements.lock`。Web 工作台源码位于 `web/`，锁定依赖见 `web/package-lock.json`。
 
-## 🌟 为什么需要 CodeNeuro？
-
-在日常深度使用 AI Coding Agent 时，开发者通常面临四个致命痛点：
-
-1. **多工作区与 Git Worktree 隔离裂痕**：同时并行多个需求或多个 worktree 时，临时经验和规则分散在各处，分支切换或重新拉取目录后认知全部丢失。
-2. **上下文污染与认知混淆**：把几百行架构规则和临时的需求重点混在一起丢给 Agent，导致 Prompt 膨胀、指令被稀释，严重时产生违背红线的幻觉。
-3. **几十轮长程 Agent Loop 的重蹈覆辙**：Agent 在第 5 轮跑测试踩了坑，到了第 20 轮因为上下文滚动压缩而遗忘，重新踩同一个坑；或者前面的假设被推翻了，过时的短期规则没有及时撤销。
-4. **不可见的黑盒状态**：缺乏全景看板，开发者无法直观审视整个代码库的规则复杂度、各目录的约束密度和优先级分布。
-
----
-
-## 🏛️ 核心产品意识形态
-
-```
-                       ┌──────────────────────────────────────────────┐
-                       │          产品需求 / PRD 输入 (WebUI)          │
-                       └──────────────────────┬───────────────────────┘
-                                              ▼
-                    ┌───────────────────────────────────────────────────┐
-                    │      Cognitive Ingestion Engine (认知拆解引擎)     │
-                    │   - 影响面分析   - 优先级评级   - 规则与约束提炼   │
-                    └─────────────────────────┬─────────────────────────┘
-                                              │
-                    ┌─────────────────────────▼─────────────────────────┐
-                    │               中心化认知存储 (Central Hub)        │
-                    │   [长期架构契约 (骨骼)]  +  [短期迭代记忆 (血液)] │
-                    └───────────┬───────────────────────────┬───────────┘
-                                │                           │
-                 ┌──────────────▼──────────────┐            │
-                 │   WebUI 认知全景看板        │            │  MCP 协议
-                 │  - 目录树热力矩阵 / 优先级   │            │  (JIT 动态下发)
-                 │  - 需求生命周期 / 记忆提炼  │            │
-                 └─────────────────────────────┘            ▼
-                                            ┌───────────────────────────┐
-                                            │   各机器 / 并行 Worktrees  │
-                                            │  (Cursor / Claude / ...)  │
-                                            └───────────────────────────┘
-```
-
-### 1. 认知二元论：骨骼与血液 (Skeleton vs. Bloodstream)
-- **长期架构记忆（骨骼 / Persistent）**：模块的架构契约（职责定位、对外承诺、接口协议、不可触碰的 P0 红线）。不随需求结束而改变。
-- **短期需求记忆（血液 / Ephemeral）**：当前迭代（Task）特异性的改动重点、临时灰度逻辑、自测注意点。随需求交付自动归档或**升华结晶**。
-
-### 2. JIT 局部视口探针 (Just-In-Time Scoped Context)
-- **不触碰不加载，触碰即透视**：Agent 在接触特定文件（例如 `src/services/pay/calc.ts`）时，系统才通过纳秒级 Glob 匹配，动态合成：
-  $$\text{Context} = \text{长期契约} + \text{当前任务重点(P0>P1>P2)} + \text{最新排坑经验}$$
-
-### 3. Agent 循环自治与护栏 (Autonomous Self-Governance)
-- **踩坑沉淀**：单测报错排查后，Agent 自动调用工具沉淀经验，避免后轮重犯。
-- **动态修正**：假设推翻时，Agent 自主废弃失效短期规则。
-- **架构护栏**：Agent 无权删除 P0 长期契约，只能提交变更提案（Proposal）由人类审批。
-
----
-
-## 🚀 快速上手
-
-### 1. 安装与启动
-
-```bash
-# 克隆仓库
-git clone https://github.com/kterna/codeneuro.git
-cd codeneuro
-
-# 安装依赖 (推荐 uv)
+```sh
 uv venv
-uv pip install -e .
-
-# 启动 WebUI 与 REST API
-python3 -m codeneuro.cli serve --port 8800
+uv pip install --python .venv/bin/python -r requirements.txt
+npm ci --prefix web && npm run build --prefix web
 ```
 
-打开浏览器访问 `http://localhost:8800`，即可进入 **CodeNeuro 认知控制台**：
-- 浏览目录树认知热力矩阵（P0/P1/P2 规则分布）
-- 输入需求文本进行自动逆向拆解
-- 审批 Agent 提交的架构提案与排坑发现
-- 使用 JIT 上下文探针实时预览 Agent 接收到的提示词视图
+Windows 使用 `.venv/Scripts/python.exe`。**仅对新建的空数据库**显式初始化：
 
-### 2. 配置 MCP 接入 Coding Agent
+```sh
+.venv/bin/python -m codeneuro migrate --db /absolute/path/new-codeneuro.db
+```
 
-在 Cursor、Claude Code 或 Windsurf 的 MCP 配置文件中添加：
+运行时拒绝旧版/未知 schema，不自动改写旧库。旧数据文件保持原状；不得把迁移命令指向生产旧库。
+
+## 服务与工作台
+
+```sh
+.venv/bin/python -m codeneuro serve --db /absolute/path/new-codeneuro.db
+```
+
+默认仅监听 `127.0.0.1:8801`。直接打开服务首页（自动跳转 `/app/`）即进入工作台并加载项目；首次使用可在侧栏注册项目。streamable HTTP MCP 位于 `/mcp/`，同机 stdio MCP 无需设置凭据环境变量。**Web API 和远程 MCP 均无鉴权；能访问监听地址的人即可读写项目数据。**只有确认处于受信任网络时才应绑定非本机地址；不得直接暴露公网。不共享 SQLite WAL 文件；远程工作区与仓库身份是客户端声明，Hub 不声称访问过远端源码。
+
+支持 stdio MCP 的宿主可配置：
 
 ```json
 {
   "mcpServers": {
     "codeneuro": {
-      "command": "python3",
-      "args": ["-m", "codeneuro.cli", "mcp", "--db", "/绝对路径/codeneuro.db"]
+      "command": "/absolute/path/to/python",
+      "args": ["-m", "codeneuro", "mcp", "--db", "/absolute/path/new-codeneuro.db"]
     }
   }
 }
 ```
 
----
+不需要 Token、登录配置或连接步骤；详见 [标准 MCP 接入](docs/agent-integrations.md)。
 
-## 🛠️ MCP 工具矩阵 (Agent Handheld Tools)
+## Agent 工作流
 
-CodeNeuro 为 Coding Agent 提供了精简而强大的原子工具：
+1. `codeneuro_list_tasks` 返回状态、标题、描述；Agent 在本地用正则检索，明确选择已有 Task 或 `codeneuro_create_task`。多候选不由 Hub 擅自绑定。人类可在 Web 提交一句话原文并明确选择歧义 Task。
+2. `codeneuro_start_session` 绑定项目、Task、Worktree 和客户端声明信息（注意：若该会话后续需要进行规则效用评分或提交问题报告，必须显式传入 `debug=True`；生产会话默认 `debug=False` 以避免诊断污染）；`codeneuro_submit_requirement` 保存独立 Requirement 原文。
+3. Agent 在相关文件工作前主动调用 `codeneuro_get_context`。多文件、类别、意图、优先级和清单模式受同一 JIT 策略控制；P0 不因预算或已知反馈静默丢失。标准 MCP **不自动拦截**宿主内置的文件读写。
+4. `codeneuro_record_finding` 记录未审阅的任务内避坑便签；同 Task 其他会话访问匹配文件时作为 `module_gotchas` 提醒，账本可查看，绝不自动扩散到其他 Task；真实下发后且在以 `debug=True` 启动的会话中，才能 `codeneuro_rate_rule`（`0=已知，1=无关，5=核心需要`）或 `codeneuro_report_issue`。均分排除 0；预览、未下发或非 Debug 会话不产生评分/Issue资格。
+5. Agent 可创建当前任务草稿 Rule、主动上报**由宿主实际执行**的测试事件、附加版本证据并在满足条件后激活；可按版本晋升活跃短期 Rule。CodeNeuro 不运行测试。修改既有长期契约须先提案，经 Web 人工审阅；无鉴权时服务无法核实操作者的真实身份。
+6. Agent 确认某条需求已完成后提供摘要并调用 `codeneuro_archive_requirement`；最后一条归档自动完成 Task，关联短期规则退出下发。`paused/released` Task 不接受归档，需先走相应状态流程。
 
-| 工具名 | 触发时机 | 功能与价值 |
-| :--- | :--- | :--- |
-| `codeneuro_get_context` | 读写或分析文件前 | 获取该文件精准匹配的长期契约与当前任务 P0/P1 约束 |
-| `codeneuro_record_finding` | 测试报错自愈、排坑成功后 | 沉淀运行时避坑指南，避免后置轮次重踩同一个坑 |
-| `codeneuro_patch_rule` | 重构方案变更、旧假设推翻时 | 自主废弃（revoke）或降级过时的短期规则，防止认知污染 |
-| `codeneuro_propose_contract` | 发现长期架构契约需要变更时 | 向人类提交架构契约变更提案，防止 Agent 越权修改底线 |
-| `codeneuro_list_active_rules` | 任务启动或审查时 | 查看当前项目与任务生效的完整规则清单 |
+Web 账本展示项目契约、作用域规则密度、活跃和历史需求、Worktree 声明与可追溯事件；密度依据**已存规则范围**，不伪装成扫描了远程代码树。
 
----
+## 验证及边界
 
-## 📂 项目结构
-
-```text
-codeneuro/
-├── src/codeneuro/
-│   ├── models.py        # 核心实体模型 (Project, Task, Rule, Finding, Proposal)
-│   ├── storage.py       # SQLite (WAL) 高并发存储层
-│   ├── matcher.py       # 纳秒级 Scope Matcher (Glob / 继承树)
-│   ├── synthesizer.py   # Context 合成器 (优先级排序与 Prompt 渲染)
-│   ├── decomposer.py    # 需求 PRD 自动拆解管道
-│   ├── mcp_server.py    # FastMCP 标准协议服务端
-│   ├── api.py           # FastAPI REST API 与静态路由
-│   ├── static/          # 现代化响应式 WebUI 前端
-│   └── cli.py           # CLI 命令行工具 (serve, mcp, sync)
-├── tests/               # 完备的单元测试与端到端集成测试
-└── pyproject.toml
+```sh
+PYTHONPATH=src .venv/bin/python -m pytest -q
+npm run build --prefix web
 ```
 
----
+测试使用显式迁移的临时数据库，覆盖版本/事务回滚、并发归档、MCP stdio/HTTP、无凭据 HTTP 接入及工作台 API。`scripts/browser_smoke.py` 使用隔离 Chromium 配置进行真实页面验收；当前 Windows 环境中页面业务动作通过，但临时日志文件清理仍可能因文件占用而失败，不能把它列为全绿浏览器验收。
 
-## 📄 开源许可证
-
-本项目基于 [MIT 许可证](LICENSE) 开源。
+语义分析、索引和模型诊断不是当前运行时的暗中回退；没有配置的能力不会伪称为模型结论。旧版产品的全量数据库导入、多仓库真实 Agent 效果或跨机器实机验收也尚未由这些测试证明。架构和业务边界见 [产品契约](docs/product-contract.md) 与 [实现规范](docs/rebuild-plan.md)。

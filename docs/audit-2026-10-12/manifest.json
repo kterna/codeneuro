@@ -1,0 +1,299 @@
+{
+  "baseline": "c30cd63c20f74c0b52c76d510b24bac0e4cc51a2",
+  "date": "2026-10-12",
+  "hash_algorithm": "SHA-256",
+  "paths_relative_to": "D:/1/github/codeneuro",
+  "self_excluded": true,
+  "files": [
+    {
+      "path": "docs/product-audit-2026-10-12.md",
+      "bytes": 51342,
+      "sha256": "18c5dbcace0002a48e9512874ff99da6ab06ae7f5712280838a3c414e397ea73"
+    },
+    {
+      "path": "docs/product-audit-checklist-2026-10-12.md",
+      "bytes": 67722,
+      "sha256": "b9d5be77a79e4bac40b51525e3da9adfcb23da13aafbef1e25b1666c227d3e9e"
+    },
+    {
+      "path": "docs/audit-2026-10-12/artifact-validation.json",
+      "bytes": 963,
+      "sha256": "def872f2cb4b476c2b8094aea491a3c685526eea64c7dc37461888c0928615af"
+    },
+    {
+      "path": "docs/audit-2026-10-12/backend-results.json",
+      "bytes": 4373,
+      "sha256": "8e89c5f04acf200f5fb4dcf0fcd9d80974617b3fc5dc0c3b58c496cf15b1a8fe"
+    },
+    {
+      "path": "docs/audit-2026-10-12/browser-followup.json",
+      "bytes": 2968,
+      "sha256": "d4b92ef4f2f2d5d7d08f4e5b550ad2de01c4c2607e8eb3a673d3fa9d5a2e2a72"
+    },
+    {
+      "path": "docs/audit-2026-10-12/browser-results.json",
+      "bytes": 23718,
+      "sha256": "7767319970ddaba7d9519c03dc19ee8ddc4addbaa89a82645251b068689b9d3f"
+    },
+    {
+      "path": "docs/audit-2026-10-12/checklist-status.json",
+      "bytes": 83804,
+      "sha256": "29447553c4d5458a8fa23a4bfb14abcdadf84ed3536596cf05c20b2b0341aaff"
+    },
+    {
+      "path": "docs/audit-2026-10-12/import-results.json",
+      "bytes": 1027,
+      "sha256": "d5fb79080f91d5d59977975d5506c96db794199e378cea5498fb248138c2730c"
+    },
+    {
+      "path": "docs/audit-2026-10-12/README.md",
+      "bytes": 10956,
+      "sha256": "5ddf048a818b5fca7da98330c938d3fb7c956a11805521e08bce9e2c373cf893"
+    },
+    {
+      "path": "docs/audit-2026-10-12/repro/backend_probe.py",
+      "bytes": 12527,
+      "sha256": "5d29e7bf4799eb042b9e35ad0e32f180e5ca30b01050cf2e49f27dde82559858"
+    },
+    {
+      "path": "docs/audit-2026-10-12/repro/browser_audit.cjs",
+      "bytes": 13139,
+      "sha256": "d11e113dac4373056f0586b9b44ab2fa05eb6aa29c0897b0280c096082f9952a"
+    },
+    {
+      "path": "docs/audit-2026-10-12/repro/browser_followup.cjs",
+      "bytes": 5126,
+      "sha256": "e43d27ce07584fa4e74255d874a8f2d984f488723faef3c828a9d833f7f5b0f2"
+    },
+    {
+      "path": "docs/audit-2026-10-12/repro/import_probe.py",
+      "bytes": 2303,
+      "sha256": "5b62de39fba60f86366a32d9c974f910ed42c6765908fb21a0967445634e142c"
+    },
+    {
+      "path": "docs/audit-2026-10-12/repro/static_audit.py",
+      "bytes": 2105,
+      "sha256": "9d60b632b4d5863e5c672c8d0ac57db898f35024706cd06dabd32e79986ce4f7"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/approval-success-wrong-label.png",
+      "bytes": 103747,
+      "sha256": "1f9d78ded43ddbd62ec3fcefffd09cffbe45616ab699bd307412a8c216f63fec"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/delete-populated-error.png",
+      "bytes": 120462,
+      "sha256": "1d3ac34460da2ec1b6dc690e53fa1ea2eea6793294b963c4f8909c43de5b7f7e"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/desktop-activity.png",
+      "bytes": 132718,
+      "sha256": "5ff4baa07140a2612dc0d3526dc3c288e2c465d7fd59e4ac6842e58e24afcda8"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/desktop-explorer.png",
+      "bytes": 99444,
+      "sha256": "0e2462fa0bb6d7401a9b8bfda6cd1ef4ee2762ab8a70dcdfdd7216b3bb14c5b6"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/desktop-feedback.png",
+      "bytes": 135062,
+      "sha256": "160f7774510745ad6ecfac0476df4d3de6559e8d9a3784a0e99da8c69a077ae7"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/desktop-review.png",
+      "bytes": 104461,
+      "sha256": "c0ae162cdd1167f18a392f54607e6d6d0993b95b6864dd6b5de1237adc152cae"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/desktop-rules.png",
+      "bytes": 114414,
+      "sha256": "4dc9e8e61da5d818308ea42dc672c093382c9577de0fe3bb5f26fd97ef9edb2f"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/desktop-settings.png",
+      "bytes": 87289,
+      "sha256": "5e1a3fb6a5b19aab34c29c74082fc48cef76b61fa2123248bd4011b0f6852101"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/desktop-tasks.png",
+      "bytes": 103728,
+      "sha256": "d9622d54bd454016479859557c9bd8ae9babca147276964331f58a8d890f3530"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/duplicate-project-error.png",
+      "bytes": 118638,
+      "sha256": "043746a593d93a82a2b86a262c5a712ba52df0cc358564841d7a654b26fa0271"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/empty-created-project.png",
+      "bytes": 55382,
+      "sha256": "225ec82fe7bacc16d13dd71e7b4c46eec7b7a2591f9fdcacd96e41a1bede0f85"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/empty-project.png",
+      "bytes": 53358,
+      "sha256": "38beca20e29c78f48d73d8624a7d959bc2dfd8862a88eb22edfcb7ca36a9a1bc"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/explorer-nested-search.png",
+      "bytes": 93261,
+      "sha256": "f1a7404eabdba43ee939b49a80ab78485fa375c6a981578fa69abfb0f4676e4b"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/explorer-wrong-scopes.png",
+      "bytes": 101811,
+      "sha256": "6c0262b06b941fa326029c8d8a3e67997b0a74e17eec292cc363ddc3beb7cac5"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/intake-failure.png",
+      "bytes": 102503,
+      "sha256": "7e3abee33860181554d06f31031e83d166e11367997f26ea7b886fc84ff68b5d"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/project-response-race.png",
+      "bytes": 69620,
+      "sha256": "e55c0ba3064feaea80d20b5fe069f9bfe2fdf4f39bf8613416e9da918141ecfb"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/rule-drawer-stable.png",
+      "bytes": 144326,
+      "sha256": "9f2212d848f2b1f96c23502af901b926f56d0ab27dd9c310c0dd0e818e5e450a"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/rule-drawer.png",
+      "bytes": 164738,
+      "sha256": "f14d6154f8b1af27d3dbcc7446cb5607e639c33c52f0a543ed9a9c96b464f04d"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/settings-after-wheel.png",
+      "bytes": 87289,
+      "sha256": "5e1a3fb6a5b19aab34c29c74082fc48cef76b61fa2123248bd4011b0f6852101"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/stale-review-conflict.png",
+      "bytes": 120211,
+      "sha256": "db5383413ce94c4f357d7f4d863017e2db78a86d81dcb9cc3504f66c6104b75f"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/task-archived-stale-drawer.png",
+      "bytes": 128543,
+      "sha256": "edd757073907b9ed675b9a651785abbac8289486f51949dda2c6e0d686b6085d"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-1280-activity.png",
+      "bytes": 105516,
+      "sha256": "cb16e4aae355f000f39224d512d6fcd7180805c0ad49702cfe862472d28680c5"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-1280-explorer.png",
+      "bytes": 80465,
+      "sha256": "0295647a008b0b92f1078e3e070a3c338e6bc5b94c11c33616f1d8f04c7aeec1"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-1280-feedback.png",
+      "bytes": 107058,
+      "sha256": "18ca68e35bc05cdf36585ca4daf83e9222d7f05522665426120d5dafce9a9b41"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-1280-review.png",
+      "bytes": 87360,
+      "sha256": "ab7bd21cc2b728ca107d847d501d376df3f1e961299549d5ba5b78c55c96c108"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-1280-rules.png",
+      "bytes": 103451,
+      "sha256": "f1303790bfac65497686bce163abac8d22b44716e5567d0004a29fe67da87959"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-1280-settings.png",
+      "bytes": 74174,
+      "sha256": "ffcb317429de5cecbf7ebbd0aa4661d8c66ecfd5bc3db4a73210cb04c048e3ef"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-1280-tasks.png",
+      "bytes": 86836,
+      "sha256": "c9073f6c29a649bd8a29692228943482379e53b3359623bf04d15e4013211240"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-390-activity.png",
+      "bytes": 34072,
+      "sha256": "276b19647b4e25b668ab67449ae1de5e31447dd9754e1220698f8e4d78766683"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-390-explorer.png",
+      "bytes": 33370,
+      "sha256": "19ad9c9fff144b16bb716842478ddc0210a00e07f43172a4caf52d63bf01efbc"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-390-feedback.png",
+      "bytes": 34006,
+      "sha256": "54cebcce753c4bd52c9c3c042d98f8bd661cad8cfd92dfcf343ed054362ed228"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-390-review.png",
+      "bytes": 34305,
+      "sha256": "146dfbc4a870b44b506092bebcb14f7f8241f0da1b8338b5a9260b971ae66a00"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-390-rules.png",
+      "bytes": 33050,
+      "sha256": "923188685f677c853de19ef52002d0484b1a6ff1a094b764deedb291ae815a36"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-390-settings.png",
+      "bytes": 34014,
+      "sha256": "f34ee95515453079e09f87cde2f97d50ee4cb89e18c8a92bdaf8a2f5d402851a"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-390-tasks.png",
+      "bytes": 33929,
+      "sha256": "e33e82b0045e674e5cf965ee8a7a4d61d7674b683a7087109de81e606f6d28b9"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-768-activity.png",
+      "bytes": 126836,
+      "sha256": "4def83743e70d4a751f73f311055199acc3bc6b66dcced2f8061dc6f5fc43e5c"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-768-explorer.png",
+      "bytes": 57203,
+      "sha256": "cca62d3d0f4b5a0fbad602b6f03182973fa1f560a6717902912e811ae7aad8a3"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-768-feedback.png",
+      "bytes": 97479,
+      "sha256": "28ee210587f5025cfb089c3f577e0f2d4433acf82cc5afa9cf4f7ae80e5f4190"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-768-review.png",
+      "bytes": 104987,
+      "sha256": "859f5895ac3e795241de024ab414b4deb762d1c767e3168b9c2dcbe6fc2da957"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-768-rules.png",
+      "bytes": 75577,
+      "sha256": "6cf9dc9178f7462af94166a675151e007fec9dcbd5ebaec3244a342812810d19"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-768-settings.png",
+      "bytes": 82150,
+      "sha256": "73a2ff3402772d14424b467f932039a909c59fc4e0bd302545e1cc1b6c2d3a22"
+    },
+    {
+      "path": "docs/audit-2026-10-12/screenshots/width-768-tasks.png",
+      "bytes": 73457,
+      "sha256": "303fc46b8f057b2f439078b5e389aabb922b8db65694ba0092b9f11e7736ca9a"
+    },
+    {
+      "path": "docs/audit-2026-10-12/static-results.json",
+      "bytes": 5505,
+      "sha256": "d5f712581f89c18c31976c4771f8836117c301d5a7c61376402b543fcd292392"
+    },
+    {
+      "path": "docs/audit-2026-10-12/verification-summary.json",
+      "bytes": 3756,
+      "sha256": "0c296bd7fc2ebf38e83c09056fe0dfbdd3d0ffb50a7d02f6288b6f3e474a9146"
+    }
+  ]
+}
