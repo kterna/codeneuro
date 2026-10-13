@@ -178,7 +178,13 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
     @server.tool()
     def codeneuro_rate_rule(session_id: str, delivery_id: str, rule_id: str,
                             score: int, ctx: Context, reason: str = '') -> str:
-        """Rate an actually delivered Rule: 0=known, 1=irrelevant, 5=core need.
+        """Rate an actually delivered Rule on a scale from 0 to 5:
+        - 0 (Known): Model already knows/follows this well; future deliveries condense to 1-line summary.
+        - 1 (Noise): Irrelevant or noisy rule for current task/files.
+        - 2 (Low Utility): Weakly relevant; minor reference value but not necessary.
+        - 3 (Useful): Helpful best practice or standard guideline.
+        - 4 (Important): Significant project standard or gotcha prevention that avoids rework.
+        - 5 (Critical): Indispensable architectural redline or core business contract.
         Requires the session to have been started with debug=True."""
         return invoke(product.feedback.rate_rule, actor(ctx), session_id, delivery_id, rule_id, score, reason)
 
