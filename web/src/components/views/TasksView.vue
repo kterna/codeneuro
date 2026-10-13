@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
 import type { Ledger, Requirement, Task, TaskStatus } from '../../types/ledger'
+import GhDrawer from '../ui/GhDrawer.vue'
 
 const props = defineProps<{
   ledger: Ledger
@@ -157,32 +158,6 @@ function closeTaskDetail() {
       contentEl.focus()
     }
   })
-}
-
-function handleDrawerKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    e.preventDefault()
-    closeTaskDetail()
-  } else if (e.key === 'Tab') {
-    const drawerEl = document.querySelector('.task-drawer-content') as HTMLElement | null
-    if (!drawerEl) return
-    const focusable = drawerEl.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
-    )
-    if (!focusable.length) return
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    if (!drawerEl.contains(document.activeElement)) {
-      e.preventDefault()
-      first.focus()
-    } else if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault()
-      first.focus()
-    }
-  }
 }
 </script>
 
@@ -513,20 +488,18 @@ function handleDrawerKeydown(e: KeyboardEvent) {
       </table>
     </div>
 
-    <!-- 5. 任务与需求舒适详情大抽屉 (宽达 580px 舒展阅读流) -->
-    <aside
-      v-if="focusedTask"
-      class="task-drawer-overlay"
-      role="dialog"
-      aria-modal="true"
+    <!-- 5. 任务与需求舒适详情大抽屉 (采用通用 GhDrawer 统一封装) -->
+    <GhDrawer
+      :model-value="!!focusedTask"
+      overlay-class="task-drawer-overlay"
+      content-class="task-drawer-content"
       aria-labelledby="task-drawer-title"
-      tabindex="-1"
-      :data-status="focusedTask.status"
-      @click.self="closeTaskDetail"
-      @keydown="handleDrawerKeydown"
+      :data-status="focusedTask ? focusedTask.status : undefined"
+      width="min(580px, 94vw)"
+      @close="closeTaskDetail"
     >
-      <div class="task-drawer-content" tabindex="-1">
-        <div class="drawer-header">
+      <template #header>
+        <div v-if="focusedTask">
           <div class="card-top" style="margin-bottom: 0">
             <div style="display: flex; align-items: center; gap: 8px">
               <span class="tag" :class="focusedTask.status">{{ taskStatusLabel(focusedTask.status) }}</span>
@@ -553,55 +526,55 @@ function handleDrawerKeydown(e: KeyboardEvent) {
           <h2 id="task-drawer-title" style="font-size: 16px; margin: 10px 0 4px">{{ focusedTask.title }}</h2>
           <p v-if="focusedTask.description" class="muted" style="font-size: 12px">{{ focusedTask.description }}</p>
         </div>
+      </template>
 
-        <div class="drawer-body">
-          <div class="section-head" style="margin: 0 0 12px">
-            <h3 style="margin: 0">关联业务需求条目 ({{ getTaskRequirements(focusedTask.id).length }})</h3>
-          </div>
-
-          <div v-if="!getTaskRequirements(focusedTask.id).length" class="empty compact">
-            该任务暂未挂载具体的需求条目。
-          </div>
-
-          <div v-else class="drawer-req-list">
-            <article
-              v-for="req in getTaskRequirements(focusedTask.id)"
-              :key="req.id"
-              class="drawer-req-item"
-              :class="{ 'is-archived': req.status === 'archived' }"
-            >
-              <div class="drawer-req-top">
-                <span class="tag" :class="req.status">
-                  {{ reqStatusLabel(req.status) }} · v{{ req.version }}
-                </span>
-                <button
-                  v-if="req.status === 'active' && ['active', 'testing'].includes(focusedTask.status)"
-                  class="primary archive-btn"
-                  :disabled="busy"
-                  @click="emit('open-archive', req)"
-                >
-                  确认归档
-                </button>
-              </div>
-
-              <div class="req-original-block">
-                <div class="req-block-label">需求原文：</div>
-                <p class="original-text">{{ req.text }}</p>
-              </div>
-
-              <div v-if="req.summary" class="req-summary-block">
-                <div class="req-block-label">完成摘要与存证：</div>
-                <p class="summary-text">✓ {{ req.summary }}</p>
-              </div>
-            </article>
-          </div>
+      <div v-if="focusedTask">
+        <div class="section-head" style="margin: 0 0 12px">
+          <h3 style="margin: 0">关联业务需求条目 ({{ getTaskRequirements(focusedTask.id).length }})</h3>
         </div>
 
-        <div class="drawer-footer">
-          <button type="button" @click="closeTaskDetail">关闭窗口</button>
+        <div v-if="!getTaskRequirements(focusedTask.id).length" class="empty compact">
+          该任务暂未挂载具体的需求条目。
+        </div>
+
+        <div v-else class="drawer-req-list">
+          <article
+            v-for="req in getTaskRequirements(focusedTask.id)"
+            :key="req.id"
+            class="drawer-req-item"
+            :class="{ 'is-archived': req.status === 'archived' }"
+          >
+            <div class="drawer-req-top">
+              <span class="tag" :class="req.status">
+                {{ reqStatusLabel(req.status) }} · v{{ req.version }}
+              </span>
+              <button
+                v-if="req.status === 'active' && ['active', 'testing'].includes(focusedTask.status)"
+                class="primary archive-btn"
+                :disabled="busy"
+                @click="emit('open-archive', req)"
+              >
+                确认归档
+              </button>
+            </div>
+
+            <div class="req-original-block">
+              <div class="req-block-label">需求原文：</div>
+              <p class="original-text">{{ req.text }}</p>
+            </div>
+
+            <div v-if="req.summary" class="req-summary-block">
+              <div class="req-block-label">完成摘要与存证：</div>
+              <p class="summary-text">✓ {{ req.summary }}</p>
+            </div>
+          </article>
         </div>
       </div>
-    </aside>
+
+      <template #footer>
+        <button type="button" @click="closeTaskDetail">关闭窗口</button>
+      </template>
+    </GhDrawer>
   </div>
 </template>
 

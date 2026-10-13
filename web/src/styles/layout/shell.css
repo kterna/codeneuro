@@ -1,0 +1,391 @@
+/* ==========================================================================
+   CodeNeuro Shell Layout (顶层应用外壳、侧边栏、指标栏与响应式断点)
+   ========================================================================== */
+
+.workbench {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* 侧边栏：桌面端默认 fixed 240px */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  height: 100vh;
+  position: fixed;
+  inset: 0 auto 0 0;
+  padding: 20px 14px;
+  border-right: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  overflow: hidden;
+}
+
+.sidebar-brand-project {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-action-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.brand {
+  text-decoration: none;
+  color: var(--gh-fg-default);
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.brand-mark {
+  background: var(--gh-canvas-inset);
+  border: 1px solid var(--gh-border-default);
+  color: var(--accent);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.brand small {
+  display: block;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--gh-fg-subtle);
+  margin-top: 1px;
+}
+
+.caption {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gh-fg-subtle);
+  margin-bottom: 6px;
+  text-transform: none !important;
+  white-space: normal;
+  min-width: 0;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* 侧边栏导航条目 */
+nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+nav button {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 7px 10px;
+  color: var(--gh-fg-muted);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+nav button:hover {
+  background: rgba(177, 186, 196, 0.12);
+  color: var(--gh-fg-default);
+}
+
+nav button.active {
+  background: rgba(177, 186, 196, 0.20);
+  color: var(--gh-fg-default);
+  font-weight: 600;
+}
+
+.nav-icon {
+  width: 16px;
+  font-size: 13px;
+  display: inline-block;
+}
+
+.aside-foot {
+  font-size: 11px;
+  color: var(--gh-fg-subtle);
+  padding-top: 14px;
+  border-top: 1px solid var(--gh-border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.palette-trigger {
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--gh-canvas-default);
+  border: 1px solid var(--gh-border-default);
+  color: var(--gh-fg-muted);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.palette-trigger:hover {
+  border-color: var(--gh-fg-muted);
+  color: var(--gh-fg-default);
+}
+
+/* 主内容视口：限定在 workbench 的直接子元素 main (D11) */
+.workbench > main {
+  margin-left: 240px;
+  width: calc(100vw - 240px);
+  min-width: 0;
+  height: 100vh;
+  padding: 24px 32px 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workbench > main > header,
+.main-header-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--gh-border-muted);
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.breadcrumb-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gh-accent-fg);
+  background: var(--gh-accent-subtle);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(56, 139, 253, 0.3);
+  white-space: nowrap;
+}
+
+.title-compact {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--gh-fg-default);
+  line-height: 1.2;
+}
+
+.subtitle-compact {
+  font-size: 12px;
+  color: var(--gh-fg-muted);
+  line-height: 1.2;
+}
+
+.action-btn-compact {
+  padding: 4px 10px;
+  font-size: 11px;
+  background: var(--gh-surface-card);
+  border: 1px solid var(--gh-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--gh-fg-default);
+}
+.action-btn-compact:hover {
+  background: var(--gh-surface-card-hover);
+  border-color: var(--gh-accent-fg);
+}
+
+h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--gh-fg-default);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--gh-fg-default);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--gh-fg-default);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+p {
+  color: var(--gh-fg-muted);
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+}
+
+/* 顶栏 4 维指标卡 (Requirement 4) */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.metric {
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric > div,
+.metric .metric-content {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gh-fg-subtle);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.metric strong {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--gh-fg-default);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin: 0;
+}
+
+/* 核心内容区容器：min-height: 0 保证 flex 子项计算，支持内部滚轮触达底部 (D08) */
+.workbench-content-area,
+.tab-content-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 响应式断点：平板与手机适配 (D25) */
+@media (max-width: 1024px) {
+  html {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-x: clip !important;
+    overflow-y: auto !important;
+  }
+
+  body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  #app {
+    height: auto !important;
+    min-height: 100vh !important;
+    width: 100% !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .workbench {
+    height: auto !important;
+    min-height: 100vh !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: visible !important;
+  }
+
+  .sidebar {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    padding: 10px 14px 6px !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--gh-border-default) !important;
+    background: var(--gh-canvas-subtle) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    z-index: 100 !important;
+    overflow: visible !important;
+  }
+
+  .workbench > main {
+    margin-left: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 16px 14px 32px !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .metrics {
+    grid-template-columns: 1fr !important;
+  }
+}

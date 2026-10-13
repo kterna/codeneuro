@@ -125,12 +125,27 @@ class Workspaces:
                       task_id: str | None = None, agent_client: str = 'MCP', debug: bool = False,
                       *, machine_name: str = 'not_attested', platform: str = 'unknown',
                       repo_identity: str | None = None, git_branch: str = ''):
-        if (not isinstance(workspace, str) or not workspace.strip() or len(workspace) > 4096
-                or '\x00' in workspace or '\n' in workspace or not agent_client.strip()
-                or not machine_name or len(machine_name) > 255
-                or platform not in ('windows', 'linux', 'macos', 'unknown')
-                or len(git_branch) > 255 or (repo_identity and len(repo_identity) > 128)):
-            raise ProductError('A bounded client-attested worktree identity is required.')
+        # 常见操作系统平台标识归一化
+        platform_normalized = platform.lower().strip() if isinstance(platform, str) else 'unknown'
+        platform_alias = {
+            'win32': 'windows',
+            'cygwin': 'windows',
+            'darwin': 'macos',
+        }
+        platform = platform_alias.get(platform_normalized, platform_normalized)
+
+        if not isinstance(workspace, str) or not workspace.strip() or len(workspace) > 4096 or '\x00' in workspace or '\n' in workspace:
+            raise ProductError('A bounded client-attested worktree identity is required: workspace must be a non-empty string under 4096 characters without nulls or newlines.')
+        if not isinstance(agent_client, str) or not agent_client.strip():
+            raise ProductError('A bounded client-attested worktree identity is required: agent_client must be non-empty.')
+        if not isinstance(machine_name, str) or not machine_name.strip() or len(machine_name) > 255:
+            raise ProductError('A bounded client-attested worktree identity is required: machine_name must be a non-empty string under 255 characters.')
+        if platform not in ('windows', 'linux', 'macos', 'unknown'):
+            raise ProductError(f"A bounded client-attested worktree identity is required: platform must be one of ('windows', 'linux', 'macos', 'unknown'); got '{platform}'.")
+        if not isinstance(git_branch, str) or len(git_branch) > 255:
+            raise ProductError('A bounded client-attested worktree identity is required: git_branch exceeds maximum length of 255 characters.')
+        if repo_identity and (not isinstance(repo_identity, str) or len(repo_identity) > 128):
+            raise ProductError('A bounded client-attested worktree identity is required: repo_identity exceeds maximum length of 128 characters.')
         canonical = workspace.casefold() if platform == 'windows' else workspace
         key = '\0'.join((project_id, actor.id, machine_name.casefold(), platform, canonical))
         wid = 'wt_' + hashlib.sha256(key.encode('utf-8')).hexdigest()[:32]

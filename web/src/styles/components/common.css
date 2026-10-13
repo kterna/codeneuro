@@ -1,0 +1,381 @@
+/* ==========================================================================
+   CodeNeuro Common Components (全局通用按钮、输入框、标签、卡片、面板与表格体系)
+   ========================================================================== */
+
+/* 共享通用布局容器类 (D10) */
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.panel {
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.card {
+  background: var(--gh-surface-card);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 16px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--gh-accent-fg);
+  background: var(--gh-surface-card-hover);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* 标准按钮 */
+button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gh-fg-default);
+  border: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+button:hover {
+  background: var(--gh-surface-card-hover);
+  border-color: #8b949e;
+}
+
+button.primary {
+  background: var(--gh-success-emphasis);
+  border-color: rgba(240, 246, 252, 0.1);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: #2ea043;
+}
+
+button.danger {
+  color: var(--gh-danger-fg);
+  background: transparent;
+}
+
+button.danger:hover {
+  background: var(--gh-danger-emphasis);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+button.subtle {
+  background: transparent;
+  border-color: transparent;
+  color: var(--gh-fg-muted);
+}
+
+button.subtle:hover {
+  background: rgba(177, 186, 196, 0.12);
+  color: var(--gh-fg-default);
+}
+
+/* 标准输入框 */
+input[type="text"],
+input[type="search"],
+select,
+textarea {
+  background: var(--gh-canvas-inset);
+  border: 1px solid var(--gh-border-default);
+  color: var(--gh-fg-default);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="text"]:focus,
+input[type="search"]:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--gh-accent-fg);
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
+}
+
+/* 标签 Tags */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--gh-border-default);
+  background: rgba(110, 118, 129, 0.15);
+  color: var(--gh-fg-default);
+}
+
+.tag.accent {
+  background: var(--gh-accent-subtle);
+  color: var(--gh-accent-fg);
+  border-color: rgba(56, 139, 253, 0.4);
+}
+
+.tag.green,
+.tag.success {
+  background: var(--gh-success-subtle);
+  color: var(--gh-success-fg);
+  border-color: rgba(46, 160, 67, 0.4);
+}
+
+.tag.amber,
+.tag.warning {
+  background: var(--gh-attention-subtle);
+  color: var(--gh-attention-fg);
+  border-color: rgba(187, 128, 9, 0.4);
+}
+
+.tag.red,
+.tag.danger {
+  background: var(--gh-danger-subtle);
+  color: var(--gh-danger-fg);
+  border-color: rgba(248, 81, 73, 0.4);
+}
+
+.tag.purple {
+  background: var(--gh-done-subtle);
+  color: var(--gh-done-purple);
+  border-color: rgba(163, 113, 247, 0.4);
+}
+
+/* 全局通用 GitHub 风格表格封装体系 (.gh-table-wrap) */
+.gh-table-wrap {
+  width: 100%;
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  overflow-x: auto;
+  background: var(--gh-canvas-subtle);
+}
+
+.gh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.gh-table th {
+  background: var(--gh-canvas-subtle);
+  color: var(--gh-fg-muted);
+  font-weight: 600;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--gh-border-default);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.gh-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--gh-border-muted);
+  color: var(--gh-fg-default);
+}
+
+.gh-table tr:last-child td {
+  border-bottom: none;
+}
+
+.gh-table tr:hover td {
+  background: rgba(110, 118, 129, 0.06);
+}
+
+/* 通用通知浮条 */
+.notice {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid;
+}
+
+.notice.info {
+  background: var(--gh-accent-subtle);
+  border-color: rgba(56, 139, 253, 0.4);
+  color: var(--gh-accent-fg);
+}
+
+.notice.error {
+  background: var(--gh-danger-subtle);
+  border-color: rgba(248, 81, 73, 0.4);
+  color: var(--gh-danger-fg);
+}
+
+.notice.success {
+  background: var(--gh-success-subtle);
+  border-color: rgba(46, 160, 67, 0.4);
+  color: var(--gh-success-fg);
+}
+
+/* 模态弹窗规范 (<dialog>) */
+dialog {
+  color: var(--gh-fg-default);
+  background: #161b22;
+  border: 1px solid var(--gh-border-default);
+  border-radius: 8px;
+  width: min(560px, 92vw);
+  padding: 0;
+  box-shadow: 0 16px 36px rgba(1, 4, 9, 0.85);
+  overflow: hidden;
+}
+
+dialog::backdrop {
+  background: rgba(1, 4, 9, 0.75);
+  backdrop-filter: blur(2px);
+}
+
+.dialog-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dialog-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dialog-body {
+  padding: 18px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.dialog-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 通用右侧滑出大抽屉体系 (.gh-drawer-overlay / .gh-drawer-content) */
+.gh-drawer-overlay,
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(1, 4, 9, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.gh-drawer-content,
+.task-drawer-content,
+.detail-drawer {
+  background: var(--gh-canvas-overlay);
+  border-left: 1px solid var(--gh-border-default);
+  width: min(720px, 92vw);
+  height: 100vh;
+  box-shadow: -8px 0 24px rgba(1, 4, 9, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 101;
+}
+
+.gh-drawer-content .drawer-header,
+.task-drawer-content .drawer-header,
+.detail-drawer .drawer-header,
+.drawer-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+  display: block;
+  margin-bottom: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+.drawer-body {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.drawer-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 命令面板 (Command Palette) */
+.command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(1, 4, 9, 0.7);
+  backdrop-filter: blur(2px);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.command-palette {
+  background: #1c2128;
+  border: 1px solid var(--gh-border-default);
+  border-radius: 8px;
+  width: min(600px, 92vw);
+  box-shadow: 0 16px 36px rgba(1, 4, 9, 0.85);
+  overflow: hidden;
+}
+
+.command-palette-input {
+  width: 100%;
+  background: var(--gh-canvas-inset);
+  border: none;
+  border-bottom: 1px solid var(--gh-border-default);
+  color: var(--gh-fg-default);
+  padding: 12px 16px;
+  font-size: 14px;
+}

@@ -1,0 +1,86 @@
+/* ==========================================================================
+   CodeNeuro A11y & Content Guard (无障碍、键盘、防换行与防溢出排版规范)
+   ========================================================================== */
+
+/* 跳至内容无障碍链接 (默认隐藏，获得焦点时可见) */
+.skip-link {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  background: var(--gh-canvas-subtle);
+  color: var(--gh-accent-fg);
+  padding: 8px 14px;
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  z-index: 1000;
+  text-decoration: none;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 14px;
+  left: 14px;
+}
+
+/* 屏幕阅读器专用隐藏类 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* 快捷键标记徽标 */
+kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--gh-fg-subtle);
+  background: rgba(110, 118, 129, 0.2);
+  border: 1px solid var(--gh-border-default);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* 短标签、徽标、短字段标签、按钮、表头与状态文字防断行 (Requirement 1) */
+.nav-btn,
+.tab-btn,
+.tag,
+.badge,
+.status-pill,
+.metric .label,
+.field-label,
+.card-header-badge,
+th,
+.nowrap-badge,
+.score-badge,
+.action-btn,
+.state-tag {
+  white-space: nowrap;
+}
+
+/* 长 ID、哈希与路径防溢出 (Requirement 2) */
+.task-id,
+.proposal-id,
+.rule-id,
+.hash,
+.path,
+.file-path,
+.scope-path,
+.worktree-path,
+.clause-id {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+}
+
+.original-text {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}

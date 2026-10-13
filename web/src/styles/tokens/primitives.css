@@ -1,0 +1,73 @@
+/* ==========================================================================
+   CodeNeuro Design Tokens - Primitive (物理色阶、基础尺寸与字体)
+   这些值是绝对物理量，在任何主题下均保持不变
+   ========================================================================== */
+
+:root {
+  /* 基础中性灰度色盘 (GitHub Primer Neutral) */
+  --scale-gray-0: #ffffff;
+  --scale-gray-1: #f6f8fa;
+  --scale-gray-2: #eaeef2;
+  --scale-gray-3: #d0d7de;
+  --scale-gray-4: #afb8c1;
+  --scale-gray-5: #8c959f;
+  --scale-gray-6: #6e7781;
+  --scale-gray-7: #424a53;
+  --scale-gray-8: #30363d;
+  --scale-gray-85: #21262d;
+  --scale-gray-88: #292e36;
+  --scale-gray-9: #161b22;
+  --scale-gray-92: #1c2128;
+  --scale-gray-95: #0d1117;
+  --scale-gray-100: #010409;
+
+  /* 基础功能色阶 */
+  /* Blue */
+  --scale-blue-3: #58a6ff;
+  --scale-blue-4: #388bfd;
+  --scale-blue-5: #1f6feb;
+  --scale-blue-6: #0969da;
+
+  /* Green */
+  --scale-green-3: #3fb950;
+  --scale-green-4: #2ea043;
+  --scale-green-5: #238636;
+  --scale-green-6: #1a7f37;
+
+  /* Yellow / Amber */
+  --scale-yellow-3: #d29922;
+  --scale-yellow-4: #bb8009;
+  --scale-yellow-5: #9e6a03;
+
+  /* Red */
+  --scale-red-3: #f85149;
+  --scale-red-4: #da3633;
+  --scale-red-5: #b62324;
+  --scale-red-6: #cf222e;
+
+  /* Purple */
+  --scale-purple-3: #a371f7;
+  --scale-purple-4: #8957e5;
+  --scale-purple-5: #6e40c9;
+
+  /* 基础字体族与层级 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* 基础圆角规范 */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+  --radius: var(--radius-md);
+
+  /* 基础间距与空间刻度 */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+}

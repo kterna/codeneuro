@@ -19,16 +19,16 @@ import ActivityView from './components/views/ActivityView.vue'
 import ProjectSettingsView from './components/views/ProjectSettingsView.vue'
 
 const tabs: readonly TabItem[] = [
-  { id: 'explorer', icon: '⌘', title: '规则作用域', subtitle: '按路径检索代码模块适用的工程规范与核心约束。' },
   { id: 'tasks', icon: '▥', title: '需求与任务看板', subtitle: '录入业务需求，推进任务流转与归档。' },
   { id: 'rules', icon: '≋', title: '项目规则库', subtitle: '长期契约与任务短期规则统一管理，多维分类检索。' },
+  { id: 'explorer', icon: '⌘', title: '规则作用域', subtitle: '按路径检索代码模块适用的工程规范与核心约束。' },
   { id: 'review', icon: '◈', title: '规范变更审阅', subtitle: '审阅编码助手提交的长期契约变更提案并核准。' },
   { id: 'feedback', icon: '◎', title: '规则反馈与便签', subtitle: '查看规则真实效用评分与开发便签。' },
   { id: 'activity', icon: '↗', title: '变更审计流水', subtitle: '记录需求归档、规则演进与状态转换的审计日志。' },
   { id: 'settings', icon: '⚙', title: '项目设置与管理', subtitle: '查看项目信息、切换工程或清理数据。' },
 ]
 
-const tab = ref<TabId>('explorer')
+const tab = ref<TabId>('tasks')
 const current = computed(() => tabs.find(item => item.id === tab.value) || tabs[0])
 
 const projects = ref<Project[]>([])
@@ -579,17 +579,17 @@ onUnmounted(() => {
 
     <!-- 主展示区 -->
     <main>
-      <header>
-        <div>
-          <div id="breadcrumb" class="caption">
-            {{ projects.find(item => item.id === projectId)?.name || '项目' }} / 工作台
-          </div>
-          <h1 id="title">{{ current.title }}</h1>
-          <p id="subtitle">{{ current.subtitle }}</p>
+      <header class="main-header-compact">
+        <div class="header-left">
+          <span id="breadcrumb" class="breadcrumb-tag">
+            {{ projects.find(item => item.id === projectId)?.name || '未选项目' }}
+          </span>
+          <h1 id="title" class="title-compact">{{ current.title }}</h1>
+          <span id="subtitle" class="subtitle-compact">{{ current.subtitle }}</span>
         </div>
         <div class="header-actions">
-          <button id="refresh" aria-label="刷新当前视图" :disabled="loading || busy" @click="connect">
-            {{ loading ? '刷新中…' : '刷新' }}
+          <button id="refresh" class="subtle action-btn-compact" aria-label="刷新当前视图" :disabled="loading || busy" @click="connect">
+            {{ loading ? '⟳ 刷新中…' : '⟳ 刷新' }}
           </button>
         </div>
       </header>

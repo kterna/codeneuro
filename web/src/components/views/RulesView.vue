@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, nextTick } from 'vue'
 import type { Ledger, Rule, RuleStatus } from '../../types/ledger'
+import GhDrawer from '../ui/GhDrawer.vue'
 
 const props = defineProps<{
   ledger: Ledger
@@ -78,32 +79,6 @@ function categoryLabel(cat?: string | null): string {
     case 'security': return '安全'
     case 'gotcha': return '避坑'
     default: return cat
-  }
-}
-
-function handleDrawerKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    e.preventDefault()
-    closeDetail()
-  } else if (e.key === 'Tab') {
-    const drawerEl = document.querySelector('.detail-drawer') as HTMLElement | null
-    if (!drawerEl) return
-    const focusable = drawerEl.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
-    )
-    if (!focusable.length) return
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    if (!drawerEl.contains(document.activeElement)) {
-      e.preventDefault()
-      first.focus()
-    } else if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault()
-      first.focus()
-    }
   }
 }
 </script>
@@ -198,92 +173,88 @@ function handleDrawerKeydown(e: KeyboardEvent) {
       </table>
     </div>
 
-    <!-- 规则详情右侧抽屉（带遮罩，无障碍 dialog 语义，焦点管理与关闭还原） -->
-    <div
-      v-if="selectedRule"
-      class="gh-drawer-overlay"
-      @click.self="closeDetail"
-      @keydown="handleDrawerKeydown"
+    <!-- 规则详情右侧抽屉（采用通用 GhDrawer 统一封装无障碍焦点与退出逻辑） -->
+    <GhDrawer
+      :model-value="!!selectedRule"
+      overlay-class="gh-drawer-overlay"
+      content-class="detail-drawer"
+      aria-labelledby="rule-drawer-title"
+      width="min(540px, 92vw)"
+      @close="closeDetail"
     >
-      <aside
-        class="detail-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rule-drawer-title"
-        tabindex="-1"
-      >
-        <div class="drawer-header">
-          <div class="drawer-header-top">
+      <template #header>
+        <div v-if="selectedRule" class="drawer-header-top">
+          <div>
             <h3 id="rule-drawer-title">规则详情</h3>
-            <button
-              ref="closeBtnRef"
-              type="button"
-              class="subtle close-btn"
-              aria-label="关闭抽屉"
-              @click="closeDetail"
-            >✕</button>
+            <p class="muted font-mono" style="margin: 2px 0 0; font-size: 11px">标识：{{ selectedRule.id }} · 版本 v{{ selectedRule.version ?? 1 }}</p>
           </div>
-          <p class="muted font-mono" style="margin: 2px 0 0; font-size: 11px">标识：{{ selectedRule.id }} · 版本 v{{ selectedRule.version ?? 1 }}</p>
+          <button
+            ref="closeBtnRef"
+            type="button"
+            class="subtle close-btn"
+            aria-label="关闭抽屉"
+            @click="closeDetail"
+          >✕</button>
         </div>
+      </template>
 
-        <div class="drawer-content-scroll">
-          <div class="drawer-section">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
-              <h2 style="font-size: 15px; margin: 0; line-height: 1.4">{{ selectedRule.title }}</h2>
-              <span class="tag" :class="selectedRule.priority.toLowerCase()">{{ selectedRule.priority }}</span>
-            </div>
-            <div class="tags" style="margin-top: 8px">
-              <span class="tag" :class="selectedRule.status">{{ statusLabel(selectedRule.status) }}</span>
-              <span class="tag neutral">{{ selectedRule.task_id ? '任务短期规则' : '长期项目契约' }}</span>
-              <span v-if="selectedRule.category" class="tag neutral">{{ categoryLabel(selectedRule.category) }}</span>
-              <span v-if="selectedRule.origin_rule_id" class="tag">由任务规则晋升 (源: v{{ selectedRule.origin_version }})</span>
-            </div>
+      <div v-if="selectedRule" class="drawer-content-scroll">
+        <div class="drawer-section">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
+            <h2 style="font-size: 15px; margin: 0; line-height: 1.4">{{ selectedRule.title }}</h2>
+            <span class="tag" :class="selectedRule.priority.toLowerCase()">{{ selectedRule.priority }}</span>
           </div>
-
-          <div class="drawer-section">
-            <div class="section-label">具体执行条款 ({{ selectedRule.points.length }})</div>
-            <ol class="clause-ol">
-              <li v-for="(p, i) in selectedRule.points" :key="i">
-                <span class="clause-text">{{ p }}</span>
-              </li>
-            </ol>
-          </div>
-
-          <div class="drawer-section">
-            <div class="section-label">管辖文件路径模式</div>
-            <div class="tags">
-              <code v-for="(pat, i) in selectedRule.patterns" :key="i" class="path-badge">{{ pat }}</code>
-            </div>
-          </div>
-
-          <div class="drawer-section">
-            <div class="section-label">使用情况与真实反馈 (当前版本)</div>
-            <div class="stat-meta-grid">
-              <div class="stat-meta-item">
-                <span>实际下发</span>
-                <strong>{{ selectedRule.delivery_count ?? 0 }} 次</strong>
-              </div>
-              <div class="stat-meta-item">
-                <span>评价反馈</span>
-                <strong>{{ selectedRule.eval_count }} 次</strong>
-              </div>
-              <div class="stat-meta-item">
-                <span>已掌握标记</span>
-                <strong>{{ selectedRule.known_count }} 次</strong>
-              </div>
-              <div class="stat-meta-item">
-                <span>实用度均分</span>
-                <strong>{{ selectedRule.avg_score !== null ? selectedRule.avg_score + ' 分' : '暂无' }}</strong>
-              </div>
-            </div>
+          <div class="tags" style="margin-top: 8px">
+            <span class="tag" :class="selectedRule.status">{{ statusLabel(selectedRule.status) }}</span>
+            <span class="tag neutral">{{ selectedRule.task_id ? '任务短期规则' : '长期项目契约' }}</span>
+            <span v-if="selectedRule.category" class="tag neutral">{{ categoryLabel(selectedRule.category) }}</span>
+            <span v-if="selectedRule.origin_rule_id" class="tag">由任务规则晋升 (源: v{{ selectedRule.origin_version }})</span>
           </div>
         </div>
 
-        <div class="drawer-footer">
-          <button type="button" @click="closeDetail">关闭抽屉</button>
+        <div class="drawer-section">
+          <div class="section-label">具体执行条款 ({{ selectedRule.points.length }})</div>
+          <ol class="clause-ol">
+            <li v-for="(p, i) in selectedRule.points" :key="i">
+              <span class="clause-text">{{ p }}</span>
+            </li>
+          </ol>
         </div>
-      </aside>
-    </div>
+
+        <div class="drawer-section">
+          <div class="section-label">管辖文件路径模式</div>
+          <div class="tags">
+            <code v-for="(pat, i) in selectedRule.patterns" :key="i" class="path-badge">{{ pat }}</code>
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <div class="section-label">使用情况与真实反馈 (当前版本)</div>
+          <div class="stat-meta-grid">
+            <div class="stat-meta-item">
+              <span>实际下发</span>
+              <strong>{{ selectedRule.delivery_count ?? 0 }} 次</strong>
+            </div>
+            <div class="stat-meta-item">
+              <span>评价反馈</span>
+              <strong>{{ selectedRule.eval_count }} 次</strong>
+            </div>
+            <div class="stat-meta-item">
+              <span>已掌握标记</span>
+              <strong>{{ selectedRule.known_count }} 次</strong>
+            </div>
+            <div class="stat-meta-item">
+              <span>实用度均分</span>
+              <strong>{{ selectedRule.avg_score !== null ? selectedRule.avg_score + ' 分' : '暂无' }}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <button type="button" @click="closeDetail">关闭抽屉</button>
+      </template>
+    </GhDrawer>
   </div>
 </template>
 

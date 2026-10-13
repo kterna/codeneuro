@@ -1,0 +1,115 @@
+/* ==========================================================================
+   CodeNeuro Design Tokens - Light Theme (GitHub Primer Light 语义映射)
+   供未来支持浅色模式或系统自适应扩展，结构与 theme-dark.css 完全对称
+   ========================================================================== */
+
+:root[data-theme="light"],
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* 表面与画布背景色阶 (Canvas / Surface) */
+  --gh-canvas-default: var(--scale-gray-0);      /* #ffffff 主画布底色 */
+  --gh-canvas-subtle: var(--scale-gray-1);       /* #f6f8fa 侧边栏、表头 */
+  --gh-canvas-inset: var(--scale-gray-1);        /* #f6f8fa 输入框、代码块 */
+  --gh-canvas-overlay: var(--scale-gray-0);      /* #ffffff 抽屉、模态弹窗 */
+  --gh-surface-card: var(--scale-gray-0);        /* #ffffff 卡片 */
+  --gh-surface-card-hover: var(--scale-gray-1);  /* #f6f8fa 卡片悬浮 */
+
+  /* 边框色阶 (Border) */
+  --gh-border-default: var(--scale-gray-3);      /* #d0d7de 分割线 */
+  --gh-border-muted: var(--scale-gray-2);        /* #eaeef2 微弱分割线 */
+  --gh-border-subtle: rgba(31, 35, 40, 0.15);
+
+  /* 前景色与文字阶层 (Foreground / Typography) */
+  --gh-fg-default: #1f2328;                      /* 主正文深黑 */
+  --gh-fg-muted: #656d76;                        /* 辅助说明灰 */
+  --gh-fg-subtle: #8c959f;                       /* 弱化元数据 */
+
+  /* 功能强调与状态色 (Accents & Status) */
+  --gh-accent-fg: var(--scale-blue-6);           /* #0969da 强调蓝 */
+  --gh-accent-emphasis: var(--scale-blue-6);
+  --gh-accent-subtle: #ddf4ff;
+
+  --gh-success-fg: var(--scale-green-6);         /* #1a7f37 成功绿 */
+  --gh-success-emphasis: var(--scale-green-5);
+  --gh-success-subtle: #dafbe1;
+
+  --gh-attention-fg: var(--scale-yellow-5);      /* #9e6a03 警示金 */
+  --gh-attention-subtle: #fff8c5;
+
+  --gh-danger-fg: var(--scale-red-6);            /* #cf222e 危险红 */
+  --gh-danger-emphasis: var(--scale-red-4);
+  --gh-danger-subtle: #ffebe9;
+
+  --gh-done-purple: var(--scale-purple-4);       /* #8957e5 归档紫 */
+  --gh-done-subtle: #fbefff;
+
+  /* 通用规范别名 */
+  --surface: var(--gh-canvas-subtle);
+  --surface-card: var(--gh-surface-card);
+  --surface-card-hover: var(--gh-surface-card-hover);
+  --surface-overlay: var(--gh-canvas-overlay);
+  --surface-inset: var(--gh-canvas-inset);
+
+  --color-border: var(--gh-border-default);
+  --color-border-default: var(--gh-border-default);
+  --color-border-muted: var(--gh-border-muted);
+  --color-border-subtle: var(--gh-border-subtle);
+  --color-border-strong: var(--gh-border-default);
+  --color-text: var(--gh-fg-default);
+  --color-text-muted: var(--gh-fg-muted);
+  --color-text-subtle: var(--gh-fg-subtle);
+  --color-fg-default: var(--gh-fg-default);
+  --color-fg-muted: var(--gh-fg-muted);
+  --color-fg-subtle: var(--gh-fg-subtle);
+  --color-bg: var(--gh-canvas-default);
+  --color-surface: var(--gh-canvas-subtle);
+  --color-canvas-default: var(--gh-canvas-default);
+  --color-canvas-subtle: var(--gh-canvas-subtle);
+  --color-canvas-inset: var(--gh-canvas-inset);
+  --color-canvas-overlay: var(--gh-canvas-overlay);
+  --color-surface-card: var(--gh-surface-card);
+  --color-surface-card-hover: var(--gh-surface-card-hover);
+  --color-primary: var(--gh-accent-fg);
+  --color-accent-fg: var(--gh-accent-fg);
+  --color-danger: var(--gh-danger-fg);
+  --color-danger-fg: var(--gh-danger-fg);
+  --color-danger-subtle: var(--gh-danger-subtle);
+  --color-success: var(--gh-success-fg);
+  --color-success-fg: var(--gh-success-fg);
+  --color-success-subtle: var(--gh-success-subtle);
+  --color-warning: var(--gh-attention-fg);
+  --color-attention-fg: var(--gh-attention-fg);
+  --color-attention-subtle: var(--gh-attention-subtle);
+  --accent-subtle: var(--gh-accent-subtle);
+
+  /* 历史与自动化测试兼容别名 */
+  --accent: #6e40c9;
+  --accent-hover: #553098;
+  --bg-canvas: var(--gh-canvas-default);
+  --bg-subtle: var(--gh-canvas-subtle);
+  --bg-surface: var(--gh-canvas-subtle);
+  --bg-surface-hover: var(--gh-surface-card-hover);
+  --bg-overlay: var(--gh-canvas-overlay);
+
+  --border-subtle: var(--gh-border-muted);
+  --border-default: var(--gh-border-default);
+  --border-strong: var(--gh-border-default);
+  --border-hover: var(--gh-accent-fg);
+
+  --text-primary: var(--gh-fg-default);
+  --text-secondary: var(--gh-fg-muted);
+  --text-tertiary: var(--gh-fg-subtle);
+
+  --red: var(--gh-danger-fg);
+  --red-bg: var(--gh-danger-subtle);
+  --red-border: rgba(207, 34, 46, 0.4);
+
+  --amber: var(--gh-attention-fg);
+  --amber-bg: var(--gh-attention-subtle);
+  --amber-border: rgba(158, 106, 3, 0.4);
+
+  --green: var(--gh-success-fg);
+  --green-bg: var(--gh-success-subtle);
+  --green-border: rgba(26, 127, 55, 0.4);
+}

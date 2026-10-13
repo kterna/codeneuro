@@ -1,0 +1,30 @@
+/* ==========================================================================
+   CodeNeuro Base Reset & Root (基础重置与文档根节点规范)
+   ========================================================================== */
+
+:root {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* 核心原则：消除 html/body 裁切溢出问题，保证内容自适应与各视口触达 (D08/D25) */
+html, body {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background: var(--gh-canvas-default);
+  color: var(--gh-fg-default);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+}
