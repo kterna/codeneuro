@@ -39,3 +39,8 @@ htmlcov/
 .idea/
 .vscode/
 *.swp
+
+# Local batch extraction artifacts and logs
+dist_batches/
+*.log
+

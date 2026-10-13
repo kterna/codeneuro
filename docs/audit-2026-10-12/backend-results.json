@@ -135,7 +135,7 @@
     "remote_path_scan": {
       "status": 200,
       "body": {
-        "workspace": "C:\\Users\\25692\\AppData\\Local\\Temp\\codeneuro-audit-a23987212a\\hub-only-fixture",
+        "workspace": "<TEMP_DIR>\\codeneuro-audit-a23987212a\\hub-only-fixture",
         "tree": [
           {
             "path": "hub-only-synthetic-marker.txt",

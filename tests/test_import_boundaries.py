@@ -836,7 +836,7 @@ def test_provenance_defaults_are_honest_and_not_hardcoded(tmp_path, temp_db):
             assert wts[0].workspace == 'unknown'
             assert wts[0].machine_name == 'not_attested'
             assert wts[0].git_branch == 'unknown'
-            assert 'D:\\1\\github\\codeneuro' not in wts[0].workspace
+            assert 'local_dev' not in wts[0].workspace
             assert 'DevStation' not in wts[0].machine_name
     finally:
         uow.dispose()

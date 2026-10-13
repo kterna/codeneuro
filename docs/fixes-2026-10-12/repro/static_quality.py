@@ -5,7 +5,7 @@ import json
 import re
 import sys
 
-root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path('D:/1/github/codeneuro')
+root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[3]
 run = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).parent
 files = sorted([*(root/'web/src').rglob('*.vue'), *(root/'web/src').rglob('*.css')])
 texts = {p.relative_to(root).as_posix(): p.read_text(encoding='utf-8') for p in files}

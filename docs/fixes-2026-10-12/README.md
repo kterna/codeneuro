@@ -40,7 +40,7 @@ $env:PYTHONPATH = Join-Path $sourceDir 'src'
 ```powershell
 $env:CODENEURO_QA_DIR = $qaDir
 $env:CODENEURO_QA_BASE = 'http://127.0.0.1:18974'
-$env:PLAYWRIGHT_MODULE = 'C:/Users/25692/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'
+# $env:PLAYWRIGHT_MODULE = 'path/to/node_modules/playwright'
 $env:CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 node docs/fixes-2026-10-12/repro/browser_fix_checks.cjs
 node docs/fixes-2026-10-12/repro/browser_more_checks.cjs

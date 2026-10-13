@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'C:/Users/25692/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const base = process.env.CODENEURO_QA_BASE || 'http://127.0.0.1:18974';
 const run = process.env.CODENEURO_QA_DIR || __dirname;
 const fixtures = JSON.parse(fs.readFileSync(path.join(run, 'fixtures.json'), 'utf8'));

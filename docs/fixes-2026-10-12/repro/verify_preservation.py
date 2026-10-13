@@ -3,7 +3,7 @@ import hashlib
 import json
 import sys
 
-root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('D:/1/github/codeneuro')
+root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[3]
 run = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).parent
 manifest = json.loads((root/'docs/audit-2026-10-12/manifest.json').read_text(encoding='utf-8'))
 changed = []

@@ -81,7 +81,7 @@
 - 原审查报告及 256 项审查清单保持原样，修复证据单独存放在 `docs/fixes-2026-10-12/`。
 
 ```powershell
-$env:PYTHONPATH = 'D:/1/github/codeneuro/src'
+$env:PYTHONPATH = (Join-Path (Get-Location).Path 'src')
 & '.venv/Scripts/python.exe' -m pytest -q
 & 'C:/Program Files/nodejs/npm.cmd' run build --prefix web
 & '.venv/Scripts/python.exe' scripts/browser_smoke.py --chromium 'C:/Program Files/Google/Chrome/Application/chrome.exe'

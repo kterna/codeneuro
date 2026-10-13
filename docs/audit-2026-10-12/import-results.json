@@ -1,6 +1,6 @@
 {
   "import_exit": 0,
-  "import_stdout": "Ingesting into target database: C:\\Users\\25692\\AppData\\Local\\Temp\\codeneuro-audit-a23987212a\\import-case\\new.db\nLoading dist_batches\\result_batch_1.json...\n\nSUCCESS! Ingested into C:\\Users\\25692\\AppData\\Local\\Temp\\codeneuro-audit-a23987212a\\import-case\\new.db:\n  Projects: 2\n  Tasks: 3\n  Requirements: 3\n  Rules: 1\n  Findings: 0\n",
+  "import_stdout": "Ingesting into target database: <TEMP_DIR>\\codeneuro-audit-a23987212a\\import-case\\new.db\nLoading dist_batches\\result_batch_1.json...\n\nSUCCESS! Ingested into <TEMP_DIR>\\codeneuro-audit-a23987212a\\import-case\\new.db:\n  Projects: 2\n  Tasks: 3\n  Requirements: 3\n  Rules: 1\n  Findings: 0\n",
   "import_stderr": "",
   "snapshots": {
     "rules": 1,

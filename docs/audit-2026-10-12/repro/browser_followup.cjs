@@ -1,5 +1,5 @@
 const fs=require('fs'),path=require('path');
-const {chromium}=require('C:/Users/25692/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const [base,run]=process.argv.slice(2);
 (async()=>{
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});

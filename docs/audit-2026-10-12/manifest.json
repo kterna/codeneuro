@@ -2,18 +2,18 @@
   "baseline": "c30cd63c20f74c0b52c76d510b24bac0e4cc51a2",
   "date": "2026-10-12",
   "hash_algorithm": "SHA-256",
-  "paths_relative_to": "D:/1/github/codeneuro",
+  "paths_relative_to": ".",
   "self_excluded": true,
   "files": [
     {
       "path": "docs/product-audit-2026-10-12.md",
-      "bytes": 51342,
-      "sha256": "18c5dbcace0002a48e9512874ff99da6ab06ae7f5712280838a3c414e397ea73"
+      "bytes": 49361,
+      "sha256": "f3194e2e12e1c71c74b6bead7c9fdd76731708c417c297289c6580dcbd3adf3f"
     },
     {
       "path": "docs/product-audit-checklist-2026-10-12.md",
-      "bytes": 67722,
-      "sha256": "b9d5be77a79e4bac40b51525e3da9adfcb23da13aafbef1e25b1666c227d3e9e"
+      "bytes": 59902,
+      "sha256": "cdd65a81dc3c789caf561bfb01a13da20197992569e7035b20d1cf68bf92e844"
     },
     {
       "path": "docs/audit-2026-10-12/artifact-validation.json",
@@ -22,8 +22,8 @@
     },
     {
       "path": "docs/audit-2026-10-12/backend-results.json",
-      "bytes": 4373,
-      "sha256": "8e89c5f04acf200f5fb4dcf0fcd9d80974617b3fc5dc0c3b58c496cf15b1a8fe"
+      "bytes": 4345,
+      "sha256": "c8762d1dc28941d7636138b7aaa8d67690a37cc07eb1bf448396c9e9c5cd5756"
     },
     {
       "path": "docs/audit-2026-10-12/browser-followup.json",
@@ -42,13 +42,13 @@
     },
     {
       "path": "docs/audit-2026-10-12/import-results.json",
-      "bytes": 1027,
-      "sha256": "d5fb79080f91d5d59977975d5506c96db794199e378cea5498fb248138c2730c"
+      "bytes": 971,
+      "sha256": "a28eabe2c852b7bfcbb5d8536f5f160d5ee67cdff66c627b94e5d142fbffcb74"
     },
     {
       "path": "docs/audit-2026-10-12/README.md",
-      "bytes": 10956,
-      "sha256": "5ddf048a818b5fca7da98330c938d3fb7c956a11805521e08bce9e2c373cf893"
+      "bytes": 8499,
+      "sha256": "1060fbe964b862f8e58406ec4c4fff339b817b9a71d5f7d5e00fe2d087d40276"
     },
     {
       "path": "docs/audit-2026-10-12/repro/backend_probe.py",
@@ -57,13 +57,13 @@
     },
     {
       "path": "docs/audit-2026-10-12/repro/browser_audit.cjs",
-      "bytes": 13139,
-      "sha256": "d11e113dac4373056f0586b9b44ab2fa05eb6aa29c0897b0280c096082f9952a"
+      "bytes": 13082,
+      "sha256": "4c0ca2cbf94a935e19efdd3e42700bc8c9864ab8f49a4c693d5ffe163431e8b3"
     },
     {
       "path": "docs/audit-2026-10-12/repro/browser_followup.cjs",
-      "bytes": 5126,
-      "sha256": "e43d27ce07584fa4e74255d874a8f2d984f488723faef3c828a9d833f7f5b0f2"
+      "bytes": 5069,
+      "sha256": "7bc0edc568ca03db3e9f4464625cfe3dfb982ee8aa8e036d0f3973b6ee8aa423"
     },
     {
       "path": "docs/audit-2026-10-12/repro/import_probe.py",
@@ -292,8 +292,8 @@
     },
     {
       "path": "docs/audit-2026-10-12/verification-summary.json",
-      "bytes": 3756,
-      "sha256": "0c296bd7fc2ebf38e83c09056fe0dfbdd3d0ffb50a7d02f6288b6f3e474a9146"
+      "bytes": 3812,
+      "sha256": "d183ed2596ef5a302b5dfe2a7793914588f188b92081388e741624a4c068259a"
     }
   ]
 }

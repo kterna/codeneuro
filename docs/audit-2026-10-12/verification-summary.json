@@ -5,7 +5,7 @@
   "purpose": "Recorded execution summary from this audit; not a raw terminal transcript.",
   "isolation": {
     "source": "Git archive snapshot of baseline",
-    "runtime_root": "C:/Users/25692/AppData/Local/Temp/codeneuro-audit-a23987212a",
+    "runtime_root": "<TEMP_DIR>/codeneuro-audit-a23987212a",
     "data": "Synthetic fixtures only",
     "real_dist_batches_used": false,
     "product_code_modified": false,
@@ -14,7 +14,7 @@
   "environment": {
     "platform": "Windows",
     "python": "3.11.13",
-    "python_executable": "D:/1/github/codeneuro/.venv/Scripts/python.exe",
+    "python_executable": ".venv/Scripts/python.exe",
     "node_executable": "C:/Program Files/nodejs/node.exe",
     "browser_executable": "C:/Program Files/Google/Chrome/Application/chrome.exe",
     "browser_viewports": [[1440, 900], [1280, 720], [768, 1024], [390, 844]],
