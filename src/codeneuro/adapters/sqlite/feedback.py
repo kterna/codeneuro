@@ -12,11 +12,15 @@ class FeedbackRepo(Repo):
             s.feedback.c.rule_id == s.rules.c.id,
             s.feedback.c.rule_version == s.rules.c.version))
         statement = sa.select(s.rules.c.id,
+            sa.select(sa.func.count()).select_from(s.delivery_rules).where(
+                s.delivery_rules.c.rule_id == s.rules.c.id,
+                s.delivery_rules.c.version == s.rules.c.version).correlate(s.rules).scalar_subquery().label('delivery_count'),
             sa.func.count(s.feedback.c.rule_id).label('eval_count'),
             sa.func.coalesce(sa.func.sum(sa.case((s.feedback.c.score == 0, 1), else_=0)), 0).label('known_count'),
             sa.func.round(sa.func.avg(sa.case((s.feedback.c.score > 0, s.feedback.c.score))), 2).label('avg_score')
         ).select_from(joined).where(s.rules.c.project_id == project_id).group_by(s.rules.c.id)
         return {row.id: {'eval_count': row.eval_count, 'known_count': row.known_count,
+                         'delivery_count': row.delivery_count,
                          'avg_score': float(row.avg_score) if row.avg_score is not None else None}
                 for row in self.c.execute(statement)}
 

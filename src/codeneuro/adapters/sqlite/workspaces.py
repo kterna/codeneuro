@@ -16,16 +16,37 @@ class WorkspacesRepo(Repo):
         self.c.execute(s.projects.insert().values(id=project_id, name=name, rule_revision=0))
 
     def delete_project(self, project_id):
-        # 清理该项目下的所有关联记录
-        self.c.execute(s.findings.delete().where(s.findings.c.project_id == project_id))
-        self.c.execute(s.contract_proposals.delete().where(s.contract_proposals.c.project_id == project_id))
-        self.c.execute(s.rules.delete().where(s.rules.c.project_id == project_id))
-        self.c.execute(s.requirements.delete().where(s.requirements.c.project_id == project_id))
-        self.c.execute(s.tasks.delete().where(s.tasks.c.project_id == project_id))
-        self.c.execute(s.sessions.delete().where(s.sessions.c.project_id == project_id))
-        self.c.execute(s.worktrees.delete().where(s.worktrees.c.project_id == project_id))
-        self.c.execute(s.audit.delete().where(s.audit.c.project_id == project_id))
-        self.c.execute(s.projects.delete().where(s.projects.c.id == project_id))
+        # Clear origin_rule_id self-referential foreign keys first
+        self.c.execute(s.rules.update().where(s.rules.c.project_id == project_id).values(origin_rule_id=None))
+        # All predicates refer to parents, which remain until their children are removed.
+        rules = sa.select(s.rules.c.id).where(s.rules.c.project_id == project_id)
+        requirements = sa.select(s.requirements.c.id).where(s.requirements.c.project_id == project_id)
+        sessions = sa.select(s.sessions.c.id).where(s.sessions.c.project_id == project_id)
+        deliveries = sa.select(s.deliveries.c.id).where(s.deliveries.c.session_id.in_(sessions))
+        indirect = {
+            'agent_rule_state': s.agent_rule_state.c.rule_id.in_(rules),
+            'rule_observations': s.rule_observations.c.rule_id.in_(rules),
+            'requirement_versions': s.requirement_versions.c.requirement_id.in_(requirements),
+            'requirement_rule_links': s.requirement_rule_links.c.rule_id.in_(rules),
+            'rule_versions': s.rule_versions.c.rule_id.in_(rules),
+            'deliveries': s.deliveries.c.session_id.in_(sessions),
+            'delivery_rules': s.delivery_rules.c.delivery_id.in_(deliveries),
+            'delivery_requirements': s.delivery_requirements.c.delivery_id.in_(deliveries),
+            'delivery_findings': s.delivery_findings.c.delivery_id.in_(deliveries),
+            'feedback': s.feedback.c.delivery_id.in_(deliveries),
+            'projects': s.projects.c.id == project_id,
+        }
+        for table in reversed(s.metadata.sorted_tables):
+            predicate = (table.c.project_id == project_id if 'project_id' in table.c
+                         else indirect[table.name])
+            self.c.execute(table.delete().where(predicate))
+
+    def transition_task(self, task, status):
+        result = self.c.execute(s.tasks.update().where(
+            s.tasks.c.id == task.id, s.tasks.c.revision == task.revision).values(
+            status=status, paused_from=None, revision=s.tasks.c.revision + 1))
+        if result.rowcount != 1:
+            raise Conflict('Task changed before this transition.')
 
     def list_projects(self):
         return [dict(r) for r in self.c.execute(sa.select(s.projects).order_by(s.projects.c.id)).mappings()]

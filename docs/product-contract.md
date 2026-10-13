@@ -13,6 +13,7 @@
 
 - Project、Worktree、Task、Requirement、Rule、Finding、Session、Delivery、Feedback 各有明确身份；Requirement 原文不变，当前 Task 的活跃需求作为 P1 独立下发，不伪装成长期 Rule。
 - Agent 带预期版本和完成摘要归档 Requirement 后立即退出活跃上下文；最后一条需求归档自动完成 Task。无 Requirement 的历史 Task 仍可人工完成。归档关联短期 Rule 的停用、Task 状态和审计同事务提交。
+- 任务状态流转契约：支持 draft、active、testing、released、archived 与 paused。draft 可流转至 active/archived；active 可流转至 testing/archived，或进入 paused；testing 可流转至 active/released/archived，或进入 paused；paused 须先经恢复操作回至暂停前的 active 或 testing，不直接跨态流转；released 可回退至 active 或完成 archived；已归档 (archived) 任务允许人工进一步流转至上线 (released)，但该操作保留既有已停用状态，绝不复活任何已随归档停用的规则。
 - 当前 Task 的活跃短期 Rule 可由 Agent 按版本晋升：保持条款、范围、优先级，不扩大权限；来源失活，晋升记录和审计同事务提交。修改现有长期契约仍需人工审阅。
 - JIT 按会话/Task/文件范围选择规则，支持多文件、类别、优先级、意图和详细/清单输出；P0 不因类别、已知反馈或字符预算丢失。未审阅 Finding 仅在同一活跃 Task 内跨会话按文件路径提示，并进入项目账本，不跨任务变成 Rule。版本匹配的既有语义诊断可作提示，但热路径不调用模型或自动裁决。
 - 实际下发保存会话、请求、规则/需求版本凭据；预览不计数。评分必须引用实际下发，`0=已知、1=无关、5=核心需要`，效用均分排除 0。写入按版本并保持请求幂等，跨项目/Task/Worktree 不串数据。

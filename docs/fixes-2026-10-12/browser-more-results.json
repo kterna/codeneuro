@@ -1,0 +1,308 @@
+{
+  "tests": {
+    "narrow_content_uses_available_width": {
+      "pass": true,
+      "detail": [
+        {
+          "tab": 0,
+          "x": 16,
+          "y": 366.75,
+          "width": 358,
+          "height": 783.140625
+        },
+        {
+          "tab": 1,
+          "x": 16,
+          "y": 129.75,
+          "width": 358,
+          "height": 1080.015625
+        },
+        {
+          "tab": 2,
+          "x": 16,
+          "y": 151.75,
+          "width": 358,
+          "height": 659.828125
+        },
+        {
+          "tab": 3,
+          "x": 16,
+          "y": 151.75,
+          "width": 358,
+          "height": 5764.515625
+        },
+        {
+          "tab": 4,
+          "x": 16,
+          "y": 129.75,
+          "width": 358,
+          "height": 2199.296875
+        },
+        {
+          "tab": 5,
+          "x": 16,
+          "y": 129.75,
+          "width": 358,
+          "height": 19374.890625
+        },
+        {
+          "tab": 6,
+          "x": 16,
+          "y": 129.75,
+          "width": 358,
+          "height": 1152.6875
+        }
+      ]
+    },
+    "metric_delivery_and_feedback": {
+      "pass": true,
+      "detail": {
+        "p0": 1,
+        "deliveries": 4,
+        "feedback": 1
+      }
+    },
+    "audit_all_pages": {
+      "pass": true,
+      "detail": {
+        "loaded": 232,
+        "first": "#237",
+        "last": "#1"
+      }
+    },
+    "audit_refresh_during_pagination": {
+      "pass": true,
+      "detail": {
+        "before": 100,
+        "after": 200
+      }
+    },
+    "worktree_selection_is_explicit": {
+      "pass": true,
+      "detail": {
+        "worktrees": 1
+      }
+    },
+    "history_and_skip_link": {
+      "pass": true,
+      "detail": {
+        "rulesUrl": "http://127.0.0.1:18974/app/#/projects/audit-a/rules",
+        "activityUrl": "http://127.0.0.1:18974/app/#/projects/audit-a/activity"
+      }
+    },
+    "inspect_stale_input_is_invalidated": {
+      "pass": true,
+      "detail": {
+        "oldResults": []
+      }
+    },
+    "switch_project_during_submit_does_not_lock_ui": {
+      "pass": true,
+      "detail": {
+        "currentProject": "audit-b",
+        "refreshEnabled": true
+      }
+    },
+    "old_submission_does_not_clear_new_busy_state": {
+      "pass": true,
+      "detail": {
+        "requests": 2,
+        "currentProject": "audit-a"
+      }
+    },
+    "stale_and_missing_snapshot_cannot_be_approved": {
+      "pass": true,
+      "detail": [
+        {
+          "id": "proposal_19a189b8696645dc82d97feadaf9f591",
+          "missingSnapshot": false,
+          "target": 1,
+          "current": 2
+        },
+        {
+          "id": "proposal_4bce3809ea6d400a84291ab91a64b05b",
+          "missingSnapshot": true,
+          "target": 1,
+          "current": 1
+        }
+      ]
+    },
+    "muted_text_contrast_on_current_surfaces": {
+      "pass": true,
+      "detail": [
+        {
+          "foreground": "--gh-fg-muted",
+          "fg": "#9ea8b3",
+          "background": "--gh-canvas-default",
+          "bg": "#0d1117",
+          "ratio": 7.845
+        },
+        {
+          "foreground": "--gh-fg-muted",
+          "fg": "#9ea8b3",
+          "background": "--gh-canvas-subtle",
+          "bg": "#161b22",
+          "ratio": 7.171
+        },
+        {
+          "foreground": "--gh-fg-muted",
+          "fg": "#9ea8b3",
+          "background": "--gh-canvas-inset",
+          "bg": "#010409",
+          "ratio": 8.513
+        },
+        {
+          "foreground": "--gh-fg-muted",
+          "fg": "#9ea8b3",
+          "background": "--gh-canvas-overlay",
+          "bg": "#1c2128",
+          "ratio": 6.709
+        },
+        {
+          "foreground": "--gh-fg-muted",
+          "fg": "#9ea8b3",
+          "background": "--gh-surface-card",
+          "bg": "#21262d",
+          "ratio": 6.309
+        },
+        {
+          "foreground": "--gh-fg-muted",
+          "fg": "#9ea8b3",
+          "background": "--gh-surface-card-hover",
+          "bg": "#292e36",
+          "ratio": 5.659
+        },
+        {
+          "foreground": "--gh-fg-subtle",
+          "fg": "#a8b4be",
+          "background": "--gh-canvas-default",
+          "bg": "#0d1117",
+          "ratio": 8.955
+        },
+        {
+          "foreground": "--gh-fg-subtle",
+          "fg": "#a8b4be",
+          "background": "--gh-canvas-subtle",
+          "bg": "#161b22",
+          "ratio": 8.185
+        },
+        {
+          "foreground": "--gh-fg-subtle",
+          "fg": "#a8b4be",
+          "background": "--gh-canvas-inset",
+          "bg": "#010409",
+          "ratio": 9.717
+        },
+        {
+          "foreground": "--gh-fg-subtle",
+          "fg": "#a8b4be",
+          "background": "--gh-canvas-overlay",
+          "bg": "#1c2128",
+          "ratio": 7.658
+        },
+        {
+          "foreground": "--gh-fg-subtle",
+          "fg": "#a8b4be",
+          "background": "--gh-surface-card",
+          "bg": "#21262d",
+          "ratio": 7.202
+        },
+        {
+          "foreground": "--gh-fg-subtle",
+          "fg": "#a8b4be",
+          "background": "--gh-surface-card-hover",
+          "bg": "#292e36",
+          "ratio": 6.46
+        }
+      ]
+    },
+    "rendered_small_text_contrast": {
+      "pass": true,
+      "detail": {
+        "sampleCount": 582,
+        "minimum": 6.309,
+        "lowest": [
+          {
+            "tab": 1,
+            "class": "task-desc",
+            "text": "用于独立产品审查的合成业务数据",
+            "color": "rgb(158, 168, 179)",
+            "ratio": 6.309
+          },
+          {
+            "tab": 1,
+            "class": "task-desc",
+            "text": "用于独立产品审查的合成业务数据",
+            "color": "rgb(158, 168, 179)",
+            "ratio": 6.309
+          },
+          {
+            "tab": 1,
+            "class": "task-desc",
+            "text": "用于独立产品审查的合成业务数据",
+            "color": "rgb(158, 168, 179)",
+            "ratio": 6.309
+          },
+          {
+            "tab": 1,
+            "class": "task-desc",
+            "text": "修复验收独立任务-1791820008776：保留原始需求",
+            "color": "rgb(158, 168, 179)",
+            "ratio": 6.309
+          },
+          {
+            "tab": 1,
+            "class": "task-desc",
+            "text": "用于独立产品审查的合成业务数据",
+            "color": "rgb(158, 168, 179)",
+            "ratio": 6.309
+          },
+          {
+            "tab": 1,
+            "class": "task-desc muted",
+            "text": "修复验收独立任务-1791857307468：保留原始需求",
+            "color": "rgb(158, 168, 179)",
+            "ratio": 6.309
+          },
+          {
+            "tab": 1,
+            "class": "task-desc muted",
+            "text": "用于独立产品审查的合成业务数据",
+            "color": "rgb(158, 168, 179)",
+            "ratio": 6.309
+          },
+          {
+            "tab": 1,
+            "class": "task-desc muted",
+            "text": "修复验收独立任务-1791853544184：保留原始需求",
+            "color": "rgb(158, 168, 179)",
+            "ratio": 6.309
+          },
+          {
+            "tab": 1,
+            "class": "task-desc muted",
+            "text": "修复验收独立任务-1791820390843：保留原始需求",
+            "color": "rgb(158, 168, 179)",
+            "ratio": 6.309
+          },
+          {
+            "tab": 1,
+            "class": "task-id",
+            "text": "#2ad8f8bf59",
+            "color": "rgb(168, 180, 190)",
+            "ratio": 7.202
+          }
+        ]
+      }
+    },
+    "task_drawer_archive_stays_current": {
+      "pass": true,
+      "detail": {
+        "title": "修复验收独立任务-1791857790455",
+        "archived": true,
+        "released": true
+      }
+    }
+  },
+  "pageErrors": []
+}

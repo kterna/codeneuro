@@ -21,6 +21,9 @@ class Governance(Workspaces):
             raise ProductError('Rule is outside this session Task.', 'not_found')
         if rule.version != expected_version:
             raise Conflict('Rule version changed.')
+        linked = tx.requirements.linked_requirement(rule_id)
+        if linked and linked.status != RequirementStatus.ACTIVE:
+            raise Conflict('The linked Requirement is archived; this Rule cannot be activated or changed.')
         state = tx.governance.state(rule_id)
         if not state or state['session_id'] != session.id:
             raise ProductError('Only its originating Agent session may mutate this draft.', 'forbidden')

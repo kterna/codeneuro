@@ -13,34 +13,34 @@ defineProps<{
 <template>
   <div id="metrics" class="metrics">
     <div class="metric">
-      <div>
+      <div class="metric-content">
         <span>活跃需求</span>
         <strong>{{ activeRequirementsCount }}</strong>
       </div>
-      <small>待完成 {{ activeRequirementsCount }} · 已归档 {{ (ledger?.requirements.length ?? 0) - activeRequirementsCount }}</small>
+      <small class="metric-caption">待完成 {{ activeRequirementsCount }} · 已归档 {{ (ledger?.requirements.length ?? 0) - activeRequirementsCount }}</small>
     </div>
     <div class="metric">
-      <div>
+      <div class="metric-content">
         <span>进行中任务</span>
         <strong>{{ activeTasksCount }}</strong>
       </div>
-      <small>全项目共 {{ ledger?.tasks.length ?? 0 }} 个任务看板流转中</small>
+      <small class="metric-caption">任务总数 {{ ledger?.tasks.length ?? 0 }}</small>
     </div>
     <div class="metric">
-      <div>
+      <div class="metric-content">
         <span>核心契约 (P0)</span>
         <strong>{{ contractsCount }}</strong>
       </div>
-      <small>长期生效 · 最高优先级强制约束规范</small>
+      <small class="metric-caption">长期最高优先级约束</small>
     </div>
     <div class="metric">
-      <div>
+      <div class="metric-content">
         <span>待审提案</span>
         <strong :style="{ color: pendingProposalsCount ? 'var(--amber)' : 'inherit' }">
           {{ pendingProposalsCount }}
         </strong>
       </div>
-      <small>长期规范修改待人工审阅批准</small>
+      <small class="metric-caption">长期规范变更待审阅</small>
     </div>
   </div>
 </template>

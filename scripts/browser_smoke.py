@@ -97,6 +97,9 @@ def main(argv=None):
                     wait(lambda: js(f"[...document.querySelectorAll('button')].some(b=>b.textContent.trim().endsWith({json.dumps(label)})&&!b.disabled)"))
                     js(f"[...document.querySelectorAll('button')].find(b=>b.textContent.trim().endsWith({json.dumps(label)})).click()")
                 cdp('Runtime.enable'); cdp('Page.enable')
+                cdp('Emulation.setDeviceMetricsOverride', {
+                    'width': 1280, 'height': 720, 'deviceScaleFactor': 1, 'mobile': False,
+                })
                 cdp('Page.navigate', {'url': f'http://127.0.0.1:{http_port}/app/'})
                 wait(lambda: js("!!document.querySelector('.sidebar') && document.querySelector('#health').textContent.includes('已连接')"))
                 assert not js("!!document.querySelector('#hub-token')")
@@ -119,7 +122,7 @@ def main(argv=None):
                 fill('#editor textarea', 'Coding Agent confirmed completion.')
                 click('保存')
                 wait(lambda: js("document.body.innerText.includes('完成摘要：Coding Agent confirmed completion.')"))
-                wait(lambda: js("[...document.querySelectorAll('.tag')].some(x=>x.textContent.includes('archived'))"))
+                wait(lambda: js("!!document.querySelector('[data-task-id][data-status=archived]')"))
                 assert not errors, errors
                 print(json.dumps({'result': 'passed', 'flow': 'intake_archival_ledger',
                                   'javascript_errors': len(errors)}))

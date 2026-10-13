@@ -47,6 +47,16 @@ class KnowledgeRepo(Repo):
     def get_rule(self, rule_id):
         return _rule(self._one(sa.select(s.rules).where(s.rules.c.id == rule_id)))
 
+    def rule_snapshot(self, rule_id, version):
+        row = self._one(sa.select(s.rule_versions).where(
+            s.rule_versions.c.rule_id == rule_id, s.rule_versions.c.version == version))
+        if row is None:
+            return None
+        result = dict(row)
+        result['points'] = json.loads(result.pop('points_json'))
+        result['patterns'] = json.loads(result.pop('patterns_json'))
+        return result
+
     def promoted_rule(self, source_id, source_version):
         return _rule(self._one(sa.select(s.rules).where(s.rules.c.origin_rule_id == source_id,
                      s.rules.c.origin_version == source_version)))
@@ -73,7 +83,7 @@ class KnowledgeRepo(Repo):
 
     def deprecate_task_rules(self, task_id):
         found = list(self.c.execute(sa.select(s.rules).where(s.rules.c.task_id == task_id,
-            s.rules.c.status == 'active')).mappings())
+            s.rules.c.status.in_(('active', 'draft')))).mappings())
         for row in found:
             self.deprecate_rule(_rule(row))
 

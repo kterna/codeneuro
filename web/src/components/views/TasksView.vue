@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import type { Ledger, Requirement, Task, TaskStatus } from '../../types/ledger'
 
 const props = defineProps<{
@@ -8,10 +8,11 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'submit-demand', payload: { text: string; taskId?: string }): void
+  (e: 'submit-demand', payload: { text: string; taskId?: string; requestId?: string; onSuccess?: () => void }): void
   (e: 'open-archive', req: Requirement): void
   (e: 'open-pause', task: Task): void
   (e: 'open-resume', task: Task): void
+  (e: 'open-transition', task: Task): void
 }>()
 
 const demand = ref('')
@@ -19,14 +20,52 @@ const selectedTaskId = ref('')
 const viewMode = ref<'swimlane' | 'list'>('swimlane')
 const searchKeyword = ref('')
 const onlyActive = ref(false)
-const focusedTask = ref<Task | null>(null)
+const focusedTaskId = ref<string | null>(null)
+let taskOpenerElement: HTMLElement | null = null
+const taskCloseBtnRef = ref<HTMLButtonElement | null>(null)
+
+// 保持重试请求 ID 幂等 (解决 D09)
+const draftRequestId = ref(crypto.randomUUID())
+const lastSubmittedText = ref('')
+const lastSubmittedTaskId = ref<string | undefined>(undefined)
+
+watch([demand, selectedTaskId], () => {
+  if (demand.value !== lastSubmittedText.value || selectedTaskId.value !== lastSubmittedTaskId.value) {
+    draftRequestId.value = crypto.randomUUID()
+  }
+})
+
+const focusedTask = computed<Task | null>(() => {
+  if (!focusedTaskId.value) return null
+  return props.ledger.tasks.find(t => t.id === focusedTaskId.value) || null
+})
 
 const activeLanes: { key: TaskStatus; label: string; dotCls: string }[] = [
-  { key: 'draft', label: '待开始 (Draft)', dotCls: 'draft' },
-  { key: 'active', label: '进行中 (Active)', dotCls: 'active' },
-  { key: 'paused', label: '已暂停 (Paused)', dotCls: 'paused' },
-  { key: 'testing', label: '测试验证 (Testing)', dotCls: 'testing' },
+  { key: 'draft', label: '待开始', dotCls: 'draft' },
+  { key: 'active', label: '进行中', dotCls: 'active' },
+  { key: 'paused', label: '已暂停', dotCls: 'paused' },
+  { key: 'testing', label: '待验证', dotCls: 'testing' },
 ]
+
+function taskStatusLabel(status: TaskStatus | string): string {
+  switch (status) {
+    case 'draft': return '待开始'
+    case 'active': return '进行中'
+    case 'paused': return '已暂停'
+    case 'testing': return '待验证'
+    case 'released': return '已发布'
+    case 'archived': return '已归档'
+    default: return status
+  }
+}
+
+function reqStatusLabel(status: string): string {
+  switch (status) {
+    case 'active': return '进行中'
+    case 'archived': return '已归档'
+    default: return status
+  }
+}
 
 function escaped(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -44,9 +83,22 @@ function handleSubmit() {
   const text = demand.value.trim()
   if (!text) return
   const chosen = selectedTaskId.value || (matchedTasks.value.length === 1 ? matchedTasks.value[0].id : undefined)
-  emit('submit-demand', { text, taskId: chosen })
-  demand.value = ''
-  selectedTaskId.value = ''
+  lastSubmittedText.value = text
+  lastSubmittedTaskId.value = chosen
+  const submittedReqId = draftRequestId.value
+  emit('submit-demand', {
+    text,
+    taskId: chosen,
+    requestId: submittedReqId,
+    onSuccess: () => {
+      // 仅当用户在请求途中未修改内容时清空
+      if (demand.value.trim() === text) {
+        demand.value = ''
+        selectedTaskId.value = ''
+      }
+      draftRequestId.value = crypto.randomUUID()
+    },
+  })
 }
 
 const filteredTasks = computed(() => {
@@ -71,12 +123,66 @@ function getTaskProgress(taskId: string) {
   return { total: reqs.length, done, percent: Math.round((done / reqs.length) * 100) }
 }
 
-function openTaskDetail(task: Task) {
-  focusedTask.value = task
+function openTaskDetail(task: Task, opener?: HTMLElement | null) {
+  taskOpenerElement = opener || (document.activeElement as HTMLElement | null)
+  focusedTaskId.value = task.id
+  nextTick(() => {
+    const btn = taskCloseBtnRef.value || (document.querySelector('.task-drawer-content button') as HTMLElement | null)
+    if (btn && typeof btn.focus === 'function') {
+      btn.focus()
+    } else {
+      (document.querySelector('.task-drawer-content') as HTMLElement | null)?.focus()
+    }
+  })
 }
 
 function closeTaskDetail() {
-  focusedTask.value = null
+  const taskId = focusedTaskId.value
+  focusedTaskId.value = null
+  nextTick(() => {
+    if (taskOpenerElement && document.body.contains(taskOpenerElement) && typeof taskOpenerElement.focus === 'function') {
+      taskOpenerElement.focus()
+      return
+    }
+    if (taskId) {
+      const escapedId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(taskId) : taskId
+      const currentCardOrRow = document.querySelector(`[data-task-id="${escapedId}"]`) as HTMLElement | null
+      if (currentCardOrRow && typeof currentCardOrRow.focus === 'function') {
+        currentCardOrRow.focus()
+        return
+      }
+    }
+    const contentEl = document.getElementById('content') || (document.querySelector('#content') as HTMLElement | null)
+    if (contentEl && typeof contentEl.focus === 'function') {
+      contentEl.focus()
+    }
+  })
+}
+
+function handleDrawerKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    closeTaskDetail()
+  } else if (e.key === 'Tab') {
+    const drawerEl = document.querySelector('.task-drawer-content') as HTMLElement | null
+    if (!drawerEl) return
+    const focusable = drawerEl.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+    )
+    if (!focusable.length) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (!drawerEl.contains(document.activeElement)) {
+      e.preventDefault()
+      first.focus()
+    } else if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
 }
 </script>
 
@@ -86,7 +192,7 @@ function closeTaskDetail() {
     <section class="intake-panel">
       <div class="intake-title">
         <h2>录入业务需求</h2>
-        <span class="caption">输入业务需求原文，自动关联任务并作为执行约束下发给 Agent</span>
+        <span class="caption">输入需求原文，作为任务执行约束下发。</span>
       </div>
 
       <div class="intake-form">
@@ -127,7 +233,7 @@ function closeTaskDetail() {
     <!-- 2. 看板控制栏 -->
     <div class="board-header">
       <div class="board-header-left">
-        <h2>任务看板与需求流转</h2>
+        <h2>任务看板</h2>
         <span class="muted">全项目共 {{ ledger.tasks.length }} 个任务 · {{ ledger.requirements.length }} 条需求</span>
       </div>
 
@@ -188,13 +294,20 @@ function closeTaskDetail() {
             <article
               v-for="task in filteredTasks.filter(t => t.status === lane.key)"
               :key="task.id"
+              :data-task-id="task.id"
+              :data-status="task.status"
               class="task-card"
               :class="{ 'card-active': task.status === 'active' }"
-              @click="openTaskDetail(task)"
+              tabindex="0"
+              role="button"
+              :aria-label="task.title"
+              @click="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
+              @keydown.enter.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
+              @keydown.space.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
             >
               <div class="task-card-top">
                 <span class="task-id">#{{ task.id.replace('task_', '').slice(0, 10) }}</span>
-                <span class="tag" :class="task.status">{{ task.status }}</span>
+                <span class="tag" :class="task.status">{{ taskStatusLabel(task.status) }}</span>
               </div>
 
               <h4 class="task-title">{{ task.title }}</h4>
@@ -210,13 +323,14 @@ function closeTaskDetail() {
                   :key="req.id"
                   class="original-text compact-pill"
                 >
-                  <span class="tag mini" :class="req.status">{{ req.status === 'active' ? '进行中' : '已归档' }}</span>
+                  <span class="tag mini" :class="req.status">{{ reqStatusLabel(req.status) }}</span>
                   <span class="preview-text">{{ req.text }}</span>
                   <button
                     v-if="req.status === 'active' && ['active', 'testing'].includes(task.status)"
                     class="subtle btn-inline-archive"
                     :disabled="busy"
                     @click.stop="emit('open-archive', req)"
+                    @keydown.stop
                   >
                     确认归档
                   </button>
@@ -229,12 +343,13 @@ function closeTaskDetail() {
                   需求达成 {{ getTaskProgress(task.id).done }} / {{ getTaskProgress(task.id).total }}
                 </span>
 
-                <div class="actions-group" @click.stop>
+                <div class="actions-group" @click.stop @keydown.stop>
                   <button
                     v-if="['active', 'testing'].includes(task.status)"
                     class="subtle action-btn"
                     :disabled="busy"
-                    @click="emit('open-pause', task)"
+                    @click.stop="emit('open-pause', task)"
+                    @keydown.stop
                   >
                     暂停
                   </button>
@@ -242,9 +357,19 @@ function closeTaskDetail() {
                     v-if="task.status === 'paused'"
                     class="subtle action-btn"
                     :disabled="busy"
-                    @click="emit('open-resume', task)"
+                    @click.stop="emit('open-resume', task)"
+                    @keydown.stop
                   >
                     恢复
+                  </button>
+                  <button
+                    v-if="task.status !== 'paused'"
+                    class="subtle action-btn"
+                    :disabled="busy"
+                    @click.stop="emit('open-transition', task)"
+                    @keydown.stop
+                  >
+                    流转
                   </button>
                 </div>
               </div>
@@ -257,7 +382,7 @@ function closeTaskDetail() {
           <div class="col-head">
             <div class="col-title">
               <span class="status-dot dot-closed"></span>
-              <h3>已完结历史 (Closed)</h3>
+              <h3>已完成</h3>
             </div>
             <span class="badge-count">
               {{ filteredTasks.filter(t => ['released', 'archived'].includes(t.status)).length }}
@@ -275,12 +400,19 @@ function closeTaskDetail() {
             <article
               v-for="task in filteredTasks.filter(t => ['released', 'archived'].includes(t.status))"
               :key="task.id"
+              :data-task-id="task.id"
+              :data-status="task.status"
               class="task-card card-closed"
-              @click="openTaskDetail(task)"
+              tabindex="0"
+              role="button"
+              :aria-label="task.title"
+              @click="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
+              @keydown.enter.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
+              @keydown.space.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
             >
               <div class="task-card-top">
                 <span class="task-id">#{{ task.id.replace('task_', '').slice(0, 10) }}</span>
-                <span class="tag online">{{ task.status === 'released' ? '已上线' : '已归档' }}</span>
+                <span class="tag online">{{ taskStatusLabel(task.status) }}</span>
               </div>
               <h4 class="task-title">{{ task.title }}</h4>
               <p v-if="task.description" class="task-desc muted">{{ task.description }}</p>
@@ -297,7 +429,7 @@ function closeTaskDetail() {
                   class="original-text compact-pill"
                   style="border-left-color: var(--green); color: var(--green)"
                 >
-                  <span class="tag mini online">已归档 (archived)</span>
+                  <span class="tag mini online">{{ reqStatusLabel(req.status) }}</span>
                   <span class="preview-text">完成摘要：{{ req.summary }}</span>
                 </div>
               </div>
@@ -322,11 +454,18 @@ function closeTaskDetail() {
           <tr
             v-for="task in filteredTasks"
             :key="task.id"
+            :data-task-id="task.id"
+            :data-status="task.status"
             style="cursor: pointer"
-            @click="openTaskDetail(task)"
+            tabindex="0"
+            role="row"
+            :aria-label="task.title"
+            @click="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
+            @keydown.enter.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
+            @keydown.space.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
           >
             <td>
-              <span class="tag" :class="task.status">{{ task.status }}</span>
+              <span class="tag" :class="task.status">{{ taskStatusLabel(task.status) }}</span>
             </td>
             <td>
               <strong>{{ task.title }}</strong>
@@ -340,12 +479,13 @@ function closeTaskDetail() {
                 <div class="progress-bar" :style="{ width: getTaskProgress(task.id).percent + '%' }"></div>
               </div>
             </td>
-            <td style="text-align: right" @click.stop>
+            <td style="text-align: right" @click.stop @keydown.stop>
               <button
                 v-if="['active', 'testing'].includes(task.status)"
                 class="subtle action-btn"
                 :disabled="busy"
-                @click="emit('open-pause', task)"
+                @click.stop="emit('open-pause', task)"
+                @keydown.stop
               >
                 暂停
               </button>
@@ -353,9 +493,19 @@ function closeTaskDetail() {
                 v-if="task.status === 'paused'"
                 class="subtle action-btn"
                 :disabled="busy"
-                @click="emit('open-resume', task)"
+                @click.stop="emit('open-resume', task)"
+                @keydown.stop
               >
                 恢复
+              </button>
+              <button
+                v-if="task.status !== 'paused'"
+                class="subtle action-btn"
+                :disabled="busy"
+                @click.stop="emit('open-transition', task)"
+                @keydown.stop
+              >
+                流转
               </button>
             </td>
           </tr>
@@ -364,17 +514,43 @@ function closeTaskDetail() {
     </div>
 
     <!-- 5. 任务与需求舒适详情大抽屉 (宽达 580px 舒展阅读流) -->
-    <aside v-if="focusedTask" class="task-drawer-overlay" @click.self="closeTaskDetail">
-      <div class="task-drawer-content">
+    <aside
+      v-if="focusedTask"
+      class="task-drawer-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="task-drawer-title"
+      tabindex="-1"
+      :data-status="focusedTask.status"
+      @click.self="closeTaskDetail"
+      @keydown="handleDrawerKeydown"
+    >
+      <div class="task-drawer-content" tabindex="-1">
         <div class="drawer-header">
           <div class="card-top" style="margin-bottom: 0">
-            <div>
-              <span class="tag" :class="focusedTask.status">{{ focusedTask.status }}</span>
-              <span class="muted font-mono" style="margin-left: 8px; font-size: 11px">任务 #{{ focusedTask.id }}</span>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span class="tag" :class="focusedTask.status">{{ taskStatusLabel(focusedTask.status) }}</span>
+              <span class="muted font-mono" style="font-size: 11px">任务 #{{ focusedTask.id }}</span>
+              <button
+                v-if="focusedTask.status !== 'paused'"
+                class="subtle action-btn"
+                style="padding: 2px 8px; font-size: 11px"
+                :disabled="busy"
+                @click="emit('open-transition', focusedTask)"
+              >
+                流转状态
+              </button>
             </div>
-            <button type="button" class="subtle" style="font-size: 16px" @click="closeTaskDetail">✕</button>
+            <button
+              ref="taskCloseBtnRef"
+              type="button"
+              class="subtle"
+              style="font-size: 16px"
+              aria-label="关闭窗口"
+              @click="closeTaskDetail"
+            >✕</button>
           </div>
-          <h2 style="font-size: 16px; margin: 10px 0 4px">{{ focusedTask.title }}</h2>
+          <h2 id="task-drawer-title" style="font-size: 16px; margin: 10px 0 4px">{{ focusedTask.title }}</h2>
           <p v-if="focusedTask.description" class="muted" style="font-size: 12px">{{ focusedTask.description }}</p>
         </div>
 
@@ -396,7 +572,7 @@ function closeTaskDetail() {
             >
               <div class="drawer-req-top">
                 <span class="tag" :class="req.status">
-                  {{ req.status === 'active' ? '进行中 (active)' : '已归档 (archived)' }} · v{{ req.version }}
+                  {{ reqStatusLabel(req.status) }} · v{{ req.version }}
                 </span>
                 <button
                   v-if="req.status === 'active' && ['active', 'testing'].includes(focusedTask.status)"

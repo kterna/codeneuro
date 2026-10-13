@@ -89,7 +89,7 @@ class Requirements(Workspaces):
         if not check_archive(task, item, expected_version, summary):
             return item
         tx.requirements.archive_requirement(item, summary)
-        for rule_id in tx.requirements.linked_active_rule_ids(item.id):
+        for rule_id in tx.requirements.linked_live_rule_ids(item.id):
             tx.knowledge.deprecate_rule(tx.knowledge.get_rule(rule_id))
         if not tx.requirements.active_requirements(task.id):
             tx.workspaces.complete_task(task.id)

@@ -1,10 +1,10 @@
 """Web API; only parameter mapping, never business state transitions."""
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from ...modules.tasks import ProductError
+from ...modules.tasks import ProductError, TaskStatus
 from ...modules.workspaces import Actor
 from ...workflows.product import Product
 
@@ -34,6 +34,10 @@ class StatusInput(BaseModel):
 class ArchiveInput(BaseModel):
     expected_version: int = Field(ge=1)
     summary: str = Field(min_length=1)
+
+
+class TransitionInput(StatusInput):
+    status: TaskStatus
 
 
 def create_router(product: Product):
@@ -74,6 +78,11 @@ def create_router(product: Product):
         return call(product.workspaces.resume_task, web_actor, project_id,
                     task_id, body.expected_revision, body.reason)
 
+    @router.post('/projects/{project_id}/tasks/{task_id}/transition')
+    def transition(project_id: str, task_id: str, body: TransitionInput):
+        return call(product.workspaces.transition_task, web_actor, project_id,
+                    task_id, body.expected_revision, body.status, body.reason)
+
     @router.post('/projects/{project_id}/requirements')
     def intake(project_id: str, body: IntakeInput):
         return call(product.requirements.intake, web_actor, project_id, body.text,
@@ -95,34 +104,16 @@ def create_router(product: Product):
         return call(product.ledger.project, web_actor, project_id)
 
     @router.get('/projects/{project_id}/tree')
-    def tree(project_id: str):
-        ledger_data = call(product.ledger.project, web_actor, project_id)
-        worktrees_list = ledger_data.get('worktrees', [])
-        ws_path = worktrees_list[0].get('workspace') if worktrees_list else None
-        
-        items = []
-        import os
-        from pathlib import Path
+    def tree(project_id: str, worktree_id: str | None = None):
+        return call(product.ledger.scope_tree, web_actor, project_id, worktree_id)
 
-        # 真实扫描项目完整文件树，不人为截断深度，但严格过滤无关依赖与构建产物
-        if ws_path and os.path.exists(ws_path):
-            base = Path(ws_path)
-            ignored = {
-                '.git', '.venv', 'venv', 'node_modules', '__pycache__', 'dist',
-                '.pytest_cache', 'build', '.idea', '.vscode', 'target', '.gradle'
-            }
-            for root, dirs, files in os.walk(base, topdown=True):
-                # 过滤杂乱目录
-                dirs[:] = [d for d in dirs if d not in ignored and not d.startswith('.')]
-                rel_root = Path(root).relative_to(base).as_posix()
-                if rel_root != '.':
-                    items.append({'path': rel_root, 'is_dir': True})
-                for f in files:
-                    # 过滤无意义日志和编译缓存
-                    if f.startswith('.') or f.endswith(('.pyc', '.pyo', '.pyd', '.log', '.tmp', '.rdb')):
-                        continue
-                    file_rel = f if rel_root == '.' else f"{rel_root}/{f}"
-                    items.append({'path': file_rel, 'is_dir': False})
-        return {'workspace': ws_path, 'tree': items}
+    @router.get('/projects/{project_id}/inspect')
+    def inspect(project_id: str, path: str, task_id: str | None = None):
+        return call(product.ledger.inspect_path, web_actor, project_id, path, task_id)
+
+    @router.get('/projects/{project_id}/events')
+    def events(project_id: str, limit: int = Query(100, ge=1, le=100),
+               before: int | None = Query(None, ge=1)):
+        return call(product.ledger.events, web_actor, project_id, limit, before)
 
     return router

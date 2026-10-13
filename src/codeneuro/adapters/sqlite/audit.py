@@ -6,8 +6,11 @@ from . import schema as s
 from .common import Repo, _json
 
 class AuditRepo(Repo):
-    def project_audit(self, project_id, limit=100):
-        statement = sa.select(s.audit).where(s.audit.c.project_id == project_id).order_by(
+    def project_audit(self, project_id, limit=100, before=None):
+        statement = sa.select(s.audit).where(s.audit.c.project_id == project_id)
+        if before is not None:
+            statement = statement.where(s.audit.c.sequence < before)
+        statement = statement.order_by(
             s.audit.c.sequence.desc()).limit(limit)
         return [dict(r) for r in self.c.execute(statement).mappings()]
 

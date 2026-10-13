@@ -24,10 +24,10 @@ class RequirementsRepo(Repo):
             request_id=request_id if session_id else None,
             web_request_id=request_id if session_id is None else None,
             original_text=item.text, status=item.status, version=item.version,
-            completion_summary=None))
+            completion_summary=item.summary))
         self.c.execute(s.requirement_versions.insert().values(requirement_id=item.id,
             version=item.version, original_text=item.text, status=item.status,
-            completion_summary=None))
+            completion_summary=item.summary))
         self.c.execute(s.tasks.update().where(s.tasks.c.id == item.task_id).values(
             revision=s.tasks.c.revision + 1))
 
@@ -49,12 +49,18 @@ class RequirementsRepo(Repo):
         self.c.execute(s.requirement_rule_links.insert().values(
             requirement_id=requirement_id, rule_id=rule_id))
 
-    def linked_active_rule_ids(self, requirement_id):
+    def linked_live_rule_ids(self, requirement_id):
         statement = sa.select(s.rules.c.id).join(s.requirement_rule_links,
             s.requirement_rule_links.c.rule_id == s.rules.c.id).where(
             s.requirement_rule_links.c.requirement_id == requirement_id,
-            s.rules.c.status == 'active')
+            s.rules.c.status.in_(('active', 'draft')))
         return [row.id for row in self.c.execute(statement)]
+
+    def linked_requirement(self, rule_id):
+        return _requirement(self._one(sa.select(s.requirements).join(
+            s.requirement_rule_links,
+            s.requirement_rule_links.c.requirement_id == s.requirements.c.id).where(
+            s.requirement_rule_links.c.rule_id == rule_id)))
 
     def active_requirements(self, task_id):
         statement = sa.select(s.requirements).where(s.requirements.c.task_id == task_id,

@@ -53,16 +53,19 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
 
     @server.tool()
     def codeneuro_create_task(project_id: str, title: str, ctx: Context,
-                              description: str = '') -> str:
+                              description: str = '', initial_status: str = 'active') -> str:
         """Create a new Task only after checking existing Task candidates."""
-        return invoke(product.workspaces.create_task, actor(ctx), project_id, title, description)
+        return invoke(product.workspaces.create_task, actor(ctx), project_id, title, description, initial_status)
 
     @server.tool()
     def codeneuro_start_session(project_id: str, workspace: str, ctx: Context,
                                 task_id: Optional[str] = None, debug: bool = False,
                                 machine_name: str = 'not_attested', platform: str = 'unknown',
                                 repo_identity: Optional[str] = None, git_branch: str = '') -> str:
-        """Pin a session to a client-attested worktree; Hub cannot inspect remote files."""
+        """Pin a session to a client-attested worktree; Hub cannot inspect remote files.
+        Note: debug=True is required if the session will provide rule ratings/feedback
+        (codeneuro_rate_rule) or report issues (codeneuro_report_issue). Production sessions
+        default to debug=False to avoid diagnostic pollution."""
         return invoke(product.workspaces.start_session, actor(ctx), project_id, workspace,
                       task_id, debug=debug, machine_name=machine_name, platform=platform,
                       repo_identity=repo_identity, git_branch=git_branch)
@@ -175,7 +178,8 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
     @server.tool()
     def codeneuro_rate_rule(session_id: str, delivery_id: str, rule_id: str,
                             score: int, ctx: Context, reason: str = '') -> str:
-        """Rate an actually delivered Rule: 0=known, 1=irrelevant, 5=core need."""
+        """Rate an actually delivered Rule: 0=known, 1=irrelevant, 5=core need.
+        Requires the session to have been started with debug=True."""
         return invoke(product.feedback.rate_rule, actor(ctx), session_id, delivery_id, rule_id, score, reason)
 
     @server.tool()
@@ -183,7 +187,8 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
                                description: str, file_path: str, ctx: Context,
                                related_rule_ids: Optional[list[str]] = None,
                                suggested_action: str = '') -> str:
-        """Report an observed conflict/noise/coverage issue for human review."""
+        """Report an observed conflict/noise/coverage issue for human review.
+        Requires the session to have been started with debug=True."""
         return invoke(product.feedback.report_issue, actor(ctx), session_id, issue_type,
             title, description, file_path, tuple(related_rule_ids or ()), suggested_action)
 

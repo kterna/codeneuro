@@ -6,4 +6,4 @@ Agent 通过标准 MCP `codeneuro_create_task_rule` 在绑定的 Task 中创建�
 
 `codeneuro_promote_rule` 仅对当前 Task 的活跃短期规则按版本原样复制为长期契约；源规则退出活跃下发，保存来源版本与原因。修改已有长期 Rule 时，Agent 调用 `codeneuro_propose_contract`，Web 人类身份对具体版本作批准/拒绝。批准时版本已变则冲突，不自动合并或擅自扩大范围。
 
-`codeneuro_archive_requirement` 由 Agent 确认实际工作完成并提交摘要；CodeNeuro 不核验代码或运行测试。当前 Requirement 关联的活跃短期规则随即失活，最后一条活跃需求归档时 Task 完成并停用剩余短期规则。暂停或已发布状态需先按确定的状态流程处理，不允许悄悄跳转。Web 人类审阅与 MCP 业务命令使用同一工作流；`0=已知`反馈仅对本会话/版本简写，不降低 P0。
+`codeneuro_archive_requirement` 由 Agent 确认实际工作完成并提交摘要；CodeNeuro 不核验代码或运行测试。当前 Requirement 关联的活跃短期规则随即失活，最后一条活跃需求归档时 Task 完成并停用剩余短期规则。暂停或已发布状态需先按确定的状态流程处理，不允许悄悄跳转。Web 人类审阅与 MCP 业务命令使用同一工作流；`0=已知`反馈仅对本会话/版本简写，不降低 P0；`rate_rule` 效用评分与 `report_issue` 均要求所在 Session 启用 `debug=True`，避免常规生产执行产生未预期的诊断数据。

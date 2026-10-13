@@ -17,13 +17,19 @@ const emit = defineEmits<{
 
 const confirmInputId = ref('')
 const searchFilter = ref('')
+const selectedWorktreeId = ref('')
 
 const currentProject = computed(() => {
   return props.projects.find(p => p.id === props.currentProjectId) || null
 })
 
-const currentWorktree = computed(() => {
-  return props.ledger?.worktrees?.[0] || null
+const availableWorktrees = computed(() => {
+  return props.ledger?.worktrees || []
+})
+
+const selectedWorktree = computed(() => {
+  if (!selectedWorktreeId.value) return null
+  return availableWorktrees.value.find(w => w.id === selectedWorktreeId.value) || null
 })
 
 const filteredProjects = computed(() => {
@@ -47,7 +53,7 @@ function handleDelete() {
   <div class="settings-view">
     <div class="section-head">
       <h2>项目管理与全局设置</h2>
-      <span class="caption">查看项目元数据、在不同工程之间快速切换，或执行安全级别的数据管理</span>
+      <span class="caption">查看项目元数据、切换工程或管理数据</span>
     </div>
 
     <!-- 1. 当前项目基本概览 -->
@@ -59,17 +65,37 @@ function handleDelete() {
 
       <div class="project-meta-grid">
         <div class="meta-field">
-          <label>项目名称 (Display Name)</label>
+          <label>项目名称</label>
           <div class="meta-value-text">{{ currentProject.name }}</div>
         </div>
         <div class="meta-field">
-          <label>项目唯一标识 (Project ID)</label>
+          <label>项目标识</label>
           <div class="meta-value-code"><code>{{ currentProject.id }}</code></div>
         </div>
         <div class="meta-field" style="grid-column: span 2">
-          <label>绑定的本地代码工作区 (Workspace Path)</label>
-          <div class="meta-value-code">
-            <code>{{ currentWorktree?.workspace || '未关联本地磁盘路径 (通过 MCP 客户端上报)' }}</code>
+          <label>工作区声明 (共 {{ availableWorktrees.length }} 处)</label>
+          <div style="margin-top: 6px">
+            <select v-model="selectedWorktreeId" aria-label="选择工作区声明" style="width: 100%; max-width: 480px">
+              <option value="">-- 请选择工作区声明 --</option>
+              <option v-for="wt in availableWorktrees" :key="wt.id" :value="wt.id">
+                [{{ wt.platform }}] {{ wt.machine_name }} · {{ wt.workspace }}
+              </option>
+            </select>
+          </div>
+
+          <div v-if="selectedWorktree" class="panel" style="margin-top: 10px; background: var(--gh-canvas-inset)">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 12px">
+              <div><strong>机器节点：</strong>{{ selectedWorktree.machine_name }}</div>
+              <div><strong>运行平台：</strong>{{ selectedWorktree.platform }}</div>
+              <div><strong>Git 分支：</strong>{{ selectedWorktree.git_branch || '未声明' }}</div>
+              <div><strong>声明上报者：</strong>{{ selectedWorktree.actor_id || '未声明' }}</div>
+            </div>
+            <div style="margin-top: 6px; font-size: 12px">
+              <strong>客户端路径：</strong><code>{{ selectedWorktree.workspace }}</code>
+            </div>
+          </div>
+          <div v-else class="caption" style="margin-top: 6px">
+            请选择工作区声明查看详情。说明：工作区路径由客户端声明，服务端不扫描本机同名路径。
           </div>
         </div>
       </div>
@@ -98,8 +124,8 @@ function handleDelete() {
     <section class="settings-card">
       <div class="card-section-title" style="display: flex; justify-content: space-between; align-items: center">
         <div>
-          <h3>已登记的所有工程项目 ({{ projects.length }})</h3>
-          <span class="caption">支持在多个项目知识库之间随时无缝切换</span>
+          <h3>已登记工程项目 ({{ projects.length }})</h3>
+          <span class="caption">支持在不同项目之间快速切换</span>
         </div>
         <button class="primary" type="button" @click="emit('open-create-project')">
           ＋ 注册新项目
@@ -109,7 +135,7 @@ function handleDelete() {
       <div style="margin: 14px 0 10px">
         <input
           v-model="searchFilter"
-          placeholder="按项目名称或 ID 快速搜索…"
+          placeholder="按项目名称或标识快速搜索…"
           style="max-width: 360px"
         />
       </div>
@@ -118,9 +144,9 @@ function handleDelete() {
         <table class="projects-table">
           <thead>
             <tr>
-              <th style="width: 160px">项目唯一 ID</th>
-              <th>项目显示名称</th>
-              <th style="width: 100px; text-align: center">当前状态</th>
+              <th style="width: 160px">项目标识</th>
+              <th>项目名称</th>
+              <th style="width: 100px; text-align: center">状态</th>
               <th style="width: 120px; text-align: right">操作</th>
             </tr>
           </thead>
@@ -158,28 +184,28 @@ function handleDelete() {
       </div>
     </section>
 
-    <!-- 3. 危险操作区 (Danger Zone) —— 工业级删除保护 -->
+    <!-- 3. 危险操作区 -->
     <section v-if="currentProject" class="danger-zone-card">
       <div class="danger-header">
         <span class="danger-icon">⚠️</span>
         <div>
-          <h3>危险操作区 (Danger Zone)</h3>
+          <h3>删除项目</h3>
           <p class="danger-warning-text">
-            删除项目属于不可撤销的破坏性操作。该项目下的全部任务看板、业务需求、规矩契约、开发避坑便签及审计日志都将被物理级联抹除。
+            此操作不可撤销。删除后，该项目下的任务、需求、规则、便签及审计流水都将被一并删除。
           </p>
         </div>
       </div>
 
       <div class="danger-action-box">
         <div class="danger-instruction">
-          若确认要彻底删除项目 <strong>{{ currentProject.name }}</strong>，请在下方文本框中完整键入该项目唯一 ID：
+          删除项目「{{ currentProject.name }}」前，请输入项目标识：
           <code class="confirm-target-id">{{ currentProject.id }}</code>
         </div>
 
         <div class="danger-form-row">
           <input
             v-model="confirmInputId"
-            :placeholder="`输入完整项目 ID: ${currentProject.id}`"
+            :placeholder="`请输入项目标识 ${currentProject.id}`"
             class="danger-confirm-input"
           />
           <button
@@ -188,7 +214,7 @@ function handleDelete() {
             :disabled="!isDeleteButtonUnlocked || busy"
             @click="handleDelete"
           >
-            {{ busy ? '正在清理…' : '我已确认，彻底删除此项目' }}
+            {{ busy ? '正在删除…' : '确认彻底删除此项目' }}
           </button>
         </div>
       </div>
