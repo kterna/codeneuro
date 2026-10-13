@@ -17,8 +17,10 @@ import ReviewView from './components/views/ReviewView.vue'
 import FeedbackView from './components/views/FeedbackView.vue'
 import ActivityView from './components/views/ActivityView.vue'
 import ProjectSettingsView from './components/views/ProjectSettingsView.vue'
+import OverviewView from './components/views/OverviewView.vue'
 
 const tabs: readonly TabItem[] = [
+  { id: 'overview', icon: '◫', title: '数据全貌看板', subtitle: '查看项目核心指标、契约规则健康度与资产分布全貌。' },
   { id: 'tasks', icon: '▥', title: '需求与任务看板', subtitle: '录入业务需求，推进任务流转与归档。' },
   { id: 'rules', icon: '≋', title: '项目规则库', subtitle: '长期契约与任务短期规则统一管理，多维分类检索。' },
   { id: 'explorer', icon: '⌘', title: '规则作用域', subtitle: '按路径检索代码模块适用的工程规范与核心约束。' },
@@ -594,13 +596,14 @@ onUnmounted(() => {
         </div>
       </header>
 
-      <!-- 顶栏指标卡组件 -->
+      <!-- 顶栏指标卡组件 (重构为微型轻量内联胶囊条，释放垂直空间) -->
       <MetricBar
         :ledger="ledger"
         :active-requirements-count="activeRequirementsCount"
         :active-tasks-count="activeTasksCount"
         :contracts-count="contractsCount"
         :pending-proposals-count="pendingProposalsCount"
+        @navigate="handleSelectTab"
       />
 
       <!-- 全局通知与错误浮条 -->
@@ -614,8 +617,19 @@ onUnmounted(() => {
         </div>
 
         <template v-else-if="ledger">
+          <!-- 0. 数据全貌看板 (Overview) -->
+          <OverviewView
+            v-if="tab === 'overview'"
+            :ledger="ledger"
+            :active-requirements-count="activeRequirementsCount"
+            :active-tasks-count="activeTasksCount"
+            :contracts-count="contractsCount"
+            :pending-proposals-count="pendingProposalsCount"
+            @navigate="handleSelectTab"
+          />
+
           <!-- 1. 规则作用域 (Explorer) -->
-          <ExplorerView v-if="tab === 'explorer'" :ledger="ledger" :project-id="projectId" />
+          <ExplorerView v-else-if="tab === 'explorer'" :ledger="ledger" :project-id="projectId" />
 
           <!-- 2. 需求与任务看板 (Tasks) -->
           <TasksView

@@ -155,7 +155,7 @@ export type Ledger = {
   events_next_cursor?: number | null
 }
 
-export type TabId = 'explorer' | 'tasks' | 'rules' | 'review' | 'feedback' | 'activity' | 'settings'
+export type TabId = 'overview' | 'tasks' | 'rules' | 'explorer' | 'review' | 'feedback' | 'activity' | 'settings'
 
 export type TabItem = {
   id: TabId
