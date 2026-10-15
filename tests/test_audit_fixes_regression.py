@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import text
 
 from codeneuro.adapters.sqlite.uow import SqliteUnitOfWork
-from codeneuro.modules.context import ContextQuery
+from v2_helpers import file_query as ContextQuery, configure_fixture, propose_review, LEVELS
 from codeneuro.modules.knowledge import Priority
 from codeneuro.modules.tasks import Conflict, ProductError, TaskStatus
 from codeneuro.modules.workspaces import Actor
@@ -30,6 +30,7 @@ def app(tmp_path):
     agent = Actor('agent')
     service.workspaces.register_project(human, 'proj-a', 'Primary Project')
     service.workspaces.register_project(human, 'proj-b', 'Secondary Project')
+    configure_fixture(service, human, ('proj-a', 'proj-b'))
     yield service, uow, human, agent, filename
     uow.dispose()
 
@@ -44,7 +45,7 @@ def test_d02_archived_requirement_blocks_draft_reactivation(app):
 
     draft = service.governance.create_task_rule(
         agent, sess.id, 'Rule for Req 1', ('Point 1',), ('src/**',),
-        'Reason', Priority.P1, 'business', requirement_id=r1.id
+        'Reason', Priority.P1, requirement_id=r1.id
     )
     rule_id = draft['rule']['id']
 
@@ -78,8 +79,8 @@ def test_d03_delete_populated_project(app):
     delivery = service.context.get_context(agent, sess_a.id, ContextQuery(('src/file.py',)), 'req-del-a')
     service.feedback.rate_rule(agent, sess_a.id, delivery.id, rule_a.id, 5, 'Great rule')
     service.context.record_finding(agent, sess_a.id, 'src/**', 'Note', Priority.P1)
-    service.knowledge.propose_contract(agent, sess_a.id, rule_a.id, 'Rule A proposed',
-                                       ('P',), ('src/**',), Priority.P1, 'business', 'reason')
+    propose_review(service, agent, sess_a.id, rule_a.id, 'Rule A proposed',
+                   ('P',), ('src/**',), Priority.P1, 'reason')
 
     # Data in project B
     task_b = service.workspaces.create_task(agent, 'proj-b', 'Task B')
@@ -193,11 +194,11 @@ def test_d07_proposals_snapshot_and_version(app):
     task = service.workspaces.create_task(agent, 'proj-a', 'Task for proposal')
     sess = service.workspaces.start_session(agent, 'proj-a', 'wt', task.id, debug=True)
     target = service.knowledge.create_rule(human, 'proj-a', 'Original Target', ('Orig point',),
-                                          ('src/core/**',), Priority.P1, 'business')
+                                          ('src/core/**',), Priority.P1)
 
-    service.knowledge.propose_contract(
-        agent, sess.id, target.id, 'Proposed Title', ('New point',),
-        ('src/core/**', 'src/api/**'), Priority.P0, 'security', 'Need P0 security'
+    propose_review(
+        service, agent, sess.id, target.id, 'Proposed Title', ('New point',),
+        ('src/core/**', 'src/api/**'), Priority.P0, 'Need P0 security'
     )
 
     ledger_data = service.ledger.project(human, 'proj-a')
@@ -209,7 +210,7 @@ def test_d07_proposals_snapshot_and_version(app):
     assert p['target_snapshot']['title'] == 'Original Target'
     assert p['target_snapshot']['priority'] == 'P1'
     assert p['priority'] == 'P0'
-    assert p['category'] == 'security'
+    assert p['topics'] == ('test-contracts',)
 
 
 def test_d13_delivery_count_vs_eval_count(app):
@@ -245,12 +246,12 @@ def test_d04_d05_scope_tree_and_inspect_path(app):
     assert 'src/pay/*.py' in paths
 
     # inspect_path tests anchored match
-    inspect_match = service.ledger.inspect_path(human, 'proj-a', 'src/pay/checkout.py', task.id)
+    inspect_match = service.ledger.inspect_path(human, 'proj-a', 'src/pay/checkout.py', LEVELS, task.id)
     assert inspect_match['source'] == 'jit_scope_match'
     assert len(inspect_match['rule_ids']) == 1
 
     # payment is not pay
-    inspect_non_match = service.ledger.inspect_path(human, 'proj-a', 'src/payment/checkout.py', task.id)
+    inspect_non_match = service.ledger.inspect_path(human, 'proj-a', 'src/payment/checkout.py', LEVELS, task.id)
     assert len(inspect_non_match['rule_ids']) == 0
 
 
@@ -279,12 +280,19 @@ def test_d31_d32_batch_importer_validation_and_invariants(tmp_path):
         'rules': [{
             'id': 'rule-imp', 'project_id': 'proj-imp', 'task_id': 'task-imp',
             'title': 'Rule Imp', 'points': ['Pt 1'], 'patterns': ['src/**'],
-            'priority': 'P1', 'category': 'business', 'status': 'active'
+            'priority': 'P1', 'topics': ['test-contracts'], 'status': 'active',
+            'validation_spec': {'kind': 'review', 'basis': 'Reviewed import fixture'}
         }]
     }
     val_file = tmp_path / 'valid.json'
     val_file.write_text(json.dumps(valid_batch), encoding='utf-8')
 
+    setup_uow = SqliteUnitOfWork(db_file)
+    setup = Product(setup_uow)
+    owner = Actor('human', 'human')
+    setup.workspaces.register_project(owner, 'proj-imp', 'Imported Project')
+    configure_fixture(setup, owner, ('proj-imp',))
+    setup_uow.dispose()
     parsed = load_and_validate([str(val_file)])
     ingest_batches(parsed, db_file, dry_run=False)
 

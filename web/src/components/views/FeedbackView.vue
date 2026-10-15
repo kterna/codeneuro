@@ -1,15 +1,42 @@
 <script setup lang="ts">
-import type { Ledger } from '../../types/ledger'
+import { ref } from 'vue'
+import type { Finding, Ledger } from '../../types/ledger'
+import { apiService } from '../../api/client'
 
-defineProps<{
+const props = defineProps<{
   ledger: Ledger
+  projectId: string
 }>()
+const emit = defineEmits<{ (e: 'refresh'): void }>()
+const selected = ref<Finding | null>(null)
+const topicText = ref('')
+const reason = ref('')
+const busy = ref(false)
+const error = ref('')
+function editFinding(finding: Finding) {
+  selected.value = finding
+  topicText.value = finding.topics.join(', ')
+  reason.value = error.value = ''
+}
+async function saveFinding(resolve: boolean) {
+  if (!selected.value || !reason.value.trim()) { error.value = '请选择便签并填写理由。'; return }
+  busy.value = true
+  error.value = ''
+  try {
+    await apiService.updateFinding(props.projectId, selected.value.id, selected.value.version,
+      topicText.value.split(',').map(s => s.trim()).filter(Boolean), resolve, reason.value)
+    selected.value = null
+    emit('refresh')
+  } catch (e) { error.value = e instanceof Error ? e.message : String(e) }
+  finally { busy.value = false }
+}
 
 function formatFindingStatus(status: string): string {
   const map: Record<string, string> = {
     pending_review: '待审阅',
     active: '生效中',
     archived: '已归档',
+    resolved: '已处理',
   }
   return map[status] || status
 }
@@ -46,7 +73,7 @@ function formatFindingStatus(status: string): string {
               <tr v-for="rule in ledger.rules" :key="rule.id">
                 <td>
                   <strong class="font-title">{{ rule.title }}</strong>
-                  <code class="font-sub-code">{{ rule.patterns[0] || '**' }}</code>
+                  <code class="font-sub-code">{{ rule.is_global ? '全局适用' : rule.patterns[0] || rule.topics.join(', ') || '待分类' }}</code>
                 </td>
                 <td style="text-align: center">
                   <span class="score-badge" :class="{ 'has-score': rule.avg_score }">
@@ -71,6 +98,15 @@ function formatFindingStatus(status: string): string {
           <span class="muted font-mono">{{ ledger.findings?.length ?? 0 }} 条便签</span>
         </div>
 
+        <div v-if="selected" class="panel">
+          <p>{{ selected.text }} · v{{ selected.version }}</p>
+          <label>已登记主题（逗号分隔）<input v-model="topicText" :disabled="busy" /></label>
+          <label>操作理由<textarea v-model="reason" :disabled="busy" /></label>
+          <button type="button" :disabled="busy" @click="saveFinding(false)">更新分类</button>
+          <button type="button" :disabled="busy" @click="saveFinding(true)">标记已处理</button>
+          <button type="button" :disabled="busy" @click="selected = null">取消</button>
+          <p v-if="error" class="error-box" role="alert">{{ error }}</p>
+        </div>
         <div class="panel-scroll-cards">
           <div v-if="!ledger.findings?.length" class="empty compact">
             当前工程暂无开发便签。编码助手记录的模块便签将展示在此。
@@ -79,12 +115,13 @@ function formatFindingStatus(status: string): string {
             <article v-for="f in ledger.findings" :key="f.id" class="gotcha-article">
               <div class="gotcha-header">
                 <span class="tag warning">避坑</span>
-                <code class="gotcha-path">{{ f.target_path }}</code>
+                <code class="gotcha-path">{{ f.target_path || '无文件锚点' }} · {{ f.topics.join(', ') || '待分类' }}</code>
               </div>
               <p class="gotcha-body-text">{{ f.text }}</p>
               <div class="gotcha-footer">
                 <span class="muted">关联任务: {{ f.task_id }}</span>
                 <span class="tag mini">{{ formatFindingStatus(f.status) }}</span>
+                <button v-if="f.status === 'pending_review'" type="button" :disabled="busy" @click="editFinding(f)">重新分类 / 处理</button>
               </div>
             </article>
           </div>

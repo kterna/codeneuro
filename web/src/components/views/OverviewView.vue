@@ -104,12 +104,12 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
             <strong class="stat-val">{{ ledger.rules.filter(r => r.task_id).length }}</strong>
           </div>
           <div class="stat-row">
-            <span class="stat-name">安全规范类别 (Security)</span>
-            <strong class="stat-val">{{ ledger.rules.filter(r => r.category === 'security').length }}</strong>
+            <span class="stat-name">纯主题规则（无文件锚点）</span>
+            <strong class="stat-val">{{ ledger.rules.filter(r => !r.patterns.length && !r.is_global).length }}</strong>
           </div>
           <div class="stat-row">
-            <span class="stat-name">业务逻辑类别 (Business)</span>
-            <strong class="stat-val">{{ ledger.rules.filter(r => r.category === 'business').length }}</strong>
+            <span class="stat-name">待分类验收规则</span>
+            <strong class="stat-val">{{ ledger.topic_coverage.rules.length }}</strong>
           </div>
         </div>
       </div>

@@ -2,10 +2,14 @@
 import { computed, ref, nextTick } from 'vue'
 import type { Ledger, Rule, RuleStatus } from '../../types/ledger'
 import GhDrawer from '../ui/GhDrawer.vue'
+import RuleGovernancePanel from './RuleGovernancePanel.vue'
 
 const props = defineProps<{
   ledger: Ledger
+  projectId: string
 }>()
+const emit = defineEmits<{ (e: 'refresh'): void }>()
+const topicFilter = ref('')
 
 const filterStatus = ref<'all' | RuleStatus>('active')
 const filterLifecycle = ref<'all' | 'long_term' | 'short_term'>('all')
@@ -22,6 +26,7 @@ const selectedRule = computed<Rule | null>(() => {
 const filteredRules = computed(() => {
   return props.ledger.rules.filter(rule => {
     if (filterStatus.value !== 'all' && rule.status !== filterStatus.value) return false
+    if (topicFilter.value && !rule.topics.includes(topicFilter.value)) return false
     if (filterLifecycle.value === 'long_term' && rule.task_id !== null) return false
     if (filterLifecycle.value === 'short_term' && rule.task_id === null) return false
     if (searchKeyword.value.trim()) {
@@ -29,7 +34,8 @@ const filteredRules = computed(() => {
       const matchTitle = rule.title.toLowerCase().includes(q)
       const matchPoints = rule.points.some(p => p.toLowerCase().includes(q))
       const matchPatterns = rule.patterns.some(p => p.toLowerCase().includes(q))
-      if (!matchTitle && !matchPoints && !matchPatterns) return false
+      const matchTopics = rule.topics.some(topic => topic.includes(q))
+      if (!matchTitle && !matchPoints && !matchPatterns && !matchTopics) return false
     }
     return true
   })
@@ -72,15 +78,6 @@ function statusLabel(status: RuleStatus | string): string {
   }
 }
 
-function categoryLabel(cat?: string | null): string {
-  if (!cat) return ''
-  switch (cat) {
-    case 'business': return '业务'
-    case 'security': return '安全'
-    case 'gotcha': return '避坑'
-    default: return cat
-  }
-}
 </script>
 
 <template>
@@ -94,6 +91,7 @@ function categoryLabel(cat?: string | null): string {
 
     <!-- 顶部过滤栏 -->
     <div class="toolbar">
+      <select v-model="topicFilter" aria-label="业务主题过滤"><option value="">主题：全部</option><option v-for="topic in ledger.topics" :key="topic.key" :value="topic.key">{{ topic.name }}</option></select>
       <select v-model="filterStatus" aria-label="规则状态过滤" style="width: 170px">
         <option value="all">状态：全部规则</option>
         <option value="active">状态：正在生效</option>
@@ -155,7 +153,7 @@ function categoryLabel(cat?: string | null): string {
               </div>
             </td>
             <td>
-              <code class="path-mono">{{ rule.patterns[0] || '**' }}</code>
+              <code class="path-mono">{{ rule.is_global ? '全局适用' : rule.patterns[0] || rule.topics.join(', ') || '待分类' }}</code>
               <span v-if="rule.patterns.length > 1" class="muted path-extra">+{{ rule.patterns.length - 1 }}</span>
             </td>
             <td>
@@ -207,7 +205,8 @@ function categoryLabel(cat?: string | null): string {
           <div class="tags" style="margin-top: 8px">
             <span class="tag" :class="selectedRule.status">{{ statusLabel(selectedRule.status) }}</span>
             <span class="tag neutral">{{ selectedRule.task_id ? '任务短期规则' : '长期项目契约' }}</span>
-            <span v-if="selectedRule.category" class="tag neutral">{{ categoryLabel(selectedRule.category) }}</span>
+            <span v-for="topic in selectedRule.topics" :key="topic" class="tag neutral">{{ topic }}</span>
+            <span v-if="selectedRule.is_global" class="tag warning">明确全局适用</span>
             <span v-if="selectedRule.origin_rule_id" class="tag">由任务规则晋升 (源: v{{ selectedRule.origin_version }})</span>
           </div>
         </div>
@@ -222,13 +221,15 @@ function categoryLabel(cat?: string | null): string {
         </div>
 
         <div class="drawer-section">
-          <div class="section-label">管辖文件路径模式</div>
+          <div class="section-label">检索路径（不是测试验证范围）</div>
+          <p v-if="!selectedRule.patterns.length" class="caption">无文件锚点，按业务主题或明确全局声明召回。</p>
           <div class="tags">
             <code v-for="(pat, i) in selectedRule.patterns" :key="i" class="path-badge">{{ pat }}</code>
           </div>
         </div>
 
         <div class="drawer-section">
+          <RuleGovernancePanel :project-id="projectId" :rule="selectedRule" @refresh="emit('refresh')" />
           <div class="section-label">使用情况与真实反馈 (当前版本)</div>
           <div class="stat-meta-grid">
             <div class="stat-meta-item">

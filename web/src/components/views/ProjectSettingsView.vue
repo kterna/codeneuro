@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { Ledger, Project } from '../../types/ledger'
+import TopicsPanel from './TopicsPanel.vue'
 
 const props = defineProps<{
   projects: Project[]
@@ -13,6 +14,7 @@ const emit = defineEmits<{
   (e: 'select-project', id: string): void
   (e: 'open-create-project'): void
   (e: 'delete-project', id: string): void
+  (e: 'refresh'): void
 }>()
 
 const confirmInputId = ref('')
@@ -119,6 +121,8 @@ function handleDelete() {
         </div>
       </div>
     </section>
+
+    <TopicsPanel v-if="ledger && currentProjectId" :key="currentProjectId" :project-id="currentProjectId" :ledger="ledger" @refresh="emit('refresh')" />
 
     <!-- 2. 全部工程项目列表与快速切换 -->
     <section class="settings-card">

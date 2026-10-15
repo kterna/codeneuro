@@ -166,6 +166,16 @@ def test_architecture_catches_relative_and_absolute_violations():
     assert check_domain_imports(init_resolved) == ['codeneuro.adapters']
 
 
+def test_knowledge_repository_implements_its_declared_port():
+    from codeneuro.adapters.sqlite.knowledge import KnowledgeRepo
+    from codeneuro.ports import KnowledgePort
+
+    methods = [name for name, member in vars(KnowledgePort).items()
+               if not name.startswith('_') and callable(member)]
+    assert methods
+    assert all(callable(getattr(KnowledgeRepo, name, None)) for name in methods)
+
+
 def test_architecture_allows_valid_dependencies():
     """Verify that legitimate dependencies within layers are permitted."""
     # Domain can import its own siblings and standard library

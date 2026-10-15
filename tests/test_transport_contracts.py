@@ -46,7 +46,8 @@ async def test_real_stdio_mcp_works_without_token_or_client_declarations(configu
             tools = await session.list_tools()
             assert {'codeneuro_list_tasks', 'codeneuro_get_context'} <= {item.name for item in tools.tools}
             projects = await session.call_tool('codeneuro_list_projects', {})
-            assert json.loads(projects.content[0].text) == [{'id': 'p', 'name': 'test project', 'rule_revision': 0}]
+            assert json.loads(projects.content[0].text) == [{'id': 'p', 'name': 'test project', 'rule_revision': 0,
+                                                            'taxonomy_revision': 0, 'topic_query_enabled': False}]
             task = await session.call_tool('codeneuro_create_task', {'project_id': 'p', 'title': 'Real MCP'})
             assert json.loads(task.content[0].text)['title'] == 'Real MCP'
 
@@ -86,7 +87,10 @@ async def test_web_api_direct_entry_intake_archive_and_ledger(configured):
             assert second.status_code == 200 and second.json()['task_id'] == task['id']
             agent = Actor('mcp')
             session = product.workspaces.start_session(agent, 'p', 'isolated-worktree', task['id'])
-            finding = product.context.record_finding(agent, session.id, 'src/refund/**', 'Avoid duplicate retries')
+            product.topics.create_topic(Actor('web', 'human'), 'refund', 'Refund', 'Refund operations',
+                                        'Fixture topic', project_id='p')
+            finding = product.context.record_finding(agent, session.id, 'src/refund/**', 'Avoid duplicate retries',
+                                                     topics=('refund',))
             task_url = f"/api/projects/p/tasks/{task['id']}"
             current = (await client.get('/api/projects/p/tasks')).json()[0]
             paused = await client.post(task_url + '/pause',

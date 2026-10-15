@@ -18,11 +18,12 @@ def _requirement(row):
     return Requirement(row['id'], row['project_id'], row['task_id'], row['original_text'],
                        RequirementStatus(row['status']), row['version'], row['completion_summary']) if row else None
 
-def _rule(row):
+def _rule(row, topics=()):
     return Rule(row['id'], row['project_id'], row['task_id'], row['title'],
                 tuple(json.loads(row['points_json'])), tuple(json.loads(row['patterns_json'])),
-                Priority(row['priority']), row['category'], row['version'], row['status'],
-                row['origin_reason']) if row else None
+                Priority(row['priority']), tuple(topics), row['version'], row['status'],
+                row['origin_reason'], bool(row['is_global']), row['priority_reason'],
+                json.loads(row['validation_spec_json']) if row['validation_spec_json'] else None) if row else None
 
 def _session(row):
     return Session(row['id'], row['project_id'], row['task_id'], row['workspace'],

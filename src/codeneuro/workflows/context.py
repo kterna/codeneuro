@@ -1,6 +1,8 @@
 """Context application workflow; domain rules remain in their owning modules."""
 from __future__ import annotations
 
+from dataclasses import asdict, replace
+
 from ..modules.context import ContextQuery, Delivery, assemble
 from ..modules.findings import Finding
 from ..modules.knowledge import Priority, relative_path
@@ -8,6 +10,7 @@ from ..modules.tasks import Conflict, ProductError, TaskStatus
 from ..modules.workspaces import Actor
 from .common import _id, _fingerprint
 from .workspaces import Workspaces
+from .topics import require_topics
 
 
 class Context(Workspaces):
@@ -24,6 +27,11 @@ class Context(Workspaces):
                         raise Conflict('request_id already used for another query.')
                     return old[1]
                 project_revision = tx.workspaces.project_revision(session.project_id)
+                taxonomy = tx.topics.state(session.project_id)
+                if query.topics and not taxonomy['topic_query_enabled']:
+                    raise Conflict('Topic queries are disabled until project classification is reviewed.')
+                require_topics(tx, session.project_id, query.topics, lock=False)
+                resolved = tuple(asdict(tx.topics.get(session.project_id, key)) for key in query.topics)
                 task = tx.workspaces.get_task(session.task_id, session.project_id) if session.task_id else None
                 effective_task = task.id if task and task.status in (TaskStatus.ACTIVE, TaskStatus.TESTING) else None
                 task_revision = task.revision if task else None
@@ -33,7 +41,8 @@ class Context(Workspaces):
                 known = tx.feedback.known_rules(session_id)
                 findings = tuple(tx.context.pending_findings(session.project_id, effective_task)) if effective_task else ()
                 conflicts = tuple(tx.feedback.conflict_issues(session.project_id, effective_task))
-            result = assemble(_id('delivery'), query, rules, requirements, known, findings, conflicts)
+            result = replace(assemble(_id('delivery'), query, rules, requirements, known, findings, conflicts),
+                             taxonomy_revision=taxonomy['taxonomy_revision'], resolved_topics=resolved)
             with self.uow.write() as tx:
                 current = self._session(tx, actor, session_id)
                 old = tx.context.find_delivery(session_id, request_id)
@@ -43,7 +52,8 @@ class Context(Workspaces):
                     return old[1]
                 task_now = tx.workspaces.get_task(session.task_id, session.project_id) if session.task_id else None
                 if (tx.workspaces.project_revision(session.project_id), task_now.revision if task_now else None,
-                    current.knowledge_revision) != (project_revision, task_revision, knowledge_revision):
+                    current.knowledge_revision, tx.topics.state(session.project_id)) != (
+                        project_revision, task_revision, knowledge_revision, taxonomy):
                     continue
                 tx.context.save_delivery(session_id, request_id, fingerprint, result)
                 tx.audit.record(session.project_id, actor.id, 'context.delivered', result.id,
@@ -52,11 +62,14 @@ class Context(Workspaces):
                 return result
         raise Conflict('Knowledge changed during context assembly; retry the request.')
 
-    def record_finding(self, actor: Actor, session_id: str, target_path: str,
-                       text: str, priority: Priority = Priority.P1):
+    def record_finding(self, actor: Actor, session_id: str, target_path: str | None,
+                       text: str, priority: Priority = Priority.P1, *, topics: tuple[str, ...]):
         if not text.strip():
             raise ProductError('Finding text is required.')
-        relative_path(target_path, pattern=True)
+        if target_path is not None:
+            relative_path(target_path, pattern=True)
+        if not topics or not isinstance(priority, Priority):
+            raise ProductError('Finding requires registered topics and a valid priority.')
         with self.uow.write() as tx:
             session = self._session(tx, actor, session_id)
             if not session.task_id:
@@ -64,8 +77,35 @@ class Context(Workspaces):
             task = tx.workspaces.get_task(session.task_id, session.project_id)
             if task.status not in (TaskStatus.ACTIVE, TaskStatus.TESTING):
                 raise Conflict('This Task no longer accepts Findings.')
+            require_topics(tx, session.project_id, topics)
             item = Finding(_id('finding'), session.project_id, task.id,
-                           session.id, target_path, text, priority)
+                           session.id, target_path, text, priority, topics=tuple(sorted(topics)))
             tx.context.record_finding(item)
             tx.audit.record(session.project_id, actor.id, 'finding.recorded', item.id, {'task_id': task.id})
             return item
+
+    def update_finding(self, actor: Actor, finding_id: str, expected_version: int, reason: str,
+                       topics: tuple[str, ...] | None = None, resolve: bool = False,
+                       *, session_id: str | None = None, project_id: str | None = None):
+        if not reason.strip() or type(resolve) is not bool:
+            raise ProductError('A reason and explicit resolution flag are required.')
+        with self.uow.write() as tx:
+            item = tx.context.get_finding(finding_id)
+            if session_id:
+                session = self._session(tx, actor, session_id)
+                if not item or (item.project_id, item.task_id) != (session.project_id, session.task_id):
+                    raise ProductError('Finding outside this session Task.', 'not_found')
+            elif actor.role != 'human' or not item or item.project_id != project_id:
+                raise ProductError('Human project review or a matching session is required.', 'forbidden')
+            if item.version != expected_version or item.status != 'pending_review':
+                raise Conflict('Finding version or state changed.')
+            keys = item.topics if topics is None else tuple(sorted(topics))
+            if not resolve and not keys:
+                raise ProductError('Pending Findings require topics.')
+            require_topics(tx, item.project_id, keys)
+            changed = replace(item, topics=keys, status='resolved' if resolve else item.status,
+                              version=item.version + 1)
+            tx.context.update_finding(changed)
+            tx.audit.record(item.project_id, actor.id, 'finding.updated', item.id,
+                            {'version': changed.version, 'reason': reason, 'resolved': resolve})
+            return changed

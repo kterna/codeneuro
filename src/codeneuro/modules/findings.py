@@ -10,11 +10,12 @@ class Finding:
     project_id: str
     task_id: str
     session_id: str
-    target_path: str
+    target_path: str | None
     text: str
     priority: Priority
     version: int = 1
     status: str = 'pending_review'
+    topics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

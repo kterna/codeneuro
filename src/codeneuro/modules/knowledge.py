@@ -1,19 +1,20 @@
-"""Versioned knowledge and anchored path-scope policy."""
+"""Versioned knowledge with controlled topics and optional anchored retrieval paths."""
 from dataclasses import dataclass
 from enum import StrEnum
 from fnmatch import fnmatchcase
 
 from .tasks import Conflict, ProductError
+from .topics import validate_keys
 
 
 class Priority(StrEnum):
     P0 = 'P0'
     P1 = 'P1'
     P2 = 'P2'
+    P3 = 'P3'
 
 
-RANK = {Priority.P0: 0, Priority.P1: 1, Priority.P2: 2}
-CATEGORIES = frozenset({'business', 'security', 'gotcha'})
+RANK = {priority: rank for rank, priority in enumerate(Priority)}
 
 
 @dataclass(frozen=True)
@@ -28,11 +29,17 @@ class ContractProposal:
     points: tuple[str, ...]
     patterns: tuple[str, ...]
     priority: Priority
-    category: str
+    topics: tuple[str, ...]
     reason: str
     status: str = 'pending'
     decision_reason: str | None = None
     reviewer_id: str | None = None
+    is_global: bool = False
+    priority_reason: str = ''
+    validation_spec: dict | None = None
+    source_rule_id: str | None = None
+    source_version: int | None = None
+    schema_version: int = 2
 
 
 @dataclass(frozen=True)
@@ -44,13 +51,30 @@ class Rule:
     points: tuple[str, ...]
     patterns: tuple[str, ...]
     priority: Priority
-    category: str
+    topics: tuple[str, ...]
     version: int
     status: str
     origin_reason: str | None = None
+    is_global: bool = False
+    priority_reason: str = ''
+    validation_spec: dict | None = None
 
     def matches(self, files: tuple[str, ...]) -> bool:
         return any(matches(pattern, file) for pattern in self.patterns for file in files)
+
+
+def validate_rule(rule: Rule):
+    if not rule.title.strip() or not rule.points or any(not point.strip() for point in rule.points):
+        raise ProductError('Rule needs a title and non-empty clauses.')
+    if not isinstance(rule.priority, Priority) or type(rule.is_global) is not bool:
+        raise ProductError('Invalid priority or global declaration.')
+    validate_keys(rule.topics)
+    if not rule.topics and not rule.is_global:
+        raise ProductError('Non-global Rules require registered topics; empty scope is not global.')
+    if rule.priority == Priority.P0 and not rule.priority_reason.strip():
+        raise ProductError('P0 requires an explicit consequence and applicability rationale.')
+    for pattern in rule.patterns:
+        relative_path(pattern, pattern=True)
 
 
 def relative_path(value: str, *, pattern: bool = False) -> str:

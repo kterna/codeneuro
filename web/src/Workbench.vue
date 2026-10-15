@@ -644,7 +644,7 @@ onUnmounted(() => {
           />
 
           <!-- 3. 项目规则库 (Rules) -->
-          <RulesView v-else-if="tab === 'rules'" :ledger="ledger" />
+          <RulesView v-else-if="tab === 'rules'" :key="projectId" :ledger="ledger" :project-id="projectId" @refresh="refresh" />
 
           <!-- 4. 规范变更审阅 (Review) -->
           <ReviewView
@@ -656,7 +656,7 @@ onUnmounted(() => {
           />
 
           <!-- 5. 规则反馈与工作区 (Feedback) -->
-          <FeedbackView v-else-if="tab === 'feedback'" :ledger="ledger" />
+          <FeedbackView v-else-if="tab === 'feedback'" :key="projectId" :ledger="ledger" :project-id="projectId" @refresh="refresh" />
 
           <!-- 6. 变更审计流水 (Activity) -->
           <ActivityView v-else-if="tab === 'activity'" :ledger="ledger" :project-id="projectId" />
@@ -671,6 +671,7 @@ onUnmounted(() => {
             @select-project="handleSelectProject"
             @open-create-project="openCreateProject"
             @delete-project="handleDeleteProject"
+            @refresh="refresh"
           />
         </template>
       </section>

@@ -1,6 +1,6 @@
 """Explicit short SQLite transactions composed from feature repositories."""
 from __future__ import annotations
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 import sqlite3
 import sqlalchemy as sa
@@ -15,6 +15,7 @@ from .context import ContextRepo
 from .feedback import FeedbackRepo
 from .governance import GovernanceRepo
 from .audit import AuditRepo
+from .topics import TopicsRepo
 
 
 class SqliteTransaction:
@@ -27,6 +28,7 @@ class SqliteTransaction:
         self.feedback = FeedbackRepo(connection)
         self.governance = GovernanceRepo(connection)
         self.audit = AuditRepo(connection)
+        self.topics = TopicsRepo(connection)
 
 
 class SqliteUnitOfWork:
@@ -34,7 +36,7 @@ class SqliteUnitOfWork:
         location = Path(filename).resolve()
         if not location.is_file():
             raise ProductError('New schema is not initialized; run the explicit Alembic migration.')
-        with sqlite3.connect(location.as_uri() + '?mode=ro', uri=True) as existing:
+        with closing(sqlite3.connect(location.as_uri() + '?mode=ro', uri=True)) as existing:
             if not existing.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='alembic_version'").fetchone():
                 raise ProductError('Refusing an unversioned or legacy database.')
             version = existing.execute('SELECT version_num FROM alembic_version').fetchone()

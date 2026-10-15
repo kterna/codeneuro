@@ -1,5 +1,6 @@
 import type {
-  Project, Ledger, ScopeTreeResponse, InspectResponse, EventsResponse, TaskStatus
+  Project, Ledger, ScopeTreeResponse, InspectResponse, EventsResponse, TaskStatus,
+  Topic, TopicPage, RulePriority, Rule
 } from '../types/ledger'
 
 export class ApiError extends Error {
@@ -110,8 +111,8 @@ export const apiService = {
     return requestApi<ScopeTreeResponse>(buildProjectPath(projectId, `tree${query}`), 'GET', undefined, signal)
   },
 
-  inspectPath: (projectId: string, path: string, taskId?: string | null, signal?: AbortSignal) => {
-    let query = `?path=${encodeURIComponent(path)}`
+  inspectPath: (projectId: string, path: string, priorities: RulePriority[], taskId?: string | null, signal?: AbortSignal) => {
+    let query = `?path=${encodeURIComponent(path)}` + priorities.map(p => `&priorities=${encodeURIComponent(p)}`).join('')
     if (taskId) {
       query += `&task_id=${encodeURIComponent(taskId)}`
     }
@@ -154,6 +155,36 @@ export const apiService = {
       status,
       reason,
     }),
+
+  getTopics: (projectId: string, query = '', includeDeleted = false, cursor?: string | null, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ query, include_deleted: String(includeDeleted) })
+    if (cursor) params.set('cursor', cursor)
+    return requestApi<TopicPage>(buildProjectPath(projectId, `topics?${params}`), 'GET', undefined, signal)
+  },
+
+  getTopic: (projectId: string, key: string) =>
+    requestApi<Topic>(buildProjectPath(projectId, `topics/${encodeURIComponent(key)}?include_usage=true`)),
+
+  createTopic: (projectId: string, payload: { key: string; name: string; description: string; reason: string }) =>
+    requestApi<Topic>(buildProjectPath(projectId, 'topics'), 'POST', payload),
+
+  updateTopic: (projectId: string, key: string, payload: { expected_version: number; name: string; description?: string; reason: string }) =>
+    requestApi<Topic>(buildProjectPath(projectId, `topics/${encodeURIComponent(key)}`), 'PATCH', payload),
+
+  deleteTopic: (projectId: string, key: string, expectedVersion: number, reason: string) =>
+    requestApi<Topic>(buildProjectPath(projectId, `topics/${encodeURIComponent(key)}`), 'DELETE', { expected_version: expectedVersion, reason }),
+
+  enableTopics: (projectId: string, expectedRevision: number, reason: string) =>
+    requestApi(buildProjectPath(projectId, 'topics/enable'), 'POST', { expected_revision: expectedRevision, reason }),
+
+  reviewTaskRule: (projectId: string, rule: Rule, approve: boolean, reason: string) =>
+    requestApi(buildProjectPath(projectId, `rules/${encodeURIComponent(rule.id)}/review`), 'POST', { expected_version: rule.version, approve, reason }),
+
+  classifyLegacyRule: (projectId: string, rule: Rule, payload: { topics: string[]; patterns: string[]; priority: RulePriority; is_global: boolean; priority_reason: string; reason: string }) =>
+    requestApi(buildProjectPath(projectId, `rules/${encodeURIComponent(rule.id)}/classify`), 'POST', { ...payload, expected_version: rule.version }),
+
+  updateFinding: (projectId: string, id: string, expectedVersion: number, topics: string[], resolve: boolean, reason: string) =>
+    requestApi(buildProjectPath(projectId, `findings/${encodeURIComponent(id)}`), 'PATCH', { expected_version: expectedVersion, topics, resolve, reason }),
 
   reviewProposal: (projectId: string, proposalId: string, approve: boolean, reason: string) =>
     requestApi(buildProjectPath(projectId, `proposals/${encodeURIComponent(proposalId)}/review`), 'POST', {
