@@ -41,20 +41,24 @@ def run_topics_flow(database, page, fetch, base_url, wait):
         return next(item for item in ledger()['findings'] if item['id'] == finding_id)
     def create(key, name):
         page.click('新建主题', panel)
+        page.until("!!document.querySelector('.topic-form') && !document.querySelector('.topics-empty-selection')")
         page.field('稳定 key', key, panel)
         page.field('显示名称', name, panel)
         page.field('业务边界', 'Synthetic browser topic boundary: ' + key, panel)
         page.field('操作理由', 'Explicit browser fixture registration', panel)
         page.click('创建主题', panel)
         wait(lambda: topic(key)['status'] == 'active')
+        page.until("!!document.querySelector('.topics-empty-selection') && !document.querySelector('.topic-form')")
     def inspect(key):
         page.click('· ' + key, panel)
         page.until(f"document.querySelector('.topic-form input')?.value === {json.dumps(key)} && document.querySelector('.topic-form input').disabled")
+        assert not page.js("!!document.querySelector('.topics-empty-selection')")
     def navigate(label, selector):
         page.click(label, '#navigation')
         page.until('!!document.querySelector(' + json.dumps(selector) + ')')
 
     navigate('项目设置与管理', panel)
+    page.until("!!document.querySelector('.topics-empty-selection') && !document.querySelector('.topic-form')")
     create('frontend-layout', 'Frontend layout')
     inspect('frontend-layout')
     page.field('显示名称', 'Frontend layout renamed', panel)
@@ -68,6 +72,7 @@ def run_topics_flow(database, page, fetch, base_url, wait):
     page.field('操作理由', 'Delete unused topic explicitly', panel)
     page.click('删除无在用引用的主题', panel)
     wait(lambda: topic('unused-topic')['status'] == 'deleted')
+    page.until("!!document.querySelector('.topics-empty-selection') && !document.querySelector('.topic-form')")
     # Reusing a tombstoned key must surface a real API conflict and retain the input.
     page.click('新建主题', panel)
     page.field('稳定 key', 'unused-topic', panel)
@@ -122,7 +127,9 @@ def run_topics_flow(database, page, fetch, base_url, wait):
     wait(lambda: finding()['status'] == 'resolved')
     page.until("document.querySelector('.findings-cards-flow').innerText.includes('已处理')")
     navigate('项目设置与管理', panel)
-    page.field('操作理由', 'Reviewed all active rules and pending observations', panel)
+    assert page.js("[...document.querySelectorAll('.topics-panel button')].find(b=>b.textContent.includes('启用主题查询')).disabled")
+    page.field('启用理由', 'Reviewed all active rules and pending observations', panel)
+    assert not page.js("[...document.querySelectorAll('.topics-panel button')].find(b=>b.textContent.includes('启用主题查询')).disabled")
     page.click('确认分类完整，启用主题查询', panel)
     wait(lambda: ledger()['taxonomy']['topic_query_enabled'])
     page.until("document.querySelector('.topics-panel').innerText.includes('主题查询已启用')")
@@ -136,5 +143,30 @@ def run_topics_flow(database, page, fetch, base_url, wait):
     page.until("document.querySelector('.inspect-results')?.textContent.includes('Browser P3 guideline')")
     assert 'Browser legacy redline' not in page.js("document.querySelector('.inspect-results').textContent")
     assert page.js("document.body.innerText.includes('无文件锚点')")
+
+    for width in (1024, 900, 768):
+        page.cdp('Emulation.setDeviceMetricsOverride', {
+            'width': width, 'height': 900, 'deviceScaleFactor': 1, 'mobile': False})
+        navigate('项目设置与管理', panel)
+        page.until("getComputedStyle(document.querySelector('.nav-section-label')).display === 'none'")
+        layout = page.js("""(() => {
+          const sidebar = document.querySelector('.sidebar');
+          const nav = document.querySelector('#navigation');
+          const panel = document.querySelector('.topics-panel');
+          return {
+            headerHeight: sidebar.getBoundingClientRect().height,
+            largestTab: Math.max(...[...nav.querySelectorAll('button')].map(b => b.getBoundingClientRect().width)),
+            navigationWidth: nav.clientWidth,
+            panelOverflow: panel.scrollWidth - panel.clientWidth,
+            pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+          };
+        })()""")
+        assert layout['headerHeight'] < 180, (width, layout)
+        assert layout['largestTab'] < layout['navigationWidth'] / 2, (width, layout)
+        assert layout['panelOverflow'] <= 1 and layout['pageOverflow'] <= 1, (width, layout)
+        navigate('项目规则库', '.github-rules-table')
+    page.cdp('Emulation.setDeviceMetricsOverride', {
+        'width': 1280, 'height': 900, 'deviceScaleFactor': 1, 'mobile': False})
     return ['topic_crud_and_tombstone', 'locked_boundary_and_delete_guard', 'legacy_rule_classification',
-            'finding_reclassification_and_resolution', 'project_topic_cutover', 'explicit_p3_preview_and_pathless_rules']
+            'finding_reclassification_and_resolution', 'project_topic_cutover', 'explicit_p3_preview_and_pathless_rules',
+            'responsive_navigation']

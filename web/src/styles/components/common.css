@@ -248,7 +248,7 @@ textarea:focus {
 /* 模态弹窗规范 (<dialog>) */
 dialog {
   color: var(--gh-fg-default);
-  background: #161b22;
+  background: var(--gh-canvas-overlay);
   border: 1px solid var(--gh-border-default);
   border-radius: 8px;
   width: min(560px, 92vw);

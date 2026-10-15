@@ -272,19 +272,55 @@ const inspectedRules = computed<Rule[]>(() => {
       </div>
     </div>
 
-    <details v-if="ledger.rules.some(r => r.status === 'active' && !r.patterns.length)" class="panel">
-      <summary>无文件锚点的主题 / 全局规则（不伪造目录）</summary>
-      <p v-for="rule in ledger.rules.filter(r => r.status === 'active' && !r.patterns.length)" :key="rule.id">{{ rule.priority }} · {{ rule.title }} · {{ rule.is_global ? '明确全局适用' : rule.topics.join(', ') }}</p>
+    <details v-if="ledger.rules.some(r => r.status === 'active' && !r.patterns.length)" class="panel pathless-rules-panel">
+      <summary class="pathless-rules-summary">
+        <span class="pathless-summary-title">
+          <span class="summary-arrow" aria-hidden="true">▶</span>
+          <span>无文件锚点的主题 / 全局规则（不伪造目录）</span>
+        </span>
+        <span class="caption pathless-summary-count">
+          {{ ledger.rules.filter(r => r.status === 'active' && !r.patterns.length).length }} 条生效规则
+        </span>
+      </summary>
+      <div class="pathless-rules-list">
+        <div
+          v-for="rule in ledger.rules.filter(r => r.status === 'active' && !r.patterns.length)"
+          :key="rule.id"
+          class="pathless-rule-row"
+        >
+          <span class="tag" :class="rule.priority.toLowerCase()">{{ rule.priority }}</span>
+          <strong class="pathless-rule-title">{{ rule.title }}</strong>
+          <span class="pathless-rule-topics caption">
+            {{ rule.is_global ? '明确全局适用' : rule.topics.join(', ') }}
+          </span>
+        </div>
+      </div>
     </details>
 
     <!-- 规则适用检查 (解决 D04/D05/E15) -->
     <div class="panel inspect-panel">
       <div class="inspect-title-row">
-        <strong>规则适用检查</strong>
+        <div class="inspect-title-group">
+          <span class="inspect-icon" aria-hidden="true">🎯</span>
+          <strong>规则适用检查</strong>
+        </div>
         <span class="caption">输入代码相对路径，按服务端分段锚定规则精确匹配。</span>
       </div>
       <form class="inspect-form" @submit.prevent="handleInspect">
-        <fieldset><legend>显式选择查询等级（没有默认等级）</legend><label v-for="p in priorityOptions" :key="p"><input v-model="inspectPriorities" type="checkbox" :value="p" />{{ p }}</label></fieldset>
+        <fieldset class="inspect-priorities-fieldset">
+          <legend class="inspect-priorities-legend">显式选择查询等级（没有默认等级）</legend>
+          <div class="inspect-pills-row">
+            <label
+              v-for="p in priorityOptions"
+              :key="p"
+              class="priority-check-pill"
+              :class="{ 'is-checked': inspectPriorities.includes(p) }"
+            >
+              <input v-model="inspectPriorities" type="checkbox" :value="p" />
+              <span class="pill-label">{{ p }}</span>
+            </label>
+          </div>
+        </fieldset>
         <div class="inspect-inputs">
           <input
             v-model="inspectFilePath"
@@ -422,20 +458,158 @@ const inspectedRules = computed<Rule[]>(() => {
   height: 100%;
 }
 
-.inspect-panel {
+/* 无文件锚点规则折叠卡片 */
+.pathless-rules-panel {
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.pathless-rules-summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gh-fg-default);
+  user-select: none;
+}
+
+.pathless-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pathless-rules-summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary-arrow {
+  font-size: 10px;
+  color: var(--gh-fg-muted);
+  transition: transform 0.15s ease;
+  display: inline-block;
+}
+
+details[open] .summary-arrow {
+  transform: rotate(90deg);
+}
+
+.pathless-rules-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--gh-border-muted);
+}
+
+.pathless-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--gh-canvas-default);
+  border: 1px solid var(--gh-border-muted);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.pathless-rule-title {
+  color: var(--gh-fg-default);
+}
+
+.pathless-rule-topics {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* 探测面板 */
+.inspect-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 14px;
 }
 
 .inspect-title-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+}
+
+.inspect-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--gh-fg-default);
+}
+
+.inspect-icon {
+  font-size: 14px;
 }
 
 .inspect-form {
-  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inspect-priorities-fieldset {
+  border: 1px solid var(--gh-border-muted);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0;
+  background: var(--gh-canvas-default);
+}
+
+.inspect-priorities-legend {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gh-fg-muted);
+  padding: 0 4px;
+}
+
+.inspect-pills-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.priority-check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  color: var(--gh-fg-default);
+  user-select: none;
+  transition: all 0.1s ease;
+}
+
+.priority-check-pill input {
+  cursor: pointer;
+  margin: 0;
+}
+
+.priority-check-pill.is-checked {
+  background: var(--gh-accent-subtle);
+  border-color: var(--gh-accent-fg);
+  color: var(--gh-accent-fg);
 }
 
 .inspect-inputs {
