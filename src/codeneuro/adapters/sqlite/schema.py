@@ -2,12 +2,40 @@
 import sqlalchemy as sa
 
 metadata = sa.MetaData()
-CURRENT_SCHEMA = '1f7a79740655'
+CURRENT_SCHEMA = '2c4e8a6b901d'
 
 projects = sa.Table('projects', metadata,
     sa.Column('id', sa.String(128), primary_key=True),
     sa.Column('name', sa.String(500), nullable=False),
-    sa.Column('rule_revision', sa.Integer, nullable=False, server_default='0'))
+    sa.Column('rule_revision', sa.Integer, nullable=False, server_default='0'),
+    sa.Column('taxonomy_revision', sa.Integer, nullable=False, server_default='0'),
+    sa.Column('topic_query_enabled', sa.Boolean, nullable=False, server_default='0'))
+
+project_topics = sa.Table('project_topics', metadata,
+    sa.Column('project_id', sa.ForeignKey('projects.id'), primary_key=True),
+    sa.Column('key', sa.String(64), primary_key=True),
+    sa.Column('name', sa.String(200), nullable=False),
+    sa.Column('description', sa.Text, nullable=False),
+    sa.Column('version', sa.Integer, nullable=False),
+    sa.Column('status', sa.String(16), nullable=False),
+    sa.Column('definition_locked', sa.Boolean, nullable=False, server_default='0'),
+    sa.CheckConstraint("status IN ('active','deleted')", name='ck_topics_status'))
+
+rule_topics = sa.Table('rule_topics', metadata,
+    sa.Column('project_id', sa.String(128), nullable=False),
+    sa.Column('rule_id', sa.String(128), primary_key=True),
+    sa.Column('topic_key', sa.String(64), primary_key=True),
+    sa.ForeignKeyConstraint(['rule_id', 'project_id'], ['rules.id', 'rules.project_id']),
+    sa.ForeignKeyConstraint(['project_id', 'topic_key'], ['project_topics.project_id', 'project_topics.key']),
+    sa.Index('ix_rule_topics_lookup', 'project_id', 'topic_key'))
+
+finding_topics = sa.Table('finding_topics', metadata,
+    sa.Column('project_id', sa.String(128), nullable=False),
+    sa.Column('finding_id', sa.String(128), primary_key=True),
+    sa.Column('topic_key', sa.String(64), primary_key=True),
+    sa.ForeignKeyConstraint(['finding_id', 'project_id'], ['findings.id', 'findings.project_id']),
+    sa.ForeignKeyConstraint(['project_id', 'topic_key'], ['project_topics.project_id', 'project_topics.key']),
+    sa.Index('ix_finding_topics_lookup', 'project_id', 'topic_key'))
 
 tasks = sa.Table('tasks', metadata,
     sa.Column('id', sa.String(128), primary_key=True),
@@ -65,11 +93,13 @@ findings = sa.Table('findings', metadata,
     sa.Column('project_id', sa.ForeignKey('projects.id'), nullable=False),
     sa.Column('task_id', sa.ForeignKey('tasks.id'), nullable=False),
     sa.Column('session_id', sa.ForeignKey('sessions.id'), nullable=False),
-    sa.Column('target_path', sa.Text, nullable=False),
+    sa.Column('target_path', sa.Text, nullable=True),
     sa.Column('text', sa.Text, nullable=False),
     sa.Column('priority', sa.String(2), nullable=False),
     sa.Column('version', sa.Integer, nullable=False),
     sa.Column('status', sa.String(20), nullable=False),
+    sa.UniqueConstraint('id', 'project_id', name='uq_findings_project'),
+    sa.CheckConstraint("priority IN ('P0','P1','P2','P3')", name='ck_findings_priority'),
     sa.Index('ix_findings_scope', 'project_id', 'task_id', 'session_id', 'status'))
 
 issues = sa.Table('issues', metadata,
@@ -105,6 +135,7 @@ test_reports = sa.Table('test_reports', metadata,
     sa.Column('finished_at', sa.String(40), nullable=False),
     sa.Column('recorded_at', sa.String(40), nullable=False),
     sa.Column('source', sa.String(24), nullable=False),
+    sa.Column('test_cases_json', sa.Text, nullable=False, server_default='[]'),
     sa.UniqueConstraint('session_id','request_id', name='uq_test_request'),
     sa.UniqueConstraint('session_id','fingerprint', name='uq_test_unique_event'))
 
@@ -114,6 +145,7 @@ rule_observations = sa.Table('rule_observations', metadata,
     sa.Column('evidence_version', sa.Integer, nullable=False),
     sa.Column('test_report_id', sa.ForeignKey('test_reports.id'), nullable=False),
     sa.Column('supports', sa.Boolean, nullable=False),
+    sa.Column('check_ids_json', sa.Text, nullable=False, server_default='[]'),
     sa.Column('reason', sa.Text, nullable=False),
     sa.Column('created_at', sa.String(40), nullable=False),
     sa.UniqueConstraint('rule_id', 'evidence_version', 'test_report_id', name='uq_rule_evidence'))
@@ -133,7 +165,9 @@ rules = sa.Table('rules', metadata,
     sa.Column('points_json', sa.Text, nullable=False),
     sa.Column('patterns_json', sa.Text, nullable=False),
     sa.Column('priority', sa.String(2), nullable=False),
-    sa.Column('category', sa.String(16), nullable=False),
+    sa.Column('is_global', sa.Boolean, nullable=False, server_default='0'),
+    sa.Column('priority_reason', sa.Text, nullable=False, server_default=''),
+    sa.Column('validation_spec_json', sa.Text),
     sa.Column('status', sa.String(16), nullable=False),
     sa.Column('version', sa.Integer, nullable=False),
     sa.Column('origin_rule_id', sa.ForeignKey('rules.id')),
@@ -141,8 +175,8 @@ rules = sa.Table('rules', metadata,
     sa.Column('origin_reason', sa.Text),
     sa.UniqueConstraint('origin_rule_id','origin_version', name='uq_promotion_source_version'),
     sa.Index('ix_rules_effective', 'project_id', 'task_id', 'status', 'priority'),
-    sa.CheckConstraint("priority IN ('P0','P1','P2')"),
-    sa.CheckConstraint("category IN ('business','security','gotcha')"),
+    sa.UniqueConstraint('id', 'project_id', name='uq_rules_project'),
+    sa.CheckConstraint("priority IN ('P0','P1','P2','P3')", name='ck_rules_priority'),
     sa.CheckConstraint("status IN ('draft','active','deprecated','revoked')"))
 
 requirement_rule_links = sa.Table('requirement_rule_links', metadata,
@@ -161,7 +195,15 @@ contract_proposals = sa.Table('contract_proposals', metadata,
     sa.Column('points_json', sa.Text, nullable=False),
     sa.Column('patterns_json', sa.Text, nullable=False),
     sa.Column('priority', sa.String(2), nullable=False),
-    sa.Column('category', sa.String(16), nullable=False),
+    sa.Column('category', sa.String(16)),  # Historical v1 proposals only; never used by v2.
+    sa.Column('topics_json', sa.Text, nullable=False, server_default='[]'),
+    sa.Column('is_global', sa.Boolean, nullable=False, server_default='0'),
+    sa.Column('priority_reason', sa.Text, nullable=False, server_default=''),
+    sa.Column('validation_spec_json', sa.Text),
+    sa.Column('source_rule_id', sa.String(128)),
+    sa.Column('source_version', sa.Integer),
+    sa.Column('schema_version', sa.Integer, nullable=False, server_default='2'),
+    sa.ForeignKeyConstraint(['source_rule_id', 'source_version'], ['rule_versions.rule_id', 'rule_versions.version']),
     sa.Column('reason', sa.Text, nullable=False),
     sa.Column('status', sa.String(16), nullable=False),
     sa.Column('decision_reason', sa.Text),
@@ -176,8 +218,24 @@ rule_versions = sa.Table('rule_versions', metadata,
     sa.Column('points_json', sa.Text, nullable=False),
     sa.Column('patterns_json', sa.Text, nullable=False),
     sa.Column('priority', sa.String(2), nullable=False),
-    sa.Column('category', sa.String(16), nullable=False),
+    sa.Column('category', sa.String(16)),  # Immutable v1 history, not a live classifier.
+    sa.Column('topics_json', sa.Text, nullable=False, server_default='[]'),
+    sa.Column('is_global', sa.Boolean, nullable=False, server_default='0'),
+    sa.Column('priority_reason', sa.Text, nullable=False, server_default=''),
+    sa.Column('validation_spec_json', sa.Text),
+    sa.Column('schema_version', sa.Integer, nullable=False, server_default='2'),
     sa.Column('status', sa.String(16), nullable=False))
+
+rule_reviews = sa.Table('rule_reviews', metadata,
+    sa.Column('id', sa.String(128), primary_key=True),
+    sa.Column('project_id', sa.ForeignKey('projects.id'), nullable=False),
+    sa.Column('rule_id', sa.String(128), nullable=False),
+    sa.Column('rule_version', sa.Integer, nullable=False),
+    sa.Column('approve', sa.Boolean, nullable=False),
+    sa.Column('reason', sa.Text, nullable=False),
+    sa.Column('reviewer_id', sa.String(128), nullable=False),
+    sa.Column('created_at', sa.String(40), nullable=False),
+    sa.ForeignKeyConstraint(['rule_id', 'rule_version'], ['rule_versions.rule_id', 'rule_versions.version']))
 
 deliveries = sa.Table('deliveries', metadata,
     sa.Column('id', sa.String(128), primary_key=True),

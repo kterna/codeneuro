@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import text
 
 from codeneuro.adapters.sqlite.uow import SqliteUnitOfWork
-from codeneuro.modules.context import ContextQuery
+from v2_helpers import file_query as ContextQuery, configure_fixture, propose_review, LEVELS
 from codeneuro.modules.knowledge import Priority, matches
 from codeneuro.modules.tasks import Conflict, ProductError, TaskStatus
 from codeneuro.modules.workspaces import Actor
@@ -32,6 +32,7 @@ def app(tmp_path):
     agent = Actor('agent')
     service.workspaces.register_project(human, 'p', 'repository')
     service.workspaces.register_project(human, 'q', 'unrelated')
+    configure_fixture(service, human, ('p', 'q'))
     task = service.workspaces.create_task(agent, 'p', 'Implement payment', 'Preserve refund contract')
     session = service.workspaces.start_session(agent, 'p', 'worktree-one', task.id, debug=True)
     yield service, uow, human, agent, task, session, filename
@@ -70,10 +71,10 @@ def test_requirement_original_text_and_last_archive_are_atomic(app):
 
 def test_scope_feedback_and_p0_survive_filter_and_budget(app):
     service, uow, human, agent, task, session, _ = app
-    p0 = service.knowledge.create_rule(human, 'p', 'P0 guard', ('CRITICAL' * 160,), ('src/**',), Priority.P0, 'security')
-    p1 = service.knowledge.create_rule(human, 'p', 'Business', ('Needed',), ('src/**',), Priority.P1, 'business')
+    p0 = service.knowledge.create_rule(human, 'p', 'P0 guard', ('CRITICAL' * 160,), ('src/**',), Priority.P0)
+    p1 = service.knowledge.create_rule(human, 'p', 'Business', ('Needed',), ('src/**',), Priority.P1)
     other = service.knowledge.create_rule(human, 'p', 'Other folder', ('Not here',), ('tests/**',))
-    q = ContextQuery(('src/main.py',), min_priority=Priority.P0, categories=('gotcha',), max_chars=512)
+    q = ContextQuery(('src/main.py',), priorities=(Priority.P0,), max_chars=512)
     delivered = service.context.get_context(agent, session.id, q, 'budgeted')
     assert delivered.budget_exceeded and 'CRITICAL' * 160 in delivered.markdown
     assert [ref[0] for ref in delivered.rule_refs] == [p0.id]
@@ -254,15 +255,17 @@ def test_agent_rule_requires_two_distinct_reported_tests_and_rechecks_after_edit
     start = datetime.now(timezone.utc) - timedelta(minutes=1)
     def report(request_id, exit_code=0, path='src/refund.py'):
         stamp = start + timedelta(seconds=len(request_id))
+        cases = ({'test_id': 'other-test' if request_id == 'unrelated' else 'contract-test',
+                  'status': 'passed' if exit_code == 0 else 'failed'},)
         return service.governance.report_test(agent, session.id, request_id,
             ('pytest', request_id), (path,), exit_code, stamp.isoformat(),
-            (stamp + timedelta(seconds=1)).isoformat())
+            (stamp + timedelta(seconds=1)).isoformat(), test_cases=cases)
     failed = report('failing', 1)
-    with pytest.raises(ProductError, match='Failed tests'):
+    with pytest.raises(ProductError, match='Failed or skipped'):
         service.governance.observe_rule(agent, session.id, rule['id'], 1, failed.id,
                                         True, 'Cannot claim success')
     unrelated = report('unrelated', path='tests/other.py')
-    with pytest.raises(ProductError, match='scope'):
+    with pytest.raises(ProductError, match='declared tests'):
         service.governance.observe_rule(agent, session.id, rule['id'], 1, unrelated.id,
                                         True, 'Not the Rule path')
     one = report('successful-1')
@@ -303,16 +306,16 @@ def test_agent_rule_requires_two_distinct_reported_tests_and_rechecks_after_edit
 def test_existing_long_term_contract_requires_human_review_and_version_match(app):
     service, uow, human, agent, task, session, _ = app
     contract = service.knowledge.create_rule(human, 'p', 'Original', ('Keep API stable',), ('src/**',), Priority.P0)
-    pending = service.knowledge.propose_contract(agent, session.id, contract.id,
+    pending = propose_review(service, agent, session.id, contract.id,
         'Improved contract', ('Keep the API stable and authenticated',),
-        ('src/**',), Priority.P0, 'security', 'Observed new boundary')
+        ('src/**',), Priority.P0, 'Observed new boundary')
     with uow.read() as tx:
         assert tx.knowledge.get_rule(contract.id).version == 1
     with pytest.raises(ProductError, match='human'):
         service.knowledge.review_contract(agent, 'p', pending.id, True, 'Agent cannot self-approve')
-    stale = service.knowledge.propose_contract(agent, session.id, contract.id,
+    stale = propose_review(service, agent, session.id, contract.id,
         'Stale suggestion', ('Old proposed text',), ('src/**',), Priority.P1,
-        'business', 'Independent proposal')
+        'Independent proposal')
     approved = service.knowledge.review_contract(human, 'p', pending.id, True, 'Reviewed clauses and scope')
     assert approved.status == 'approved'
     assert service.knowledge.review_contract(human, 'p', pending.id, True, 'Reviewed clauses and scope') == approved
@@ -356,7 +359,7 @@ def test_archiving_one_requirement_deactivates_its_linked_rule_only(app):
 def test_promotion_preserves_original_and_never_changes_existing_contract(app):
     service, uow, human, agent, task, session, _ = app
     source = service.knowledge.create_rule(human, 'p', 'Contract', ('Same clause',), ('src/**',),
-                                 Priority.P1, 'business', task.id)
+                                 Priority.P1, task.id)
     promoted = service.knowledge.promote_rule(agent, session.id, source.id, 1, 'Reusable across Tasks')
     assert promoted.task_id is None and promoted.points == source.points
     assert promoted.patterns == source.patterns and promoted.priority == source.priority

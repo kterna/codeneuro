@@ -7,6 +7,7 @@ from .context import Context
 from .feedback import Feedback
 from .ledger import Ledger
 from .governance import Governance
+from .topics import Topics
 
 
 class Product:
@@ -18,3 +19,4 @@ class Product:
         self.feedback = Feedback(uow)
         self.ledger = Ledger(uow)
         self.governance = Governance(uow)
+        self.topics = Topics(uow)

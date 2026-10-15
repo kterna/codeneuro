@@ -35,25 +35,16 @@ function isStale(prop: Proposal): boolean {
   return prop.current_target_version !== prop.target_version
 }
 
-function categoryLabel(cat?: string | null): string {
-  if (!cat) return ''
-  switch (cat) {
-    case 'business': return '业务'
-    case 'security': return '安全'
-    case 'gotcha': return '避坑'
-    default: return cat
-  }
-}
-
 function hasApprovalBlock(prop: Proposal): boolean {
   if (prop.status !== 'pending') return false
-  return isStale(prop) ||
+  return prop.schema_version !== 2 || isStale(prop) ||
     prop.current_target_version === null ||
     prop.current_target_version === undefined ||
     !prop.target_snapshot
 }
 
 function getApprovalBlockReason(prop: Proposal): string {
+  if (prop.schema_version !== 2) return '旧分类提案只供历史查看，请按新主题与验证计划重新提交候选。'
   if (isStale(prop)) {
     return `目标规则已在此提案提交后发生变更（最新版本为 v${prop.current_target_version}，提案基于 v${prop.target_version}）。此提案已过时，无法直接批准，请刷新页面重新核对或要求重新提交。`
   }
@@ -72,7 +63,7 @@ function getApprovalBlockReason(prop: Proposal): string {
     <div class="section-head">
       <div>
         <h2>长期契约变更审阅</h2>
-        <span class="caption">对比变更前后的标题、优先级、分类、适用路径和条款，再决定是否批准。</span>
+        <span class="caption">对比候选版本的主题、全局范围、验证依据与条款，再决定是否批准。</span>
       </div>
     </div>
 
@@ -116,12 +107,14 @@ function getApprovalBlockReason(prop: Proposal): string {
           <p>{{ prop.reason }}</p>
         </div>
 
-        <!-- 全五项字段的前后完整对比 (title/points/patterns/priority/category)，所有提案均保留，支持 details 折叠 -->
+        <p class="caption">候选：{{ prop.source_rule_id }} @ {{ prop.source_version }} · 全局适用 {{ prop.target_snapshot?.is_global ? '是' : '否' }} → {{ prop.is_global ? '是' : '否' }}</p>
+        <details><summary>验证计划与优先级依据</summary><p>原优先级依据：{{ prop.target_snapshot?.priority_reason || '未记录' }}</p><p>拟议依据：{{ prop.priority_reason || '未记录' }}</p><pre>原计划：{{ JSON.stringify(prop.target_snapshot?.validation_spec, null, 2) }}</pre><pre>拟议计划：{{ JSON.stringify(prop.validation_spec, null, 2) }}</pre></details>
+        <!-- 不回填新分类到历史快照。 -->
         <details class="diff-container panel" :open="prop.status === 'pending'">
           <summary class="diff-summary">
             <strong>契约变更五项对比</strong>
             <span class="caption muted" style="margin-left: 8px">
-              {{ prop.status === 'pending' ? '标题 · 优先级 · 分类 · 路径模式 · 条款' : '点击查看决议前完整五项对比' }}
+              {{ prop.status === 'pending' ? '标题 · 优先级 · 业务主题 · 路径模式 · 条款' : '点击查看决议前完整五项对比' }}
             </span>
           </summary>
 
@@ -136,7 +129,7 @@ function getApprovalBlockReason(prop: Proposal): string {
               </div>
             </div>
 
-            <!-- 2 & 3. 优先级与类别 (不伪造默认值) -->
+            <!-- 2 & 3. 优先级与主题，不伪造默认值 -->
             <div class="diff-grid" style="margin-bottom: 12px">
               <div class="diff-field">
                 <span class="caption">2. 优先级</span>
@@ -150,12 +143,12 @@ function getApprovalBlockReason(prop: Proposal): string {
               </div>
 
               <div class="diff-field">
-                <span class="caption">3. 规则分类</span>
+                <span class="caption">3. 业务主题</span>
                 <div class="diff-val-row">
-                  <span class="tag neutral">原: {{ categoryLabel(prop.target_snapshot?.category) || '（无历史快照）' }}</span>
+                  <span class="tag neutral">原: {{ prop.target_snapshot?.topics?.join(', ') || '（无主题 / 旧快照）' }}</span>
                   <span class="diff-arrow">→</span>
                   <span class="tag neutral">
-                    拟议: {{ categoryLabel(prop.category || prop.target_snapshot?.category) || '（未变更）' }}
+                    拟议: {{ prop.topics.join(', ') || '（无主题）' }}
                   </span>
                 </div>
               </div>

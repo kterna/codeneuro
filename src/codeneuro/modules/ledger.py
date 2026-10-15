@@ -4,13 +4,18 @@ from collections import defaultdict
 
 def density(rules: list[dict]) -> list[dict]:
     grouped: dict[str, dict] = defaultdict(lambda: {
-        'scope': '', 'p0': 0, 'p1': 0, 'p2': 0,
+        'scope': '', 'p0': 0, 'p1': 0, 'p2': 0, 'p3': 0,
         'long_term': 0, 'short_term': 0, 'rule_ids': [],
     })
     for rule in rules:
         if rule['status'] != 'active':
             continue
-        for pattern in set(rule['patterns']):
+        scopes = set(rule['patterns'])
+        if rule.get('is_global'):
+            scopes.add('(global)')
+        if not scopes:
+            scopes = {'topic:' + key for key in rule['topics']}
+        for pattern in scopes:
             segments = pattern.split('/')
             concrete = []
             for part in segments:
@@ -25,4 +30,4 @@ def density(rules: list[dict]) -> list[dict]:
             if rule['id'] not in item['rule_ids']:
                 item['rule_ids'].append(rule['id'])
     return sorted(grouped.values(), key=lambda item: (-item['p0'],
-                  -(item['p1'] + item['p2']), item['scope']))
+                  -(item['p1'] + item['p2'] + item['p3']), item['scope']))

@@ -9,4 +9,5 @@ def _id(prefix):
 
 
 def _fingerprint(query):
-    return hashlib.sha256(json.dumps(asdict(query), sort_keys=True, default=str).encode()).hexdigest()
+    payload = {'protocol_version': 2, 'query': asdict(query)}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()

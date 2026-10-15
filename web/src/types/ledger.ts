@@ -24,8 +24,29 @@ export type Requirement = {
   summary: string | null
 }
 
-export type RulePriority = 'P0' | 'P1' | 'P2'
-export type RuleCategory = 'business' | 'security' | 'gotcha'
+export type RulePriority = 'P0' | 'P1' | 'P2' | 'P3'
+export type ValidationSpec =
+  | { kind: 'review'; basis: string }
+  | { kind: 'test'; checks: { id: string; clause_indexes: number[]; test_ids: string[] }[] }
+
+export type Topic = {
+  project_id: string
+  key: string
+  name: string
+  description: string
+  version: number
+  status: 'active' | 'deleted'
+  definition_locked: boolean
+  can_delete?: boolean
+  blocking_references?: Record<string, number>
+}
+
+export type TopicPage = {
+  taxonomy_revision: number
+  topic_query_enabled: boolean
+  items: Topic[]
+  next_cursor: string | null
+}
 export type RuleStatus = 'draft' | 'active' | 'revoked' | 'deprecated'
 
 export type RuleSnapshot = {
@@ -35,7 +56,11 @@ export type RuleSnapshot = {
   points: string[]
   patterns: string[]
   priority: RulePriority
-  category: RuleCategory
+  topics: string[]
+  is_global: boolean
+  priority_reason: string
+  validation_spec: ValidationSpec | null
+  schema_version: number
   status: RuleStatus
 }
 
@@ -45,10 +70,13 @@ export type Rule = {
   points: string[]
   patterns: string[]
   priority: RulePriority
-  category?: RuleCategory
+  topics: string[]
+  is_global: boolean
+  priority_reason: string
+  validation_spec: ValidationSpec | null
   task_id: string | null
   status: RuleStatus
-  version?: number
+  version: number
   origin_rule_id: string | null
   origin_version: number | null
   delivery_count?: number
@@ -76,7 +104,13 @@ export type Proposal = {
   points: string[]
   patterns: string[]
   priority?: RulePriority
-  category?: RuleCategory
+  topics: string[]
+  is_global: boolean
+  priority_reason: string
+  validation_spec: ValidationSpec | null
+  source_rule_id: string | null
+  source_version: number | null
+  schema_version: number
   reason: string
   status: ProposalStatus
   decision_reason: string | null
@@ -90,6 +124,7 @@ export type ScopeDensity = {
   p0: number
   p1: number
   p2: number
+  p3: number
   long_term: number
   short_term: number
   rule_ids: string[]
@@ -109,7 +144,8 @@ export type Finding = {
   project_id: string
   task_id: string
   session_id: string
-  target_path: string
+  target_path: string | null
+  topics: string[]
   text: string
   priority: string
   version: number
@@ -144,6 +180,9 @@ export type EventsResponse = {
 
 export type Ledger = {
   project_id?: string
+  taxonomy: { taxonomy_revision: number; topic_query_enabled: boolean }
+  topics: Topic[]
+  topic_coverage: { rules: string[]; findings: string[] }
   tasks: Task[]
   worktrees: Worktree[]
   requirements: Requirement[]

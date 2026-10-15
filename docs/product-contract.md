@@ -11,12 +11,15 @@
 
 ## 核心行为
 
-- Project、Worktree、Task、Requirement、Rule、Finding、Session、Delivery、Feedback 各有明确身份；Requirement 原文不变，当前 Task 的活跃需求作为 P1 独立下发，不伪装成长期 Rule。
+- Project、Topic、Worktree、Task、Requirement、Rule、Finding、Session、Delivery、Feedback 各有明确身份；Requirement 原文不变，当前 Task 的活跃需求在独立需求区下发，不受规则等级筛选隐藏，不伪装成长期 Rule。
 - Agent 带预期版本和完成摘要归档 Requirement 后立即退出活跃上下文；最后一条需求归档自动完成 Task。无 Requirement 的历史 Task 仍可人工完成。归档关联短期 Rule 的停用、Task 状态和审计同事务提交。
 - 任务状态流转契约：支持 draft、active、testing、released、archived 与 paused。draft 可流转至 active/archived；active 可流转至 testing/archived，或进入 paused；testing 可流转至 active/released/archived，或进入 paused；paused 须先经恢复操作回至暂停前的 active 或 testing，不直接跨态流转；released 可回退至 active 或完成 archived；已归档 (archived) 任务允许人工进一步流转至上线 (released)，但该操作保留既有已停用状态，绝不复活任何已随归档停用的规则。
 - 当前 Task 的活跃短期 Rule 可由 Agent 按版本晋升：保持条款、范围、优先级，不扩大权限；来源失活，晋升记录和审计同事务提交。修改现有长期契约仍需人工审阅。
-- JIT 按会话/Task/文件范围选择规则，支持多文件、类别、优先级、意图和详细/清单输出；P0 不因类别、已知反馈或字符预算丢失。未审阅 Finding 仅在同一活跃 Task 内跨会话按文件路径提示，并进入项目账本，不跨任务变成 Rule。版本匹配的既有语义诊断可作提示，但热路径不调用模型或自动裁决。
-- 实际下发保存会话、请求、规则/需求版本凭据；预览不计数。评分必须引用实际下发，`0=已知、1=无关、5=核心需要`，效用均分排除 0。写入按版本并保持请求幂等，跨项目/Task/Worktree 不串数据。
+- JIT 必须显式提供精确的 P0–P3 等级集合，无默认、阈值或自动补 P0。有主题时主题决定准入，文件仅辅助排序；无主题才按文件匹配，允许真实无路径规则和纯业务查询。全局性由 `is_global` 显式表达，仍受等级和 Task 可见性约束；已经准入的 P0 才具有全文/预算保护。旧 category/categories/min_priority 删除。
+- Topic 为项目级受控词表，支持显式 CRUD、版本和目录修订；稳定 key 不可改/复用，引用后业务边界冻结。删除被活跃/草稿 Rule、未审阅 Finding、未决 Proposal 阻断，不级联摘除引用或自动重分类。项目分类完成人工确认后开启主题查询，详见 [v2 契约](topics-v2.md)。
+- Rule 检索范围与验证证据解耦：测试计划绑定条款、检查 ID、宿主测试 ID 和规则版本；规范条款走人类版本审阅。没有“任意同 Task 成功测试即放行”的路径，Hub 不执行或保证测试真实性。
+- 未审阅 Finding 仅在同一活跃 Task 内按主题/文件提示，允许可选路径、显式重分类/结束，不跨任务自动变成 Rule。热路径不调用模型或自动裁决。
+- 实际下发保存协议版本、规范化查询、目录修订、匹配依据及规则/需求版本凭据；旧回执不重算；预览不计数。评分必须引用实际下发，`0=已知、1=无关、5=核心需要`，效用均分排除 0。写入按版本并保持请求幂等，跨项目/Task/Worktree 不串数据。
 - 可选代码索引、PRD/语义分析与任务提炼走有界异步工作流，结果带证据位置和失败状态，不得冒充确定性推导或自动批准长期规则。
 - Web 工作台通过相同业务用例支持需求录入/归档、既有契约的人类审阅、规则作用域密度、活跃任务与资产演进账本；UI 不是规则的第二真实源。代码焦点浏览如要做，必须依赖真实索引，而不是伪造远程文件树。
 

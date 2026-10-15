@@ -353,4 +353,41 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
 .status-indicator.disconnected .status-dot {
   background: var(--gh-danger-fg);
 }
+
+@media (max-width: 1024px) {
+  .sidebar-brand-project {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .brand {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  .project-selector-compact {
+    flex: 0 1 260px;
+    width: auto;
+    max-width: 50%;
+    min-width: 0;
+  }
+
+  .nav-section-label {
+    display: none;
+  }
+
+  .nav-tab-item {
+    width: auto;
+  }
+
+  .aside-foot-compact {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 6px;
+  }
+}
 </style>

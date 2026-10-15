@@ -2,9 +2,10 @@
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ...modules.tasks import ProductError, TaskStatus
+from ...modules.knowledge import Priority
 from ...modules.workspaces import Actor
 from ...workflows.product import Product
 
@@ -38,6 +39,42 @@ class ArchiveInput(BaseModel):
 
 class TransitionInput(StatusInput):
     status: TaskStatus
+
+
+class TopicInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    key: str
+    name: str
+    description: str
+    reason: str = Field(min_length=1)
+
+
+class VersionedInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    expected_version: int = Field(ge=1)
+    reason: str = Field(min_length=1)
+
+
+class TopicUpdateInput(VersionedInput):
+    name: str | None = None
+    description: str | None = None
+
+
+class RuleReviewInput(VersionedInput):
+    approve: bool
+
+
+class FindingUpdateInput(VersionedInput):
+    topics: list[str] | None = None
+    resolve: bool = False
+
+
+class ClassifyInput(VersionedInput):
+    topics: list[str]
+    patterns: list[str] | None = None
+    priority: Priority | None = None
+    is_global: bool = False
+    priority_reason: str = ''
 
 
 def create_router(product: Product):
@@ -99,6 +136,52 @@ def create_router(product: Product):
         return call(product.knowledge.review_contract, web_actor, project_id,
                     proposal_id, body.approve, body.reason)
 
+    @router.get('/projects/{project_id}/topics')
+    def list_topics(project_id: str, query: str = '', include_deleted: bool = False,
+                    cursor: str | None = None, limit: int = Query(50, ge=1, le=100)):
+        return call(product.topics.list_topics, web_actor, project_id, query, include_deleted, cursor, limit)
+
+    @router.post('/projects/{project_id}/topics')
+    def create_topic(project_id: str, body: TopicInput):
+        return call(product.topics.create_topic, web_actor, body.key, body.name, body.description,
+                    body.reason, project_id=project_id)
+
+    @router.post('/projects/{project_id}/topics/enable')
+    def enable_topics(project_id: str, body: StatusInput):
+        return call(product.topics.enable_query, web_actor, project_id, body.expected_revision, body.reason)
+
+    @router.get('/projects/{project_id}/topics/{key}')
+    def get_topic(project_id: str, key: str, include_usage: bool = False):
+        return call(product.topics.get_topic, web_actor, project_id, key, include_usage)
+
+    @router.patch('/projects/{project_id}/topics/{key}')
+    def update_topic(project_id: str, key: str, body: TopicUpdateInput):
+        return call(product.topics.update_topic, web_actor, key, body.expected_version, body.reason,
+                    body.name, body.description, project_id=project_id)
+
+    @router.delete('/projects/{project_id}/topics/{key}')
+    def delete_topic(project_id: str, key: str, body: VersionedInput):
+        return call(product.topics.delete_topic, web_actor, key, body.expected_version,
+                    body.reason, project_id=project_id)
+
+    @router.post('/projects/{project_id}/rules/{rule_id}/review')
+    def review_rule(project_id: str, rule_id: str, body: RuleReviewInput):
+        return call(product.governance.review_task_rule, web_actor, project_id, rule_id,
+                    body.expected_version, body.approve, body.reason)
+
+    @router.post('/projects/{project_id}/rules/{rule_id}/classify')
+    def classify_legacy_rule(project_id: str, rule_id: str, body: ClassifyInput):
+        return call(product.knowledge.classify_legacy_rule, web_actor, project_id, rule_id,
+                    body.expected_version, tuple(body.topics), body.reason,
+                    tuple(body.patterns) if body.patterns is not None else None,
+                    body.priority, body.is_global, body.priority_reason)
+
+    @router.patch('/projects/{project_id}/findings/{finding_id}')
+    def update_finding(project_id: str, finding_id: str, body: FindingUpdateInput):
+        return call(product.context.update_finding, web_actor, finding_id, body.expected_version,
+                    body.reason, tuple(body.topics) if body.topics is not None else None,
+                    body.resolve, project_id=project_id)
+
     @router.get('/projects/{project_id}/ledger')
     def ledger(project_id: str):
         return call(product.ledger.project, web_actor, project_id)
@@ -108,8 +191,8 @@ def create_router(product: Product):
         return call(product.ledger.scope_tree, web_actor, project_id, worktree_id)
 
     @router.get('/projects/{project_id}/inspect')
-    def inspect(project_id: str, path: str, task_id: str | None = None):
-        return call(product.ledger.inspect_path, web_actor, project_id, path, task_id)
+    def inspect(project_id: str, path: str, priorities: list[Priority] = Query(...), task_id: str | None = None):
+        return call(product.ledger.inspect_path, web_actor, project_id, path, tuple(priorities), task_id)
 
     @router.get('/projects/{project_id}/events')
     def events(project_id: str, limit: int = Query(100, ge=1, le=100),

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import type { Ledger, Rule, InspectResponse } from '../../types/ledger'
+import type { Ledger, Rule, InspectResponse, RulePriority } from '../../types/ledger'
 import { apiService } from '../../api/client'
 import ScopeTreeNodeItem, { type ScopeTreeNodeModel } from './ScopeTreeNodeItem.vue'
 
@@ -16,6 +16,8 @@ const treeSearch = ref<string>('')
 // JIT 检查相关
 const inspectFilePath = ref<string>('')
 const inspectTaskId = ref<string>('')
+const inspectPriorities = ref<RulePriority[]>([])
+const priorityOptions: RulePriority[] = ['P0', 'P1', 'P2', 'P3']
 const inspectLoading = ref(false)
 const inspectError = ref('')
 const inspectResult = ref<InspectResponse | null>(null)
@@ -35,7 +37,7 @@ function invalidateInspect() {
 
 // 监听输入路径、关联任务、项目与账本变动，立即失效并取消旧请求
 watch(
-  [inspectFilePath, inspectTaskId, () => props.projectId, () => props.ledger],
+  [inspectFilePath, inspectTaskId, () => inspectPriorities.value.join(','), () => props.projectId, () => props.ledger],
   () => {
     invalidateInspect()
   },
@@ -73,6 +75,7 @@ const directoryTree = computed<ScopeTreeNodeModel[]>(() => {
     p0Count: 0,
     p1Count: 0,
     p2Count: 0,
+    p3Count: 0,
     ruleIds: [],
   }
 
@@ -80,7 +83,7 @@ const directoryTree = computed<ScopeTreeNodeModel[]>(() => {
   nodeMap.set('', root)
 
   // 收集所有已登记规则的 pattern 与关联规则
-  const patternToRules = new Map<string, { p0: number; p1: number; p2: number; ids: Set<string> }>()
+  const patternToRules = new Map<string, { p0: number; p1: number; p2: number; p3: number; ids: Set<string> }>()
 
   const activeRules = props.ledger.rules.filter(r => r.status === 'active')
   for (const rule of activeRules) {
@@ -89,13 +92,14 @@ const directoryTree = computed<ScopeTreeNodeModel[]>(() => {
       if (!pat) continue
       let entry = patternToRules.get(pat)
       if (!entry) {
-        entry = { p0: 0, p1: 0, p2: 0, ids: new Set() }
+        entry = { p0: 0, p1: 0, p2: 0, p3: 0, ids: new Set() }
         patternToRules.set(pat, entry)
       }
       entry.ids.add(rule.id)
       if (rule.priority === 'P0') entry.p0++
       else if (rule.priority === 'P1') entry.p1++
-      else entry.p2++
+      else if (rule.priority === 'P2') entry.p2++
+      else entry.p3++
     }
   }
 
@@ -121,6 +125,7 @@ const directoryTree = computed<ScopeTreeNodeModel[]>(() => {
           p0Count: 0,
           p1Count: 0,
           p2Count: 0,
+          p3Count: 0,
           ruleIds: [],
         }
         nodeMap.set(currentPath, node)
@@ -133,6 +138,7 @@ const directoryTree = computed<ScopeTreeNodeModel[]>(() => {
         node.p0Count += stat.p0
         node.p1Count += stat.p1
         node.p2Count += stat.p2
+        node.p3Count += stat.p3
         node.ruleIds = Array.from(stat.ids)
       }
     }
@@ -207,7 +213,7 @@ const selectedNodeRules = computed<Rule[]>(() => {
 // 调用后端执行真实 JIT 语义检查 (带异步序号与 AbortSignal 保护)
 async function handleInspect() {
   const targetPath = inspectFilePath.value.trim()
-  if (!props.projectId || !targetPath) return
+  if (!props.projectId || !targetPath || !inspectPriorities.value.length) return
 
   if (inspectAbortCtrl) {
     inspectAbortCtrl.abort()
@@ -223,7 +229,7 @@ async function handleInspect() {
   inspectResult.value = null
 
   try {
-    const res = await apiService.inspectPath(props.projectId, targetPath, targetTask, ctrl.signal)
+    const res = await apiService.inspectPath(props.projectId, targetPath, [...inspectPriorities.value], targetTask, ctrl.signal)
     if (currentSeq !== inspectSeq || ctrl.signal.aborted) return
     inspectResult.value = res
   } catch (err: unknown) {
@@ -266,13 +272,55 @@ const inspectedRules = computed<Rule[]>(() => {
       </div>
     </div>
 
+    <details v-if="ledger.rules.some(r => r.status === 'active' && !r.patterns.length)" class="panel pathless-rules-panel">
+      <summary class="pathless-rules-summary">
+        <span class="pathless-summary-title">
+          <span class="summary-arrow" aria-hidden="true">▶</span>
+          <span>无文件锚点的主题 / 全局规则（不伪造目录）</span>
+        </span>
+        <span class="caption pathless-summary-count">
+          {{ ledger.rules.filter(r => r.status === 'active' && !r.patterns.length).length }} 条生效规则
+        </span>
+      </summary>
+      <div class="pathless-rules-list">
+        <div
+          v-for="rule in ledger.rules.filter(r => r.status === 'active' && !r.patterns.length)"
+          :key="rule.id"
+          class="pathless-rule-row"
+        >
+          <span class="tag" :class="rule.priority.toLowerCase()">{{ rule.priority }}</span>
+          <strong class="pathless-rule-title">{{ rule.title }}</strong>
+          <span class="pathless-rule-topics caption">
+            {{ rule.is_global ? '明确全局适用' : rule.topics.join(', ') }}
+          </span>
+        </div>
+      </div>
+    </details>
+
     <!-- 规则适用检查 (解决 D04/D05/E15) -->
     <div class="panel inspect-panel">
       <div class="inspect-title-row">
-        <strong>规则适用检查</strong>
+        <div class="inspect-title-group">
+          <span class="inspect-icon" aria-hidden="true">🎯</span>
+          <strong>规则适用检查</strong>
+        </div>
         <span class="caption">输入代码相对路径，按服务端分段锚定规则精确匹配。</span>
       </div>
       <form class="inspect-form" @submit.prevent="handleInspect">
+        <fieldset class="inspect-priorities-fieldset">
+          <legend class="inspect-priorities-legend">显式选择查询等级（没有默认等级）</legend>
+          <div class="inspect-pills-row">
+            <label
+              v-for="p in priorityOptions"
+              :key="p"
+              class="priority-check-pill"
+              :class="{ 'is-checked': inspectPriorities.includes(p) }"
+            >
+              <input v-model="inspectPriorities" type="checkbox" :value="p" />
+              <span class="pill-label">{{ p }}</span>
+            </label>
+          </div>
+        </fieldset>
         <div class="inspect-inputs">
           <input
             v-model="inspectFilePath"
@@ -286,7 +334,7 @@ const inspectedRules = computed<Rule[]>(() => {
               [{{ formatTaskStatus(t.status) }}] {{ t.title }}
             </option>
           </select>
-          <button type="submit" class="button primary" :disabled="inspectLoading || !inspectFilePath.trim()">
+          <button type="submit" class="button primary" :disabled="inspectLoading || !inspectFilePath.trim() || !inspectPriorities.length">
             {{ inspectLoading ? '检查中…' : '检查适用规则' }}
           </button>
         </div>
@@ -377,7 +425,7 @@ const inspectedRules = computed<Rule[]>(() => {
             <div class="card-head">
               <div>
                 <span class="tag" :class="rule.priority.toLowerCase()">{{ rule.priority }}</span>
-                <span v-if="rule.category" class="tag neutral" style="margin-left: 6px">{{ rule.category }}</span>
+                <span v-for="topic in rule.topics" :key="topic" class="tag neutral" style="margin-left: 6px">{{ topic }}</span>
                 <span v-if="rule.task_id" class="tag neutral" style="margin-left: 6px">任务短期</span>
                 <span v-else class="tag success" style="margin-left: 6px">长期契约</span>
                 <h4 style="display: inline-block; margin-left: 8px">{{ rule.title }}</h4>
@@ -410,20 +458,158 @@ const inspectedRules = computed<Rule[]>(() => {
   height: 100%;
 }
 
-.inspect-panel {
+/* 无文件锚点规则折叠卡片 */
+.pathless-rules-panel {
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.pathless-rules-summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gh-fg-default);
+  user-select: none;
+}
+
+.pathless-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pathless-rules-summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary-arrow {
+  font-size: 10px;
+  color: var(--gh-fg-muted);
+  transition: transform 0.15s ease;
+  display: inline-block;
+}
+
+details[open] .summary-arrow {
+  transform: rotate(90deg);
+}
+
+.pathless-rules-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--gh-border-muted);
+}
+
+.pathless-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--gh-canvas-default);
+  border: 1px solid var(--gh-border-muted);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.pathless-rule-title {
+  color: var(--gh-fg-default);
+}
+
+.pathless-rule-topics {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* 探测面板 */
+.inspect-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  padding: 14px;
 }
 
 .inspect-title-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+}
+
+.inspect-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--gh-fg-default);
+}
+
+.inspect-icon {
+  font-size: 14px;
 }
 
 .inspect-form {
-  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inspect-priorities-fieldset {
+  border: 1px solid var(--gh-border-muted);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0;
+  background: var(--gh-canvas-default);
+}
+
+.inspect-priorities-legend {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gh-fg-muted);
+  padding: 0 4px;
+}
+
+.inspect-pills-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.priority-check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  color: var(--gh-fg-default);
+  user-select: none;
+  transition: all 0.1s ease;
+}
+
+.priority-check-pill input {
+  cursor: pointer;
+  margin: 0;
+}
+
+.priority-check-pill.is-checked {
+  background: var(--gh-accent-subtle);
+  border-color: var(--gh-accent-fg);
+  color: var(--gh-accent-fg);
 }
 
 .inspect-inputs {

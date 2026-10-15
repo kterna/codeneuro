@@ -3,6 +3,7 @@ from dataclasses import asdict
 import json
 
 from ..modules.ledger import density
+from ..modules.context import ContextQuery
 from ..modules.knowledge import matches, relative_path
 from ..modules.tasks import ProductError
 from ..modules.workspaces import Actor
@@ -32,8 +33,7 @@ class Ledger(Workspaces):
             scores = tx.feedback.current_rule_scores(project_id)
             for rule in rules:
                 rule.update(scores[rule['id']])
-                rule.pop('points_json')
-                rule.pop('patterns_json')
+
             proposals = []
             for proposal in tx.knowledge.list_proposals(project_id):
                 target = tx.knowledge.get_rule(proposal.target_rule_id)
@@ -42,6 +42,9 @@ class Ledger(Workspaces):
                     'current_target_version': target.version if target else None})
             events = self._events(tx, project_id)
             return {'project_id': project_id,
+                    'taxonomy': tx.topics.state(project_id),
+                    'topic_coverage': tx.topics.coverage(project_id),
+                    'topics': [asdict(item) for item in tx.topics.list(project_id, limit=100)],
                     'tasks': [asdict(task) for task in tx.workspaces.list_tasks(project_id)],
                     'worktrees': [asdict(worktree) for worktree in tx.workspaces.project_worktrees(project_id)],
                     'requirements': [asdict(item) for item in tx.requirements.project_requirements(project_id)],
@@ -72,9 +75,11 @@ class Ledger(Workspaces):
                     'tree': [{'path': path, 'is_dir': False, 'rule_ids': sorted(ids)}
                              for path, ids in sorted(scopes.items())]}
 
-    def inspect_path(self, actor: Actor, project_id: str, path: str, task_id: str | None = None):
+    def inspect_path(self, actor: Actor, project_id: str, path: str, priorities: tuple,
+                     task_id: str | None = None):
         """Reuse JIT's anchored matcher without a Delivery or filesystem access."""
         path = relative_path(path)
+        query = ContextQuery(priorities=priorities, files=(path,))
         with self.uow.read() as tx:
             tx.workspaces.project_revision(project_id)
             if task_id:
@@ -82,6 +87,7 @@ class Ledger(Workspaces):
                 if not task or task.status not in ('active', 'testing'):
                     raise ProductError('Select an active/testing Task in this project.')
             rules = [r for r in tx.knowledge.visible_rules(project_id, task_id)
-                     if any(matches(pattern, path) for pattern in r.patterns)]
+                     if r.priority in query.priorities and
+                     (r.is_global or any(matches(pattern, path) for pattern in r.patterns))]
             return {'path': path, 'task_id': task_id, 'rule_ids': [r.id for r in rules],
                     'source': 'jit_scope_match', 'preview': True}

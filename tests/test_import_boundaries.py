@@ -1,6 +1,7 @@
 """Focused regression tests for batch importer ownership, state, and boundary invariants."""
 
 import json
+from copy import deepcopy
 from pathlib import Path
 import pytest
 import sqlalchemy as sa
@@ -14,7 +15,8 @@ from codeneuro.adapters.sqlite.schema import (
     rules, rule_versions, worktrees, sessions, findings, audit,
     requirement_rule_links
 )
-from codeneuro.modules.context import ContextQuery
+from v2_helpers import file_query as ContextQuery, TOPICS, REVIEW
+from codeneuro.modules.topics import Topic
 from codeneuro.modules.workspaces import Actor
 from codeneuro.workflows.product import Product
 from scripts.load_batches_into_codeneuro import (
@@ -37,6 +39,23 @@ def temp_db(tmp_path):
 
 
 def _write_batch(tmp_path: Path, filename: str, data: dict) -> str:
+    # Ownership regressions use explicit v2 fixture metadata; no product-side defaults.
+    data = deepcopy(data)
+    declarations = []
+    for project in data.get('projects', []) if isinstance(data.get('projects', []), list) else []:
+        if isinstance(project, dict) and isinstance(project.get('id'), str):
+            declarations.append(dict(project_id=project['id'], key=TOPICS[0], name='Fixture contracts',
+                                     description='Only deterministic test fixture contracts'))
+    data.setdefault('topics', declarations)
+    for rule in data.get('rules', []) if isinstance(data.get('rules', []), list) else []:
+        if isinstance(rule, dict):
+            rule.setdefault('topics', list(TOPICS))
+            rule.setdefault('validation_spec', REVIEW)
+            if rule.get('priority') == 'P0':
+                rule.setdefault('priority_reason', 'Fixture irreversible loss')
+    for finding in data.get('findings', []) if isinstance(data.get('findings', []), list) else []:
+        if isinstance(finding, dict):
+            finding.setdefault('topics', list(TOPICS))
     path = tmp_path / filename
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
     return str(path)
@@ -480,17 +499,16 @@ def test_collection_shapes_and_types_rejected(tmp_path):
     })
     with pytest.raises(ValueError) as exc:
         load_and_validate([b4])
-    assert "'patterns' is required and must be a non-empty list" in str(exc.value)
+    assert "'patterns' is required and must be a list" in str(exc.value)
 
-    # 5. Missing finding target_path rejected (does not invent src/**)
+    # 5. Missing finding target_path is now genuinely pathless; no src/** is invented.
     b5 = _write_batch(tmp_path, "b5.json", {
         "projects": [{"id": "p", "name": "P"}],
         "tasks": [{"id": "t", "project_id": "p", "title": "T"}],
         "findings": [{"id": "f", "project_id": "p", "task_id": "t", "text": "F"}]
     })
-    with pytest.raises(ValueError) as exc:
-        load_and_validate([b5])
-    assert "'target_path' is required" in str(exc.value)
+    pathless = load_and_validate([b5])
+    assert pathless.findings_map['f']['target_path'] is None
 
     # 6. Explicit empty task status fails
     b6 = _write_batch(tmp_path, "b6.json", {
@@ -537,7 +555,6 @@ def test_main_regression_fixture_and_jit_execution(tmp_path, temp_db):
                 "points": ["P"],
                 "patterns": ["src/**"],
                 "priority": "P1",
-                "category": "business",
                 "status": "active"
             }
         ]
@@ -696,7 +713,9 @@ def test_preflight_rejects_rule_with_differing_requirement_links(tmp_path, temp_
             tx.workspaces.create_task(t)
             r = codeneuro.modules.tasks.Requirement('req-1', 'p-link', 't-link', 'Req 1', codeneuro.modules.tasks.RequirementStatus.ACTIVE, 1, None)
             tx.requirements.create_requirement(r, session_id=None, request_id='imp-1')
-            rule = codeneuro.modules.knowledge.Rule('rule-1', 'p-link', 't-link', 'Rule 1', ('P',), ('src/**',), codeneuro.modules.knowledge.Priority.P1, 'business', 1, 'active')
+            tx.topics.create(Topic('p-link', TOPICS[0], 'Fixture contracts', 'Only deterministic test fixture contracts'))
+            rule = codeneuro.modules.knowledge.Rule('rule-1', 'p-link', 't-link', 'Rule 1', ('P',), ('src/**',),
+                codeneuro.modules.knowledge.Priority.P1, TOPICS, 1, 'active', validation_spec=REVIEW)
             tx.knowledge.create_rule(rule)
             tx.requirements.link_rule('req-1', 'rule-1')
     finally:
@@ -720,12 +739,15 @@ def test_preflight_rejects_missing_version_snapshot_repair_required(tmp_path, te
     try:
         with uow.write() as tx:
             tx.workspaces.create_project('p-corrupt', 'Corrupt DB Project')
+            tx.topics.create(Topic('p-corrupt', TOPICS[0], 'Fixture contracts', 'Only deterministic test fixture contracts'))
             # Manually insert rule WITHOUT corresponding row in rule_versions
             tx.c.execute(rules.insert().values(
                 id='rule-corrupt', project_id='p-corrupt', task_id=None,
                 title='Unversioned Rule', points_json='["P"]', patterns_json='["src/**"]',
-                priority='P1', category='business', status='active', version=1
+                priority='P1', validation_spec_json=json.dumps(REVIEW), status='active', version=1
             ))
+            from codeneuro.adapters.sqlite.schema import rule_topics
+            tx.c.execute(rule_topics.insert().values(project_id='p-corrupt', rule_id='rule-corrupt', topic_key=TOPICS[0]))
     finally:
         uow.dispose()
 
@@ -774,7 +796,7 @@ def test_domain_pattern_and_path_validation(tmp_path):
     })
     with pytest.raises(ValueError) as exc:
         load_and_validate([b3])
-    assert "invalid domain path/pattern" in str(exc.value)
+    assert "target_path invalid: Expected a workspace-relative POSIX path." in str(exc.value)
 
 
 def test_state_invariants_paused_from_and_strict_statuses(tmp_path):

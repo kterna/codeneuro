@@ -23,7 +23,9 @@ from codeneuro.adapters.sqlite.schema import (
     rules, rule_versions, worktrees, sessions, findings, audit,
     requirement_rule_links
 )
-from codeneuro.modules.knowledge import Priority, Rule, relative_path
+from codeneuro.modules.knowledge import Priority, Rule, relative_path, validate_rule
+from codeneuro.modules.governance import validate_plan
+from codeneuro.modules.topics import Topic, validate_definition, validate_keys
 from codeneuro.modules.tasks import Requirement, RequirementStatus, Task, TaskStatus
 from codeneuro.modules.workspaces import Session, Worktree
 from codeneuro.modules.findings import Finding
@@ -66,13 +68,14 @@ def task_session_id_for(project_id: str, task_id: str, actor_id: str = DEFAULT_A
 
 
 class ValidatedBatches(list):
-    def __init__(self, batches, projects_map, tasks_map, requirements_map, rules_map, findings_map):
+    def __init__(self, batches, projects_map, tasks_map, requirements_map, rules_map, findings_map, topics_map):
         super().__init__(batches)
         self.projects_map = projects_map
         self.tasks_map = tasks_map
         self.requirements_map = requirements_map
         self.rules_map = rules_map
         self.findings_map = findings_map
+        self.topics_map = topics_map
 
 
 class PreflightResult:
@@ -94,6 +97,7 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
     known_requirements: dict[str, dict] = {}
     known_rules: dict[str, dict] = {}
     known_findings: dict[str, dict] = {}
+    known_topics: dict[tuple[str, str], Topic] = {}
 
     parsed_batches = []
     errors = []
@@ -113,7 +117,7 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
             continue
 
         # Check collection shapes: null/numeric/object for collections must be rejected
-        for key in ('projects', 'tasks', 'rules', 'findings'):
+        for key in ('projects', 'tasks', 'rules', 'findings', 'topics'):
             if key in data and not isinstance(data[key], list):
                 errors.append(f"{file_path}: '{key}' must be a list, got {type(data[key]).__name__}")
 
@@ -220,6 +224,24 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
             'data': data,
             'projects': batch_projects,
         })
+
+    # Explicit topic declarations are independent of rules; no keys are inferred from knowledge.
+    for batch in parsed_batches:
+        declarations = batch['data'].get('topics', [])
+        for item in declarations if isinstance(declarations, list) else []:
+            try:
+                if not isinstance(item, dict) or set(item) != {'project_id', 'key', 'name', 'description'}:
+                    raise ValueError('Topic declarations require project_id, key, name and description.')
+                if item['project_id'] not in known_projects:
+                    raise ValueError('Topic references an unknown project_id.')
+                validate_definition(item['key'], item['name'], item['description'])
+                topic = Topic(**item)
+                identity = (topic.project_id, topic.key)
+                if identity in known_topics and known_topics[identity] != topic:
+                    raise ValueError('Conflicting duplicate topic declaration.')
+                known_topics[identity] = topic
+            except (ValueError, TypeError, AttributeError) as error:
+                errors.append(f"{batch['file']}: invalid topic: {error}")
 
     # 2. Collect and validate tasks and their nested requirements across all batches
     for batch in parsed_batches:
@@ -499,8 +521,8 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
                         points.append(pt.strip())
 
             # Patterns validation: required real input (do not invent global **)
-            if 'patterns' not in r or not isinstance(r['patterns'], list) or len(r['patterns']) == 0:
-                errors.append(f"{file_path}: rules[{idx}] ('{rid}') 'patterns' is required and must be a non-empty list of path patterns")
+            if 'patterns' not in r or not isinstance(r['patterns'], list):
+                errors.append(f"{file_path}: rules[{idx}] ('{rid}') 'patterns' is required and must be a list of real path patterns (possibly empty)")
                 patterns = []
             else:
                 patterns = []
@@ -515,12 +537,12 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
                         except Exception as pe:
                             errors.append(f"{file_path}: rules[{idx}] ('{rid}') patterns[{pat_idx}] '{pat}' invalid domain pattern: {pe}")
 
-            # Priority, Category, Status validation
+            # Explicit v2 classification; old categories are not converted into business topics.
             if 'priority' in r:
                 raw_p = r['priority']
-                if not isinstance(raw_p, str) or raw_p.strip().upper() not in ('P0', 'P1', 'P2'):
+                if not isinstance(raw_p, str) or raw_p.strip().upper() not in ('P0', 'P1', 'P2', 'P3'):
                     errors.append(
-                        f"{file_path}: rules[{idx}] ('{rid}') invalid priority '{raw_p}', must be P0, P1, or P2"
+                        f"{file_path}: rules[{idx}] ('{rid}') invalid priority '{raw_p}', must be P0, P1, P2, or P3"
                     )
                     priority = 'P1'
                 else:
@@ -529,16 +551,24 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
                 priority = 'P1'
 
             if 'category' in r:
-                raw_c = r['category']
-                if not isinstance(raw_c, str) or raw_c.strip().lower() not in ('business', 'security', 'gotcha'):
-                    errors.append(
-                        f"{file_path}: rules[{idx}] ('{rid}') invalid category '{raw_c}', must be business, security, or gotcha"
-                    )
-                    category = 'business'
-                else:
-                    category = raw_c.strip().lower()
-            else:
-                category = 'business'
+                errors.append(f"{file_path}: rules[{idx}] obsolete category; supply registered topics and a validation_spec")
+            topic_keys = r.get('topics', [])
+            if not isinstance(topic_keys, list) or any(not isinstance(key, str) for key in topic_keys):
+                errors.append(f"{file_path}: rules[{idx}] topics must be a list of registered keys")
+                topic_keys = []
+            topic_keys = tuple(sorted(topic_keys))
+            is_global = r.get('is_global', False)
+            priority_reason = r.get('priority_reason', '')
+            validation_spec = r.get('validation_spec')
+            try:
+                validate_plan(validation_spec, len(points))
+                if validation_spec['kind'] != 'review':
+                    raise ValueError('Batch ingestion does not fabricate test validation; use the candidate evidence workflow.')
+                validate_rule(Rule(rid, pid, tid, rtitle, tuple(points), tuple(patterns), Priority(priority),
+                                  topic_keys, 1, 'draft', is_global=is_global,
+                                  priority_reason=priority_reason, validation_spec=validation_spec))
+            except (ValueError, TypeError, AttributeError) as error:
+                errors.append(f"{file_path}: rules[{idx}] invalid v2 rule: {error}")
 
             if 'status' in r:
                 raw_s = r['status']
@@ -601,7 +631,10 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
                 'points': tuple(points),
                 'patterns': tuple(patterns),
                 'priority': priority,
-                'category': category,
+                'topics': topic_keys,
+                'is_global': is_global,
+                'priority_reason': priority_reason,
+                'validation_spec': validation_spec,
                 'status': rstatus,
                 'requirement_id': req_link,
                 'file': file_path,
@@ -612,7 +645,9 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
                 if (prior_rule['project_id'] != pid or prior_rule['task_id'] != tid or
                         prior_rule['title'] != rtitle or prior_rule['points'] != tuple(points) or
                         prior_rule['patterns'] != tuple(patterns) or prior_rule['priority'] != priority or
-                        prior_rule['category'] != category or prior_rule['status'] != rstatus or
+                        prior_rule['topics'] != topic_keys or prior_rule['is_global'] != is_global or
+                        prior_rule['priority_reason'] != priority_reason or prior_rule['validation_spec'] != validation_spec or
+                        prior_rule['status'] != rstatus or
                         prior_rule['requirement_id'] != req_link):
                     errors.append(
                         f"{file_path}: rules[{idx}] ('{rid}') conflicting duplicate rule declaration with {prior_rule['file']}"
@@ -671,22 +706,27 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
                         f"{file_path}: findings[{idx}] task_id '{tid}' belongs to project '{known_tasks[tid]['project_id']}', not '{pid}'"
                     )
 
-            # target_path: required real input (do not invent src/**)
-            if 'target_path' not in fn or not isinstance(fn['target_path'], str) or not fn['target_path'].strip():
-                errors.append(f"{file_path}: findings[{idx}] ('{fid}') 'target_path' is required and must be a non-empty string")
-                target = ''
-            else:
-                target = fn['target_path'].strip()
-                try:
+            target = fn.get('target_path')
+            try:
+                if target is not None:
                     relative_path(target, pattern=True)
-                except Exception as pe:
-                    errors.append(f"{file_path}: findings[{idx}] ('{fid}') target_path '{target}' invalid domain path/pattern: {pe}")
+            except ValueError as pe:
+                errors.append(f"{file_path}: findings[{idx}] target_path invalid: {pe}")
+            finding_keys = fn.get('topics', [])
+            try:
+                if not isinstance(finding_keys, list) or not finding_keys or any(not isinstance(key, str) for key in finding_keys):
+                    raise ValueError('Findings require registered topics.')
+                validate_keys(tuple(finding_keys))
+            except (ValueError, TypeError) as pe:
+                errors.append(f"{file_path}: findings[{idx}] invalid topics: {pe}")
+                finding_keys = []
+            finding_keys = tuple(sorted(finding_keys))
 
             if 'priority' in fn:
                 raw_fp = fn['priority']
-                if not isinstance(raw_fp, str) or raw_fp.strip().upper() not in ('P0', 'P1', 'P2'):
+                if not isinstance(raw_fp, str) or raw_fp.strip().upper() not in ('P0', 'P1', 'P2', 'P3'):
                     errors.append(
-                        f"{file_path}: findings[{idx}] ('{fid}') invalid priority '{raw_fp}', must be P0, P1, or P2"
+                        f"{file_path}: findings[{idx}] ('{fid}') invalid priority '{raw_fp}', must be P0, P1, P2, or P3"
                     )
                     fpriority = 'P1'
                 else:
@@ -714,6 +754,7 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
                 'task_id': tid,
                 'text': ftext,
                 'target_path': target,
+                'topics': finding_keys,
                 'priority': fpriority,
                 'status': fstatus,
                 'file': file_path,
@@ -723,7 +764,7 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
                 prior_f = known_findings[fid]
                 if (prior_f['project_id'] != pid or prior_f['task_id'] != tid or
                         prior_f['text'] != ftext or prior_f['target_path'] != target or
-                        prior_f['priority'] != fpriority or prior_f['status'] != fstatus):
+                        prior_f['topics'] != finding_keys or prior_f['priority'] != fpriority or prior_f['status'] != fstatus):
                     errors.append(
                         f"{file_path}: findings[{idx}] ('{fid}') conflicting duplicate finding declaration with {prior_f['file']}"
                     )
@@ -739,11 +780,12 @@ def load_and_validate(files: list[str]) -> ValidatedBatches:
         known_tasks,
         known_requirements,
         known_rules,
-        known_findings
+        known_findings,
+        known_topics
     )
 
 
-def preflight_target_db(tx, projects_map, tasks_map, requirements_map, rules_map, findings_map) -> PreflightResult:
+def preflight_target_db(tx, projects_map, tasks_map, requirements_map, rules_map, findings_map, topics_map=None) -> PreflightResult:
     """Validate all incoming identities and payloads against existing database rows.
 
     Rejects any conflicting identity, cross-project collision, or unversioned snapshot rows.
@@ -850,6 +892,18 @@ def preflight_target_db(tx, projects_map, tasks_map, requirements_map, rules_map
 
             result.existing_requirements.add(rid)
 
+    # Topic declarations are independently explicit and compared before any writes.
+    topics_map = topics_map or {}
+    for identity, incoming in topics_map.items():
+        old = tx.topics.get(*identity)
+        if old and (old.status != 'active' or old.name != incoming.name or old.description != incoming.description):
+            raise ValueError(f'Target DB conflict: topic {identity} differs or is deleted.')
+    for item in [*rules_map.values(), *findings_map.values()]:
+        for key in item['topics']:
+            topic = tx.topics.get(item['project_id'], key) or topics_map.get((item['project_id'], key))
+            if topic is None or topic.status != 'active':
+                raise ValueError(f"Register or explicitly declare topic '{key}' in project '{item['project_id']}' before importing knowledge.")
+
     # 4. Check Rules, Requirement-Links, and verify version snapshots
     for rid, r in rules_map.items():
         row = tx.c.execute(sa.select(rules).where(rules.c.id == rid)).mappings().first()
@@ -859,7 +913,9 @@ def preflight_target_db(tx, projects_map, tasks_map, requirements_map, rules_map
             if (row['project_id'] != r['project_id'] or row['task_id'] != r['task_id'] or
                     row['title'] != r['title'] or points_db != r['points'] or
                     patterns_db != r['patterns'] or row['priority'] != r['priority'] or
-                    row['category'] != r['category'] or row['status'] != r['status']):
+                    tx.knowledge.get_rule(rid).topics != r['topics'] or row['is_global'] != r['is_global'] or
+                    row['priority_reason'] != r['priority_reason'] or
+                    json.loads(row['validation_spec_json'] or 'null') != r['validation_spec'] or row['status'] != r['status']):
                 raise ValueError(
                     f"Target DB conflict: rule '{rid}' already exists with conflicting attributes"
                 )
@@ -891,7 +947,9 @@ def preflight_target_db(tx, projects_map, tasks_map, requirements_map, rules_map
             snap_pts = tuple(json.loads(snap['points_json']))
             snap_pats = tuple(json.loads(snap['patterns_json']))
             if (snap['title'] != row['title'] or snap['priority'] != row['priority'] or
-                    snap['category'] != row['category'] or snap['status'] != row['status'] or
+                    tuple(json.loads(snap['topics_json'])) != tx.knowledge.get_rule(rid).topics or
+                    snap['is_global'] != row['is_global'] or snap['priority_reason'] != row['priority_reason'] or
+                    snap['validation_spec_json'] != row['validation_spec_json'] or snap['status'] != row['status'] or
                     snap_pts != points_db or snap_pats != patterns_db):
                 raise ValueError(
                     f"Target DB repair required: rule '{rid}' version {curr_v} snapshot disagrees with current row"
@@ -915,6 +973,7 @@ def preflight_target_db(tx, projects_map, tasks_map, requirements_map, rules_map
         if row:
             if (row['project_id'] != fn['project_id'] or row['task_id'] != fn['task_id'] or
                     row['text'] != fn['text'] or row['target_path'] != fn['target_path'] or
+                    tx.context.get_finding(fid).topics != fn['topics'] or
                     row['priority'] != fn['priority'] or row['status'] != fn['status']):
                 raise ValueError(
                     f"Target DB conflict: finding '{fid}' already exists with conflicting attributes"
@@ -945,6 +1004,7 @@ def ingest_batches(parsed_batches, db_path: str, dry_run: bool = False):
         requirements_map = parsed_batches.requirements_map
         rules_map = parsed_batches.rules_map
         findings_map = parsed_batches.findings_map
+        topics_map = parsed_batches.topics_map
     else:
         files = [b['file'] for b in parsed_batches if isinstance(b, dict) and 'file' in b]
         if files:
@@ -954,8 +1014,9 @@ def ingest_batches(parsed_batches, db_path: str, dry_run: bool = False):
             requirements_map = validated.requirements_map
             rules_map = validated.rules_map
             findings_map = validated.findings_map
+            topics_map = validated.topics_map
         else:
-            projects_map, tasks_map, requirements_map, rules_map, findings_map = {}, {}, {}, {}, {}
+            projects_map, tasks_map, requirements_map, rules_map, findings_map, topics_map = {}, {}, {}, {}, {}, {}
 
     uow = SqliteUnitOfWork(db_path)
     try:
@@ -963,7 +1024,7 @@ def ingest_batches(parsed_batches, db_path: str, dry_run: bool = False):
         if dry_run:
             with uow.read() as tx:
                 preflight = preflight_target_db(
-                    tx, projects_map, tasks_map, requirements_map, rules_map, findings_map
+                    tx, projects_map, tasks_map, requirements_map, rules_map, findings_map, topics_map
                 )
             print(f"[DRY-RUN] Target database verified at {db_path} (schema: {CURRENT_SCHEMA}).")
             print(
@@ -980,7 +1041,7 @@ def ingest_batches(parsed_batches, db_path: str, dry_run: bool = False):
         # Run identical preflight first before ANY mutation.
         with uow.write() as tx:
             preflight = preflight_target_db(
-                tx, projects_map, tasks_map, requirements_map, rules_map, findings_map
+                tx, projects_map, tasks_map, requirements_map, rules_map, findings_map, topics_map
             )
 
             # Step 1: Projects & Worktrees & Default Sessions
@@ -1017,6 +1078,12 @@ def ingest_batches(parsed_batches, db_path: str, dry_run: bool = False):
                         knowledge_revision=1,
                     )
                     tx.workspaces.create_session(session, agent_client=agent_client)
+
+            for topic in topics_map.values():
+                if tx.topics.get(topic.project_id, topic.key) is None:
+                    tx.topics.create(topic)
+                    tx.audit.record(topic.project_id, actor_id, 'topic.created', topic.key,
+                                    {'reason': 'Explicit batch topic declaration'})
 
             # Step 2: Tasks & Task Sessions (session task_id MUST equal task)
             for tid, t in tasks_map.items():
@@ -1087,15 +1154,21 @@ def ingest_batches(parsed_batches, db_path: str, dry_run: bool = False):
                         points=tuple(r['points']),
                         patterns=tuple(r['patterns']),
                         priority=Priority(r['priority']),
-                        category=r['category'],
+                        topics=r['topics'],
+                        is_global=r['is_global'],
+                        priority_reason=r['priority_reason'],
+                        validation_spec=r['validation_spec'],
                         version=1,
                         status=r['status'],
                         origin_reason=None,
                     )
+                    tx.topics.lock(r['project_id'], r['topics'])
                     tx.knowledge.create_rule(rule_obj)
+                    tx.governance.record_review('review_imp_' + rid, r['project_id'], rid, 1,
+                                                True, r['validation_spec']['basis'], actor_id)
                     tx.audit.record(
                         r['project_id'], actor_id, 'rule.created', rid,
-                        {'priority': r['priority'], 'category': r['category']}
+                        {'priority': r['priority'], 'topics': r['topics'], 'basis': 'imported_normative_review'}
                     )
 
             # Step 5: Requirement-Rule Links
@@ -1118,7 +1191,9 @@ def ingest_batches(parsed_batches, db_path: str, dry_run: bool = False):
                         priority=Priority(fn['priority']),
                         version=1,
                         status=fn['status'],
+                        topics=fn['topics'],
                     )
+                    tx.topics.lock(fn['project_id'], fn['topics'])
                     tx.context.record_finding(finding_obj)
                     tx.audit.record(
                         fn['project_id'], actor_id, 'finding.recorded', fid,

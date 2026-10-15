@@ -1,28 +1,36 @@
 """Deterministic JIT selection and rendering; no SQL, I/O or model calls."""
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import json
 
 from .findings import Finding
-from .knowledge import CATEGORIES, RANK, Priority, Rule, matches, relative_path
+from .knowledge import RANK, Priority, Rule, matches, relative_path
+from .topics import validate_keys
 from .tasks import ProductError, Requirement
 
 
 @dataclass(frozen=True)
 class ContextQuery:
-    files: tuple[str, ...]
-    min_priority: Priority = Priority.P2
-    categories: tuple[str, ...] = ()
+    priorities: tuple[Priority, ...]
+    files: tuple[str, ...] = ()
+    topics: tuple[str, ...] = ()
     intent: str = 'implementing'
     mode: str = 'detailed'
     max_chars: int = 24000
 
     def __post_init__(self):
-        if not 1 <= len(self.files) <= 50 or len(set(self.files)) != len(self.files):
-            raise ProductError('Supply 1–50 distinct files.')
+        if len(self.files) > 50 or len(set(self.files)) != len(self.files):
+            raise ProductError('Supply at most 50 distinct files.')
+        if not self.files and not self.topics:
+            raise ProductError('Supply real files or registered topics, not an empty project-wide query.')
+        validate_keys(self.topics)
+        if (not self.priorities or any(not isinstance(p, Priority) for p in self.priorities)
+                or len(set(self.priorities)) != len(self.priorities)):
+            raise ProductError('Explicit distinct priorities are required; there is no default or threshold.')
+        object.__setattr__(self, 'priorities', tuple(sorted(self.priorities, key=RANK.__getitem__)))
+        object.__setattr__(self, 'topics', tuple(sorted(self.topics)))
+        object.__setattr__(self, 'files', tuple(sorted(self.files)))
         for file in self.files:
             relative_path(file)
-        if not isinstance(self.min_priority, Priority) or set(self.categories) - CATEGORIES:
-            raise ProductError('Unsupported priority or category.')
         if self.intent not in ('implementing', 'debugging') or self.mode not in ('detailed', 'checklist'):
             raise ProductError('Unsupported intent or output mode.')
         if not 512 <= self.max_chars <= 200000:
@@ -44,15 +52,22 @@ class Delivery:
     sections: dict[str, tuple[dict, ...]] = field(default_factory=dict)
     reported_conflicts: tuple[dict, ...] = ()
     omitted_conflict_ids: tuple[str, ...] = ()
+    protocol_version: int = 2
+    query: dict = field(default_factory=dict)
+    taxonomy_revision: int | None = None
+    resolved_topics: tuple[dict, ...] = ()
+    match_reasons: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def assemble(delivery_id: str, query: ContextQuery, rules: tuple[Rule, ...],
              requirements: tuple[Requirement, ...], known: frozenset[tuple[str, int]],
              findings: tuple[Finding, ...] = (), conflict_reports: tuple[dict, ...] = ()) -> Delivery:
-    candidates = [rule for rule in rules if rule.status == 'active' and rule.matches(query.files)
-                  and RANK[rule.priority] <= RANK[query.min_priority]
-                  and (rule.priority == Priority.P0 or not query.categories or rule.category in query.categories)]
-    header = f'CodeNeuro delivery {delivery_id}\nFiles: {", ".join(query.files)}\n'
+    candidates = [rule for rule in rules if rule.status == 'active' and rule.priority in query.priorities
+                  and (rule.is_global or (bool(set(rule.topics) & set(query.topics)) if query.topics
+                                          else rule.matches(query.files)))]
+    header = (f'CodeNeuro delivery {delivery_id}\nFiles: {", ".join(query.files)}\n'
+              f'Topics: {", ".join(query.topics)}\nPriorities: {", ".join(query.priorities)}\n')
+    reasons = {}
     entries: list[tuple[str, str, int, str, str, int, int, bool]] = []
     for rule in candidates:
         reminder = rule.priority != Priority.P0 and (rule.id, rule.version) in known
@@ -62,26 +77,30 @@ def assemble(delivery_id: str, query: ContextQuery, rules: tuple[Rule, ...],
             bullet = '- [ ] ' if query.mode == 'checklist' else '- '
             clauses = '\n'.join(f'{bullet}{p}' for p in rule.points)
             content = f'[{rule.priority}] {rule.title} ({rule.id}@{rule.version})\n{clauses}\n'
-        boost = 0 if query.intent == 'debugging' and rule.category == 'gotcha' else 1
+        topic_hit = bool(set(rule.topics) & set(query.topics))
+        path_hit = rule.matches(query.files)
+        reasons[rule.id] = tuple(name for name, hit in (
+            ('topic', topic_hit), ('path', path_hit), ('global', rule.is_global)) if hit)
+        boost = -(4 * topic_hit + 2 * path_hit)
         entries.append(('rule', rule.id, rule.version, 'reminder' if reminder else 'full',
                         content, RANK[rule.priority], boost, rule.priority == Priority.P0))
-    if RANK[query.min_priority] >= 1 and (not query.categories or 'business' in query.categories):
-        for requirement in requirements:
-            if requirement.status != 'active':
-                continue
-            prefix = '- [ ] ' if query.mode == 'checklist' else '> '
-            quote = '\n'.join(f'{prefix}{line}' for line in requirement.text.splitlines())
-            content = f'[P1] Requirement {requirement.id}@{requirement.version}\n{quote}\n'
-            entries.append(('requirement', requirement.id, requirement.version, '', content, 1, -1, False))
-    if RANK[query.min_priority] >= 1 and (not query.categories or 'gotcha' in query.categories):
-        for finding in findings:
-            if finding.status != 'pending_review' or RANK[finding.priority] > RANK[query.min_priority]:
-                continue
-            if any(matches(finding.target_path, file) for file in query.files):
-                bullet = '- [ ] ' if query.mode == 'checklist' else '- '
-                text = f'[{finding.priority}] Unreviewed Finding {finding.id}@{finding.version}\n{bullet}{finding.text}\n'
-                entries.append(('finding', finding.id, finding.version, '', text,
-                                RANK[finding.priority], -2 if query.intent == 'debugging' else 2, False))
+    for requirement in requirements:
+        if requirement.status != 'active':
+            continue
+        prefix = '- [ ] ' if query.mode == 'checklist' else '> '
+        quote = '\n'.join(f'{prefix}{line}' for line in requirement.text.splitlines())
+        content = f'Requirement {requirement.id}@{requirement.version}\n{quote}\n'
+        entries.append(('requirement', requirement.id, requirement.version, '', content, 1, -8, False))
+    for finding in findings:
+        if finding.status != 'pending_review' or finding.priority not in query.priorities:
+            continue
+        topic_hit = bool(set(finding.topics) & set(query.topics))
+        path_hit = bool(finding.target_path) and any(matches(finding.target_path, file) for file in query.files)
+        if (topic_hit if query.topics else path_hit):
+            bullet = '- [ ] ' if query.mode == 'checklist' else '- '
+            text = f'[{finding.priority}] Unreviewed Finding {finding.id}@{finding.version}\n{bullet}{finding.text}\n'
+            entries.append(('finding', finding.id, finding.version, '', text, RANK[finding.priority],
+                            -(4 * topic_hit + 2 * path_hit + (query.intent == 'debugging')), False))
     current = {(rule.id, rule.version) for rule in candidates}
     for report in conflict_reports:
         refs = tuple(tuple(ref) for ref in report['rule_refs'])
@@ -90,7 +109,7 @@ def assemble(delivery_id: str, query: ContextQuery, rules: tuple[Rule, ...],
         content = (f"[Unverified Agent report] Possible conflict {report['id']}: "
                    f"{json.dumps(report['title'], ensure_ascii=False)} (Rule versions: "
                    + ', '.join(f'{rid}@{version}' for rid, version in refs) + ')\n')
-        entries.append(('conflict', report['id'], 0, '', content, 3, 0, False))
+        entries.append(('conflict', report['id'], 0, '', content, len(RANK), 0, False))
     entries.sort(key=lambda entry: (entry[5], entry[6], entry[1]))
     selected, omitted = [], []
     length = len(header)
@@ -132,4 +151,5 @@ def assemble(delivery_id: str, query: ContextQuery, rules: tuple[Rule, ...],
         sections={name: tuple(items) for name, items in sections.items()},
         reported_conflicts=tuple(report for report in conflict_reports if report['id'] in
                                  {e[1] for e in selected if e[0] == 'conflict'}),
-        omitted_conflict_ids=tuple(e[1] for e in omitted if e[0] == 'conflict'))
+        omitted_conflict_ids=tuple(e[1] for e in omitted if e[0] == 'conflict'),
+        query=asdict(query), match_reasons={e[1]: reasons[e[1]] for e in selected if e[0] == 'rule'})
