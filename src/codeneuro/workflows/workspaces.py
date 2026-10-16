@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import hashlib
 import re
+from dataclasses import replace
 
-from ..modules.tasks import Conflict, ProductError, Task, TaskStatus
+from ..modules.tasks import Conflict, ProductError, Task, TaskStatus, validate_crud
 from ..modules.workspaces import Actor, Session, Worktree
 from ..ports import UnitOfWork
 from .common import _id
@@ -99,27 +100,63 @@ class Workspaces:
                         expected_revision: int, status: str, reason: str):
         if actor.role != 'human' or not reason.strip():
             raise ProductError('Human review and a reason are required.', 'forbidden')
-        transitions = {
-            'draft': {'active', 'archived'},
-            'active': {'testing', 'archived'},
-            'testing': {'active', 'released', 'archived'},
-            'released': {'active', 'archived'},
-            'archived': {'released'},
-        }
-        with self.uow.write() as tx:
-            task = tx.workspaces.get_task(task_id, project_id)
+        return self.manage_task(actor, project_id, 'update', task_id, expected_revision,
+                                {'status': status}, reason)
+
+    def manage_task(self, actor: Actor, project_id: str, action: str, entity_id: str | None = None,
+                    expected_version: int | None = None, changes: dict | None = None, reason: str = ''):
+        changes = changes or {}
+        validate_crud(action, entity_id, expected_version, changes, reason)
+        if set(changes) - {'title', 'description', 'status'}:
+            raise ProductError('Task changes support title, description and status.')
+        if ('title' in changes and (not isinstance(changes['title'], str) or not changes['title'].strip())
+                or 'description' in changes and not isinstance(changes['description'], str)):
+            raise ProductError('Task title must be non-empty and description must be a string.')
+        if action == 'create':
+            return self.create_task(actor, project_id, changes.get('title', ''),
+                                    changes.get('description', ''), changes.get('status', 'active'))
+        if action == 'list':
+            return self.list_tasks(actor, project_id)
+        transaction = self.uow.read if action == 'get' else self.uow.write
+        with transaction() as tx:
+            task = tx.workspaces.get_task(entity_id, project_id)
             if task is None:
                 raise ProductError('Task not found.', 'not_found')
-            if task.revision != expected_revision or status not in transitions.get(task.status, set()):
-                raise Conflict('Task changed or this transition is not allowed. Refresh and review its state.')
-            if status in ('released', 'archived') and tx.requirements.active_requirements(task.id):
+            if action == 'get':
+                return task
+            if task.revision != expected_version or task.status == TaskStatus.DELETED:
+                raise Conflict('Task version is stale or the Task is deleted.')
+            target = 'deleted' if action == 'delete' else changes.get('status', task.status)
+            transitions = {
+                'draft': {'active', 'archived'},
+                'active': {'testing', 'paused', 'archived'},
+                'testing': {'active', 'paused', 'released', 'archived'},
+                'paused': {task.paused_from},
+                'released': {'active', 'archived'},
+                'archived': {'active', 'released'},
+            }
+            if action != 'delete' and target != task.status and target not in transitions[task.status]:
+                raise Conflict('This Task transition is not allowed.')
+            if target != task.status and target in ('released', 'archived') and tx.requirements.active_requirements(task.id):
                 raise Conflict('Archive the active Requirements before completing or releasing this Task.')
-            tx.workspaces.transition_task(task, status)
-            if status in ('released', 'archived'):
+            changed = replace(task, title=changes.get('title', task.title),
+                description=changes.get('description', task.description), status=TaskStatus(target),
+                paused_from=(task.paused_from if task.status == target else task.status) if target == 'paused' else None,
+                revision=task.revision + 1)
+            tx.workspaces.update_task(changed, expected_version)
+            if target != task.status and target in ('released', 'archived', 'deleted'):
                 tx.knowledge.deprecate_task_rules(task.id)
-            tx.audit.record(project_id, actor.id, 'task.transitioned', task.id,
-                            {'from': task.status, 'to': status, 'reason': reason})
-            return tx.workspaces.get_task(task_id, project_id)
+                changed = tx.workspaces.get_task(task.id, project_id)
+            event = 'task.updated'
+            if action == 'delete':
+                event = 'task.deleted'
+            elif target != task.status:
+                event = ('task.reopened' if task.status == 'archived' and target == 'active' else
+                         'task.paused' if target == 'paused' else
+                         'task.resumed' if task.status == 'paused' else 'task.transitioned')
+            tx.audit.record(project_id, actor.id, event, task.id,
+                {'from': task.status, 'to': target, 'version': changed.revision, 'changes': changes, 'reason': reason})
+            return changed
 
     def start_session(self, actor: Actor, project_id: str, workspace: str,
                       task_id: str | None = None, agent_client: str = 'MCP', debug: bool = False,

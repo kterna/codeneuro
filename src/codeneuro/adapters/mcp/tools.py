@@ -1,7 +1,7 @@
 """One MCP tool catalogue shared by stdio and streamable HTTP."""
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 import json
 from typing import Optional
 
@@ -10,7 +10,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from ...modules.context import ContextQuery
 from ...modules.knowledge import Priority
-from ...modules.tasks import ProductError
+from ...modules.tasks import ProductError, Task
+from .inputs import Action, TaskChanges, RequirementChanges
 from ...modules.workspaces import Actor
 from ...workflows.product import Product
 
@@ -20,16 +21,24 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
     if actor_for_context is None:
         actor_for_context = lambda _ctx: Actor('mcp')
     server = MCPServer(name, instructions=(
-        'List Tasks first. Match active Task titles/descriptions locally using regex; choose explicitly '
-        'when several match. Submit original demand text to a bound Task, call get_context before '
-        'file or business work with explicit priorities (P0-P3). Reuse registered project topics from '
+        'Use codeneuro_task(action="list") first; match titles/descriptions and explicitly select a Task. '
+        'Task and Requirement CRUD use action, id, expected_version, changes and reason. '
+        'Reopen via update with changes.status="active"; archive completed Requirements with '
+        'changes.status="archived" and changes.summary. Delete is soft; history is preserved. '
+        'Bind an active/testing Task with start_session. Call get_context before file or business work '
+        'with explicit priorities (P0-P3). Reuse registered project topics from '
         'the session catalogue; topic-only queries do not require dummy files. Archive only '
         'Agent-confirmed completed Requirements. CodeNeuro neither '
         'edits files nor runs tests. A standard MCP installation does not intercept host tools.'))
 
     def output(value):
-        return json.dumps(asdict(value) if hasattr(value, '__dataclass_fields__') else value,
-                          ensure_ascii=False, default=str)
+        def encode(item):
+            if isinstance(item, Task):
+                fields = asdict(item)
+                fields['version'] = fields.pop('revision')
+                return fields
+            return asdict(item) if is_dataclass(item) else str(item)
+        return json.dumps(value, ensure_ascii=False, default=encode)
 
     def actor(ctx):
         try:
@@ -49,15 +58,26 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         return invoke(product.workspaces.list_projects, actor(ctx))
 
     @server.tool()
-    def codeneuro_list_tasks(project_id: str, ctx: Context) -> str:
-        """Return real Task titles/descriptions/states for Agent-side regex matching."""
-        return invoke(product.workspaces.list_tasks, actor(ctx), project_id)
+    def codeneuro_task(project_id: str, action: Action, ctx: Context, id: Optional[str] = None,
+                        expected_version: Optional[int] = None, changes: Optional[TaskChanges] = None,
+                        reason: str = '') -> str:
+        """Task CRUD. List before create; get includes deleted records. Create/update use changes.
+        Update/delete require id, current version and reason. Status updates cover pause, resume,
+        archive and reopen. Delete is soft; neither reopen nor deletion restores Rules."""
+        return invoke(product.workspaces.manage_task, actor(ctx), project_id, action, id,
+                      expected_version, changes.model_dump(exclude_unset=True) if changes else None, reason)
 
     @server.tool()
-    def codeneuro_create_task(project_id: str, title: str, ctx: Context,
-                              description: str = '', initial_status: str = 'active') -> str:
-        """Create a new Task only after checking existing Task candidates."""
-        return invoke(product.workspaces.create_task, actor(ctx), project_id, title, description, initial_status)
+    def codeneuro_requirement(task_id: str, action: Action, ctx: Context, id: Optional[str] = None,
+                               expected_version: Optional[int] = None, changes: Optional[RequirementChanges] = None,
+                               reason: str = '', request_id: Optional[str] = None) -> str:
+        """Requirement CRUD under one Task. Get includes version history, even after soft deletion.
+        Create requires changes.text; request_id optionally deduplicates creation. Update/delete
+        require id, current version and reason. Revisions preserve original text/history.
+        Update status to active to reopen, or archived with summary to complete; the last active
+        Requirement's archival completes its Task. Delete does not mark a Task completed."""
+        return invoke(product.requirements.manage_requirement, actor(ctx), task_id, action, id,
+                      expected_version, changes.model_dump(exclude_unset=True) if changes else None, reason, request_id)
 
     @server.tool()
     def codeneuro_start_session(project_id: str, workspace: str, ctx: Context,
@@ -65,9 +85,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
                                 machine_name: str = 'not_attested', platform: str = 'unknown',
                                 repo_identity: Optional[str] = None, git_branch: str = '') -> str:
         """Pin a session to a client-attested worktree; Hub cannot inspect remote files.
-        Note: debug=True is required if the session will provide rule ratings/feedback
-        (codeneuro_rate_rule) or report issues (codeneuro_report_issue). Production sessions
-        default to debug=False to avoid diagnostic pollution."""
+        A selected Task must be active/testing. Set debug=True for rule ratings or Issues."""
         def start():
             who = actor(ctx)
             session = product.workspaces.start_session(who, project_id, workspace, task_id,
@@ -76,12 +94,6 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
             return {**asdict(session), 'protocol_version': 2,
                     'topic_catalog': product.topics.list_topics(who, project_id, limit=30)}
         return invoke(start)
-
-    @server.tool()
-    def codeneuro_submit_requirement(session_id: str, text: str, ctx: Context,
-                                     request_id: Optional[str] = None) -> str:
-        """Persist original Requirement text under the session's selected Task."""
-        return invoke(product.requirements.submit_requirement, actor(ctx), session_id, text, request_id)
 
     @server.tool()
     def codeneuro_get_context(session_id: str, priorities: list[str], ctx: Context,
@@ -170,13 +182,6 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         """Propose an exact Task candidate snapshot for an existing contract; human review remains mandatory."""
         return invoke(product.knowledge.propose_contract, actor(ctx), session_id, target_rule_id,
                       expected_target_version, candidate_rule_id, expected_candidate_version, reason)
-
-    @server.tool()
-    def codeneuro_archive_requirement(session_id: str, requirement_id: str,
-                                      expected_version: int, summary: str, ctx: Context) -> str:
-        """Archive Agent-confirmed completion; the final active demand completes its Task."""
-        return invoke(product.requirements.archive_requirement, actor(ctx), session_id,
-                      requirement_id, expected_version, summary)
 
     @server.tool()
     def codeneuro_record_finding(session_id: str, text: str, topics: list[str],

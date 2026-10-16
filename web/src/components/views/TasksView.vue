@@ -11,6 +11,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'submit-demand', payload: { text: string; taskId?: string; requestId?: string; onSuccess?: () => void }): void
   (e: 'open-archive', req: Requirement): void
+  (e: 'open-reopen-requirement', req: Requirement): void
   (e: 'open-pause', task: Task): void
   (e: 'open-resume', task: Task): void
   (e: 'open-transition', task: Task): void
@@ -533,6 +534,10 @@ function closeTaskDetail() {
           <h3 style="margin: 0">关联业务需求条目 ({{ getTaskRequirements(focusedTask.id).length }})</h3>
         </div>
 
+        <p v-if="focusedTask.status === 'archived'" class="caption">
+          如需继续此任务，请先通过「流转状态」重新激活为进行中，再恢复指定需求；已停用规则不会自动恢复。
+        </p>
+
         <div v-if="!getTaskRequirements(focusedTask.id).length" class="empty compact">
           该任务暂未挂载具体的需求条目。
         </div>
@@ -555,6 +560,14 @@ function closeTaskDetail() {
                 @click="emit('open-archive', req)"
               >
                 确认归档
+              </button>
+              <button
+                v-else-if="req.status === 'archived' && ['active', 'testing'].includes(focusedTask.status)"
+                class="subtle"
+                :disabled="busy"
+                @click="emit('open-reopen-requirement', req)"
+              >
+                恢复需求
               </button>
             </div>
 

@@ -8,4 +8,6 @@
 
 v2 查询必须传非空 `priorities` 数组。可只传项目已登记的 `topics` 而完全不传文件；有主题时主题决定准入，无主题时回退为文件匹配。`start_session` 返回有界主题目录及 `taxonomy_revision`，目录截断时才按需搜索/分页，不必每次查询前重复获取。项目分类未确认启用时只允许文件模式；旧分类和 `min_priority` 不再支持。详见 [v2 契约](topics-v2.md)。
 
+已归档任务可在 Web 的「流转状态」中直接选「进行中」重新激活；MCP 使用 `codeneuro_task(action="update", changes={"status":"active"}, ...)`，然后创建绑定该 Task 的 Session。需求通过 `codeneuro_requirement` 统一执行 CRUD，重开同样是 update status=active；归档为 update status=archived 并填写 summary。两者修改和删除均使用通用 id、expected_version、reason。需求正文可按版本修订，初始原文和历史下发不变；删除保留历史，重开不自动恢复其他需求或停用规则。完整参数见 [Task 与需求 CRUD](mcp-resources.md)。
+
 Web 使用 `/app/`；MCP 连接与配置见 [标准接入](agent-integrations.md)。当前不内置 CodeNeuro 远程路径自动发现器或宿主钩子；不要引用旧版 `codeneuro.client`、`codeneuro.cli`、`sync/export` API。

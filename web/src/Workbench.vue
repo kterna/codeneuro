@@ -80,11 +80,12 @@ const paletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
 const dialogRef = ref<InstanceType<typeof ActionDialog> | null>(null)
 
 // 模态弹窗状态 (新增 transition 模式支持 D22)
-const modalMode = ref<'project' | 'pause' | 'resume' | 'archive' | 'approve' | 'reject' | 'transition'>('project')
+const modalMode = ref<'project' | 'pause' | 'resume' | 'archive' | 'reopen-requirement' | 'approve' | 'reject' | 'transition'>('project')
 const modalTitle = computed(() => {
   switch (modalMode.value) {
     case 'project': return '注册新项目'
     case 'archive': return '确认业务需求完成归档'
+    case 'reopen-requirement': return '恢复已归档业务需求'
     case 'approve': return '批准长期契约变更'
     case 'reject': return '拒绝契约变更提案'
     case 'pause': return '暂停任务流转'
@@ -102,8 +103,9 @@ const transitionAvailableStatuses = computed<TaskStatus[]>(() => {
     active: ['testing', 'archived'],
     testing: ['active', 'released', 'archived'],
     released: ['active', 'archived'],
-    archived: ['released'],
+    archived: ['active', 'released'],
     paused: [],
+    deleted: [],
   }
   return transitions[currentStatus] || []
 })
@@ -384,6 +386,13 @@ function openArchive(req: Requirement) {
   dialogRef.value?.open()
 }
 
+function openReopenRequirement(req: Requirement) {
+  modalEpoch++
+  modalMode.value = 'reopen-requirement'
+  modalTarget.value = req
+  dialogRef.value?.open()
+}
+
 function openPause(task: Task) {
   modalEpoch++
   modalMode.value = 'pause'
@@ -478,6 +487,20 @@ async function handleDialogSubmit(data: {
       modalEpoch++
       dialogRef.value?.close()
       await refresh()
+    } else if (capturedMode === 'reopen-requirement') {
+      const req = capturedTarget as Requirement
+      await apiService.reopenRequirement(
+        capturedProjectId,
+        req.task_id,
+        req.id,
+        req.version,
+        data.reason || '',
+      )
+      if (!isModalContextValid()) return
+      notice.value = '需求已恢复为进行中，历史归档版本保留；已停用规则未恢复。'
+      modalEpoch++
+      dialogRef.value?.close()
+      await refresh()
     } else if (capturedMode === 'pause') {
       const t = capturedTarget as Task
       await apiService.pauseTask(capturedProjectId, t.id, t.revision, data.reason || '')
@@ -504,7 +527,9 @@ async function handleDialogSubmit(data: {
         data.reason || '人工状态转换',
       )
       if (!isModalContextValid()) return
-      notice.value = `任务状态已成功流转至 ${formatTaskStatusName(data.targetStatus)}。`
+      notice.value = t.status === 'archived' && data.targetStatus === 'active'
+        ? '任务已重新激活；历史需求和已停用规则保持不变，可按需恢复指定需求。'
+        : `任务状态已成功流转至 ${formatTaskStatusName(data.targetStatus)}。`
       modalEpoch++
       dialogRef.value?.close()
       await refresh()
@@ -638,6 +663,7 @@ onUnmounted(() => {
             :busy="busy"
             @submit-demand="handleSubmitDemand"
             @open-archive="openArchive"
+            @open-reopen-requirement="openReopenRequirement"
             @open-pause="openPause"
             @open-resume="openResume"
             @open-transition="openTransition"

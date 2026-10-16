@@ -3,7 +3,7 @@ export type Project = {
   name: string
 }
 
-export type TaskStatus = 'draft' | 'active' | 'paused' | 'testing' | 'released' | 'archived'
+export type TaskStatus = 'draft' | 'active' | 'paused' | 'testing' | 'released' | 'archived' | 'deleted'
 
 export type Task = {
   id: string
@@ -13,7 +13,7 @@ export type Task = {
   revision: number
 }
 
-export type RequirementStatus = 'active' | 'archived'
+export type RequirementStatus = 'active' | 'archived' | 'deleted'
 
 export type Requirement = {
   id: string

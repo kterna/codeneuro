@@ -137,6 +137,13 @@ export const apiService = {
       { expected_version: expectedVersion, summary },
     ),
 
+  reopenRequirement: (projectId: string, taskId: string, requirementId: string, expectedVersion: number, reason: string) =>
+    requestApi(
+      buildProjectPath(projectId, `tasks/${encodeURIComponent(taskId)}/requirements/${encodeURIComponent(requirementId)}/reopen`),
+      'POST',
+      { expected_version: expectedVersion, reason },
+    ),
+
   pauseTask: (projectId: string, taskId: string, expectedRevision: number, reason: string) =>
     requestApi(buildProjectPath(projectId, `tasks/${encodeURIComponent(taskId)}/pause`), 'POST', {
       expected_revision: expectedRevision,

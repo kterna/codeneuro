@@ -297,61 +297,66 @@ const inspectedRules = computed<Rule[]>(() => {
       </div>
     </details>
 
-    <!-- 规则适用检查 (解决 D04/D05/E15) -->
+    <!-- 规则适用检查 (方案 A: 紧凑工具栏) -->
     <div class="panel inspect-panel">
-      <div class="inspect-title-row">
-        <div class="inspect-title-group">
-          <span class="inspect-icon" aria-hidden="true">🎯</span>
-          <strong>规则适用检查</strong>
-        </div>
-        <span class="caption">输入代码相对路径，按服务端分段锚定规则精确匹配。</span>
-      </div>
       <form class="inspect-form" @submit.prevent="handleInspect">
-        <fieldset class="inspect-priorities-fieldset">
-          <legend class="inspect-priorities-legend">显式选择查询等级（没有默认等级）</legend>
-          <div class="inspect-pills-row">
-            <label
-              v-for="p in priorityOptions"
-              :key="p"
-              class="priority-check-pill"
-              :class="{ 'is-checked': inspectPriorities.includes(p) }"
-            >
-              <input v-model="inspectPriorities" type="checkbox" :value="p" />
-              <span class="pill-label">{{ p }}</span>
-            </label>
+        <div class="inspect-controls-row">
+          <!-- 标题与等级选择紧凑区 -->
+          <div class="inspect-brand-group">
+            <span class="inspect-icon" aria-hidden="true">🎯</span>
+            <span class="inspect-title-text">规则适用检查</span>
+            <div class="inspect-pills-row" role="group" aria-label="显式选择查询等级">
+              <label
+                v-for="p in priorityOptions"
+                :key="p"
+                class="priority-check-pill"
+                :class="{ 'is-checked': inspectPriorities.includes(p) }"
+                :title="`查询 ${p} 等级规则`"
+              >
+                <input v-model="inspectPriorities" type="checkbox" :value="p" />
+                <span class="pill-label">{{ p }}</span>
+              </label>
+            </div>
           </div>
-        </fieldset>
-        <div class="inspect-inputs">
-          <input
-            v-model="inspectFilePath"
-            class="input font-mono"
-            placeholder="输入文件相对路径，如 src/pay/refund.py"
-            required
-          />
-          <select v-model="inspectTaskId" class="select" aria-label="关联任务上下文">
-            <option value="">仅长期核心契约 (无任务)</option>
-            <option v-for="t in availableTasks" :key="t.id" :value="t.id">
-              [{{ formatTaskStatus(t.status) }}] {{ t.title }}
-            </option>
-          </select>
-          <button type="submit" class="button primary" :disabled="inspectLoading || !inspectFilePath.trim() || !inspectPriorities.length">
-            {{ inspectLoading ? '检查中…' : '检查适用规则' }}
-          </button>
+
+          <!-- 输入与操作区 -->
+          <div class="inspect-inputs">
+            <input
+              v-model="inspectFilePath"
+              class="input font-mono"
+              placeholder="输入文件相对路径，如 src/pay/refund.py"
+              required
+              aria-label="输入文件相对路径"
+            />
+            <select v-model="inspectTaskId" class="select" aria-label="关联任务上下文">
+              <option value="">仅长期核心契约 (无任务)</option>
+              <option v-for="t in availableTasks" :key="t.id" :value="t.id">
+                [{{ formatTaskStatus(t.status) }}] {{ t.title }}
+              </option>
+            </select>
+            <button type="submit" class="button primary" :disabled="inspectLoading || !inspectFilePath.trim() || !inspectPriorities.length">
+              {{ inspectLoading ? '检查中…' : '检查适用规则' }}
+            </button>
+          </div>
         </div>
       </form>
 
       <!-- 探测结果区 -->
-      <div v-if="inspectError" class="error-box" role="alert">
-        {{ inspectError }}
+      <div v-if="inspectError" class="error-box inspect-results" role="alert">
+        <span>{{ inspectError }}</span>
+        <button type="button" class="inspect-close-btn" aria-label="关闭" @click="invalidateInspect">×</button>
       </div>
       <div v-else-if="inspectResult" class="inspect-results">
-        <div class="inspect-summary">
-          <span>
-            目标路径：<code>{{ inspectResult.path }}</code> ·
-            关联任务：<code>{{ resultTaskLabel }}</code> ·
-            匹配规则：<strong>{{ inspectResult.rule_ids.length }}</strong> 条
-            ({{ inspectResult.task_id ? '包含选定任务规则' : '仅项目全局规则' }})
-          </span>
+        <div class="inspect-results-header">
+          <div class="inspect-summary">
+            <span>
+              目标路径：<code>{{ inspectResult.path }}</code> ·
+              关联任务：<code>{{ resultTaskLabel }}</code> ·
+              匹配规则：<strong>{{ inspectResult.rule_ids.length }}</strong> 条
+              <span class="caption">({{ inspectResult.task_id ? '包含选定任务规则' : '仅项目全局规则' }})</span>
+            </span>
+          </div>
+          <button type="button" class="inspect-close-btn" aria-label="收起结果" title="收起检查结果" @click="invalidateInspect">×</button>
         </div>
         <div v-if="!inspectedRules.length" class="empty-compact">
           该路径无适用规则（未命中全局契约或所选任务规则）。
@@ -528,77 +533,70 @@ details[open] .summary-arrow {
   font-size: 11px;
 }
 
-/* 探测面板 */
+/* 探测面板 (紧凑工具栏) */
 .inspect-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   background: var(--gh-canvas-subtle);
   border: 1px solid var(--gh-border-default);
   border-radius: 6px;
-  padding: 14px;
+  padding: 8px 12px;
 }
 
-.inspect-title-row {
+.inspect-form {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
 }
 
-.inspect-title-group {
+.inspect-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inspect-brand-group {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.inspect-title-text {
   font-size: 13px;
+  font-weight: 600;
   color: var(--gh-fg-default);
+  white-space: nowrap;
 }
 
 .inspect-icon {
   font-size: 14px;
 }
 
-.inspect-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.inspect-priorities-fieldset {
-  border: 1px solid var(--gh-border-muted);
-  border-radius: 6px;
-  padding: 8px 12px;
-  margin: 0;
-  background: var(--gh-canvas-default);
-}
-
-.inspect-priorities-legend {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--gh-fg-muted);
-  padding: 0 4px;
-}
-
 .inspect-pills-row {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 4px;
   align-items: center;
+  margin-left: 4px;
 }
 
 .priority-check-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
+  gap: 4px;
+  padding: 2px 8px;
   border-radius: 12px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  background: var(--gh-canvas-subtle);
+  background: var(--gh-canvas-default);
   border: 1px solid var(--gh-border-default);
   color: var(--gh-fg-default);
   user-select: none;
-  transition: all 0.1s ease;
+  transition: all 0.15s ease;
+  line-height: 1.4;
 }
 
 .priority-check-pill input {
@@ -617,23 +615,49 @@ details[open] .summary-arrow {
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+  flex: 1;
+  min-width: 320px;
 }
 
 .inspect-inputs input {
   flex: 1;
-  min-width: 240px;
-}
-
-.inspect-inputs select {
   min-width: 180px;
 }
 
+.inspect-inputs select {
+  min-width: 160px;
+  max-width: 220px;
+}
+
 .inspect-results {
-  margin-top: 10px;
-  padding: 10px 14px;
+  margin-top: 4px;
+  padding: 8px 12px;
   background: var(--gh-canvas-inset);
   border: 1px solid var(--gh-border-default);
   border-radius: 6px;
+}
+
+.inspect-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.inspect-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--gh-fg-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.inspect-close-btn:hover {
+  color: var(--gh-fg-default);
+  background: var(--gh-canvas-subtle);
 }
 
 .inspect-summary {
@@ -644,18 +668,18 @@ details[open] .summary-arrow {
 .rule-match-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .rule-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: var(--gh-surface-card);
   border: 1px solid var(--gh-border-default);
-  padding: 5px 10px;
-  border-radius: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
 }
 
 .rule-chip-title {
