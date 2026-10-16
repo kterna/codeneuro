@@ -15,7 +15,7 @@ def _task(row):
                 TaskStatus(row['paused_from']) if row['paused_from'] else None) if row else None
 
 def _requirement(row):
-    return Requirement(row['id'], row['project_id'], row['task_id'], row['original_text'],
+    return Requirement(row['id'], row['project_id'], row['task_id'], row['current_text'],
                        RequirementStatus(row['status']), row['version'], row['completion_summary']) if row else None
 
 def _rule(row, topics=()):

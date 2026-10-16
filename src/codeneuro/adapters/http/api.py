@@ -131,6 +131,12 @@ def create_router(product: Product):
         return call(product.requirements.archive_by_human, web_actor, project_id,
                     task_id, requirement_id, body.expected_version, body.summary)
 
+    @router.post('/projects/{project_id}/tasks/{task_id}/requirements/{requirement_id}/reopen')
+    def reopen_requirement(project_id: str, task_id: str, requirement_id: str,
+                           body: VersionedInput):
+        return call(product.requirements.reopen_by_human, web_actor, project_id,
+                    task_id, requirement_id, body.expected_version, body.reason)
+
     @router.post('/projects/{project_id}/proposals/{proposal_id}/review')
     def review(project_id: str, proposal_id: str, body: ReviewInput):
         return call(product.knowledge.review_contract, web_actor, project_id,

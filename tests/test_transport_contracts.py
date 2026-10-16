@@ -44,12 +44,44 @@ async def test_real_stdio_mcp_works_without_token_or_client_declarations(configu
         async with ClientSession(reader, writer) as session:
             await session.initialize()
             tools = await session.list_tools()
-            assert {'codeneuro_list_tasks', 'codeneuro_get_context'} <= {item.name for item in tools.tools}
+            assert {'codeneuro_task', 'codeneuro_requirement', 'codeneuro_get_context'} <= {item.name for item in tools.tools}
             projects = await session.call_tool('codeneuro_list_projects', {})
             assert json.loads(projects.content[0].text) == [{'id': 'p', 'name': 'test project', 'rule_revision': 0,
                                                             'taxonomy_revision': 0, 'topic_query_enabled': False}]
-            task = await session.call_tool('codeneuro_create_task', {'project_id': 'p', 'title': 'Real MCP'})
+            task = await session.call_tool('codeneuro_task', {
+                'project_id': 'p', 'action': 'create', 'changes': {'title': 'Real MCP'}})
             assert json.loads(task.content[0].text)['title'] == 'Real MCP'
+            task_id = json.loads(task.content[0].text)['id']
+            bound = await session.call_tool('codeneuro_start_session', {
+                'project_id': 'p', 'workspace': 'stdio-worktree', 'task_id': task_id})
+            session_id = json.loads(bound.content[0].text)['id']
+            demand = await session.call_tool('codeneuro_requirement', {
+                'task_id': task_id, 'action': 'create', 'changes': {'text': 'Unfinished work'}})
+            requirement_id = json.loads(demand.content[0].text)['id']
+            archived = await session.call_tool('codeneuro_requirement', {
+                'task_id': task_id, 'action': 'update', 'id': requirement_id, 'expected_version': 1,
+                'changes': {'status': 'archived', 'summary': 'Premature completion'}, 'reason': 'Completed'})
+            assert not archived.is_error
+            tasks = await session.call_tool('codeneuro_task', {'project_id': 'p', 'action': 'list'})
+            current = json.loads(tasks.content[0].text)[0]
+            assert 'codeneuro_reopen_task' not in {item.name for item in tools.tools}
+            reopened = await session.call_tool('codeneuro_task', {
+                'project_id': 'p', 'action': 'update', 'id': task_id, 'expected_version': current['version'],
+                'changes': {'status': 'active'}, 'reason': 'User requests continuation'})
+            assert not reopened.is_error
+            follow_up = await session.call_tool('codeneuro_start_session', {
+                'project_id': 'p', 'workspace': 'stdio-follow-up', 'task_id': task_id})
+            assert not follow_up.is_error
+            assert json.loads(follow_up.content[0].text)['task_id'] == task_id
+            listed = await session.call_tool('codeneuro_requirement', {'task_id': task_id, 'action': 'list'})
+            requirement = json.loads(listed.content[0].text)[0]
+            assert requirement['id'] == requirement_id and requirement['status'] == 'archived'
+            restored = await session.call_tool('codeneuro_requirement', {
+                'task_id': task_id, 'action': 'update', 'id': requirement_id,
+                'expected_version': requirement['version'], 'changes': {'status': 'active'}, 'reason': 'Still unfinished'})
+            assert not restored.is_error
+            assert json.loads(restored.content[0].text)['version'] == 3
+            assert json.loads(restored.content[0].text)['status'] == 'active'
 
 
 @pytest.mark.asyncio
@@ -116,6 +148,54 @@ async def test_web_api_direct_entry_intake_archive_and_ledger(configured):
 
 
 @pytest.mark.asyncio
+async def test_web_reopens_archived_task_and_selected_requirement(configured):
+    _, _, product = configured
+    app = create_http_app(product)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url='http://localhost') as client:
+            created = await client.post('/api/projects/p/requirements',
+                json={'text': 'Unfinished work', 'request_id': 'reopen-web', 'title': 'Continue work'})
+            assert created.status_code == 200
+            requirement = created.json()
+            task_url = f"/api/projects/p/tasks/{requirement['task_id']}"
+            requirement_url = f"{task_url}/requirements/{requirement['id']}"
+            archived = await client.post(requirement_url + '/archive',
+                json={'expected_version': 1, 'summary': 'Premature completion'})
+            assert archived.status_code == 200
+            current = (await client.get('/api/projects/p/tasks')).json()[0]
+            assert current['status'] == 'archived'
+            blocked = await client.post(requirement_url + '/reopen',
+                json={'expected_version': 2, 'reason': 'Task is still archived'})
+            assert blocked.status_code == 409
+            stale = await client.post(task_url + '/transition',
+                json={'expected_revision': current['revision'] - 1, 'status': 'active', 'reason': 'Stale'})
+            assert stale.status_code == 409
+            reopened = await client.post(task_url + '/transition',
+                json={'expected_revision': current['revision'], 'status': 'active', 'reason': 'Continue work'})
+            assert reopened.status_code == 200, reopened.text
+            assert reopened.json()['id'] == current['id'] and reopened.json()['status'] == 'active'
+            for version, reason, expected_status in ((1, 'Stale', 409), (2, ' ', 400), (2, 'Continue', 200)):
+                restored = await client.post(requirement_url + '/reopen',
+                    json={'expected_version': version, 'reason': reason})
+                assert restored.status_code == expected_status, restored.text
+            assert restored.json()['text'] == requirement['text']
+            assert restored.json()['version'] == 3 and restored.json()['summary'] is None
+            duplicate = await client.post(requirement_url + '/reopen',
+                json={'expected_version': 2, 'reason': 'Retry'})
+            assert duplicate.status_code == 409
+            ledger = (await client.get('/api/projects/p/ledger')).json()
+            assert ledger['tasks'][0]['status'] == 'active'
+            assert ledger['requirements'][0]['status'] == 'active'
+            assert sum(e['action'] == 'task.reopened' for e in ledger['events']) == 1
+            assert sum(e['action'] == 'requirement.reopened' for e in ledger['events']) == 1
+            completed = await client.post(requirement_url + '/archive',
+                json={'expected_version': 3, 'summary': 'Actually complete'})
+            assert completed.status_code == 200 and completed.json()['version'] == 4
+            assert (await client.get('/api/projects/p/tasks')).json()[0]['status'] == 'archived'
+
+
+@pytest.mark.asyncio
 async def test_real_streamable_http_mcp_matches_stdio_without_bearer(configured):
     _, _, product = configured
     app = create_http_app(product)
@@ -126,12 +206,13 @@ async def test_real_streamable_http_mcp_matches_stdio_without_bearer(configured)
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
                     names = {item.name for item in (await session.list_tools()).tools}
-                    assert {'codeneuro_get_context','codeneuro_archive_requirement'} <= names
+                    assert {'codeneuro_get_context', 'codeneuro_task', 'codeneuro_requirement'} <= names
+                    assert 'codeneuro_reopen_task' not in names
                     result = await session.call_tool('codeneuro_list_projects', {})
                     assert not result.is_error
                     assert json.loads(result.content[0].text)[0]['id'] == 'p'
-                    created = await session.call_tool('codeneuro_create_task',
-                        {'project_id': 'p', 'title': 'Remote Task'})
+                    created = await session.call_tool('codeneuro_task',
+                        {'project_id': 'p', 'action': 'create', 'changes': {'title': 'Remote Task'}})
                     task = json.loads(created.content[0].text)
                     opened = await session.call_tool('codeneuro_start_session', {
                         'project_id': 'p', 'workspace': 'C:/Work/Repo', 'task_id': task['id'],

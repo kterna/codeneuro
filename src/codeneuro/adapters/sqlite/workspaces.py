@@ -51,18 +51,28 @@ class WorkspacesRepo(Repo):
     def list_projects(self):
         return [dict(r) for r in self.c.execute(sa.select(s.projects).order_by(s.projects.c.id)).mappings()]
 
-    def get_task(self, task_id, project_id):
-        return _task(self._one(sa.select(s.tasks).where(s.tasks.c.id == task_id,
-                                                       s.tasks.c.project_id == project_id)))
+    def get_task(self, task_id, project_id=None):
+        statement = sa.select(s.tasks).where(s.tasks.c.id == task_id)
+        if project_id is not None:
+            statement = statement.where(s.tasks.c.project_id == project_id)
+        return _task(self._one(statement))
 
     def list_tasks(self, project_id):
         return [_task(r) for r in self.c.execute(sa.select(s.tasks).where(
-            s.tasks.c.project_id == project_id).order_by(s.tasks.c.id)).mappings()]
+            s.tasks.c.project_id == project_id, s.tasks.c.status != TaskStatus.DELETED).order_by(s.tasks.c.id)).mappings()]
 
     def create_task(self, task):
         self.c.execute(s.tasks.insert().values(id=task.id, project_id=task.project_id,
             title=task.title, description=task.description, status=task.status,
             revision=task.revision, paused_from=task.paused_from))
+
+    def update_task(self, task, expected_version):
+        result = self.c.execute(s.tasks.update().where(
+            s.tasks.c.id == task.id, s.tasks.c.revision == expected_version).values(
+            title=task.title, description=task.description, status=task.status,
+            paused_from=task.paused_from, revision=task.revision))
+        if result.rowcount != 1:
+            raise Conflict('Task version is stale.')
 
     def complete_task(self, task_id):
         self.c.execute(s.tasks.update().where(s.tasks.c.id == task_id).values(

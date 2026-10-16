@@ -69,6 +69,195 @@ def test_requirement_original_text_and_last_archive_are_atomic(app):
     assert global_rule.id in after.markdown and task_rule.id not in after.markdown
 
 
+def test_reopen_preserves_history_and_only_restores_selected_requirement(app):
+    service, uow, human, agent, task, session, _ = app
+    first = service.requirements.submit_requirement(agent, session.id, 'Payment still needs work', 'first')
+    second = service.requirements.submit_requirement(agent, session.id, 'Refund is complete', 'second')
+    rule = service.knowledge.create_rule(human, 'p', 'Temporary', ('Do not revive automatically',),
+                                         ('src/**',), task_id=task.id)
+    with uow.write() as tx:
+        tx.requirements.link_rule(first.id, rule.id)
+    query = ContextQuery(('src/pay.py',))
+    original_delivery = service.context.get_context(agent, session.id, query, 'before-archive')
+    service.requirements.archive_requirement(agent, session.id, first.id, 1, 'Premature completion')
+    service.requirements.archive_requirement(agent, session.id, second.id, 1, 'Verified refund')
+    archived_task = service.workspaces.list_tasks(agent, 'p')[0]
+    with pytest.raises(Conflict, match='active/testing'):
+        service.workspaces.start_session(agent, 'p', 'follow-up', task.id)
+
+    reopened_task = service.workspaces.manage_task(agent, 'p', 'update', task.id,
+        archived_task.revision, {'status': 'active'}, 'User requests remaining work')
+    follow_up = service.workspaces.start_session(agent, 'p', 'follow-up', task.id)
+    assert reopened_task.id == task.id and reopened_task.status == TaskStatus.ACTIVE
+    assert reopened_task.revision == archived_task.revision + 1
+    assert follow_up.task_id == task.id
+    requirements = service.requirements.list_requirements(agent, follow_up.id)
+    assert {item.id for item in requirements} == {first.id, second.id}
+    assert all(item.status == 'archived' and item.version == 2 for item in requirements)
+    assert not service.context.get_context(agent, follow_up.id, query, 'task-only').requirement_refs
+
+    restored = service.requirements.reopen_requirement(agent, follow_up.id, first.id, 2,
+                                                       'User confirms payment is unfinished')
+    assert restored.id == first.id and restored.text == first.text
+    assert restored.status == 'active' and restored.version == 3 and restored.summary is None
+    with uow.read() as tx:
+        assert tx.workspaces.get_task(task.id, 'p').revision == reopened_task.revision + 1
+        assert tx.requirements.get_requirement(second.id, task.id).status == 'archived'
+        assert tx.requirements.get_requirement(second.id, task.id).summary == 'Verified refund'
+        assert tx.knowledge.get_rule(rule.id).status == 'deprecated'
+        versions = tx.c.execute(text(
+            'SELECT version, status, completion_summary, original_text FROM requirement_versions '
+            'WHERE requirement_id=:id ORDER BY version'), {'id': first.id}).all()
+        assert [tuple(row) for row in versions] == [
+            (1, 'active', None, first.text),
+            (2, 'archived', 'Premature completion', first.text),
+            (3, 'active', None, first.text),
+        ]
+    delivered = service.context.get_context(agent, follow_up.id, query, 'after-reopen')
+    assert delivered.requirement_refs == ((first.id, 3),)
+    assert rule.id not in delivered.markdown
+    assert service.context.get_context(agent, session.id, query, 'before-archive') == original_delivery
+    with pytest.raises(Conflict):
+        service.requirements.archive_requirement(agent, follow_up.id, first.id, 1, 'Premature completion')
+    completed = service.requirements.archive_requirement(agent, follow_up.id, first.id, 3, 'Actually finished')
+    assert completed.version == 4
+    assert service.workspaces.list_tasks(agent, 'p')[0].status == TaskStatus.ARCHIVED
+
+
+@pytest.mark.parametrize('status', ['active', 'testing'])
+def test_reopen_requirement_in_working_task_preserves_other_requirements(app, status):
+    service, _, human, agent, task, session, _ = app
+    first = service.requirements.submit_requirement(agent, session.id, 'Recheck this', 'first')
+    second = service.requirements.submit_requirement(agent, session.id, 'Still active', 'second')
+    service.requirements.archive_requirement(agent, session.id, first.id, 1, 'Finished too soon')
+    current = service.workspaces.list_tasks(agent, 'p')[0]
+    if status == 'testing':
+        current = service.workspaces.transition_task(human, 'p', task.id, current.revision,
+                                                     'testing', 'Review remaining work')
+    restored = service.requirements.reopen_requirement(agent, session.id, first.id, 2, 'Not done')
+    assert restored.status == 'active'
+    requirements = {item.id: item for item in service.requirements.list_requirements(agent, session.id)}
+    assert requirements[second.id] == second
+    updated = service.workspaces.list_tasks(agent, 'p')[0]
+    assert updated.status == status and updated.revision == current.revision + 1
+
+
+@pytest.mark.parametrize('status,target', [
+    ('draft', 'released'), ('active', 'draft'), ('paused', 'released'),
+    ('archived', 'testing'), ('deleted', 'active'),
+])
+def test_task_update_rejects_invalid_transitions(app, status, target):
+    service, uow, _, agent, task, _, _ = app
+    with uow.write() as tx:
+        tx.c.execute(text('UPDATE tasks SET status=:status WHERE id=:id'), {'status': status, 'id': task.id})
+    with pytest.raises(Conflict):
+        service.workspaces.manage_task(agent, 'p', 'update', task.id, task.revision,
+                                       {'status': target}, 'Change status')
+    assert service.workspaces.manage_task(agent, 'p', 'get', task.id).status == status
+
+
+def test_reopen_checks_versions_scope_and_explicit_reason(app):
+    service, _, human, agent, task, session, _ = app
+    demand = service.requirements.submit_requirement(agent, session.id, 'Not done', 'demand')
+    service.requirements.archive_requirement(agent, session.id, demand.id, 1, 'Premature')
+    archived = service.workspaces.list_tasks(agent, 'p')[0]
+    with pytest.raises(Conflict):
+        service.workspaces.manage_task(agent, 'p', 'update', task.id,
+            archived.revision - 1, {'status': 'active'}, 'Stale')
+    with pytest.raises(ProductError, match='reason'):
+        service.workspaces.manage_task(agent, 'p', 'update', task.id,
+            archived.revision, {'status': 'active'}, ' ')
+    with pytest.raises(ProductError, match='Task not found'):
+        service.workspaces.manage_task(agent, 'q', 'update', task.id,
+            archived.revision, {'status': 'active'}, 'Wrong project')
+    with pytest.raises(Conflict, match='Task before'):
+        service.requirements.reopen_requirement(agent, session.id, demand.id, 2, 'Task still archived')
+    reopened = service.workspaces.manage_task(agent, 'p', 'update', task.id,
+        archived.revision, {'status': 'active'}, 'Continue')
+    with pytest.raises(Conflict):
+        service.workspaces.manage_task(agent, 'p', 'update', task.id,
+            archived.revision, {'status': 'active'}, 'Retry')
+    with pytest.raises(Conflict):
+        service.requirements.reopen_requirement(agent, session.id, demand.id, 1, 'Stale')
+    with pytest.raises(ProductError, match='reason'):
+        service.requirements.reopen_requirement(agent, session.id, demand.id, 2, ' ')
+
+    for project in ('p', 'q'):
+        other = service.workspaces.create_task(agent, project, 'Unrelated')
+        other_session = service.workspaces.start_session(agent, project, f'other-{project}', other.id)
+        assert service.requirements.list_requirements(agent, other_session.id) == []
+        with pytest.raises(ProductError, match='outside this Task'):
+            service.requirements.reopen_requirement(agent, other_session.id, demand.id, 2, 'Wrong Task')
+    unbound = service.workspaces.start_session(agent, 'p', 'unbound')
+    with pytest.raises(ProductError, match='Select a Task'):
+        service.requirements.list_requirements(agent, unbound.id)
+    with pytest.raises(ProductError, match='outside this Task'):
+        service.requirements.reopen_requirement(agent, unbound.id, demand.id, 2, 'No Task')
+    with pytest.raises(ProductError, match='outside this Task'):
+        service.requirements.reopen_by_human(human, 'q', task.id, demand.id, 2, 'Wrong project')
+    with pytest.raises(ProductError, match='Human review'):
+        service.requirements.reopen_by_human(agent, 'p', task.id, demand.id, 2, 'Wrong entry')
+
+    paused = service.workspaces.pause_task(human, 'p', task.id, reopened.revision, 'Wait')
+    with pytest.raises(Conflict, match='Task before'):
+        service.requirements.reopen_requirement(agent, session.id, demand.id, 2, 'Still paused')
+    service.workspaces.resume_task(human, 'p', task.id, paused.revision, 'Continue')
+    restored = service.requirements.reopen_requirement(agent, session.id, demand.id, 2, 'Continue')
+    with pytest.raises(Conflict):
+        service.requirements.reopen_requirement(agent, session.id, demand.id, 2, 'Retry')
+    with pytest.raises(Conflict):
+        service.requirements.reopen_requirement(agent, session.id, demand.id, restored.version, 'Already active')
+
+
+@pytest.mark.parametrize('overrides', [
+    {'entity_id': None}, {'expected_version': None}, {'reason': ' '},
+    {'changes': {}}, {'action': 'get'}, {'action': 'delete'},
+])
+def test_crud_rejects_missing_or_irrelevant_arguments(app, overrides):
+    service, uow, _, agent, task, session, _ = app
+    options = {'action': 'update', 'entity_id': task.id, 'expected_version': task.revision,
+               'changes': {'status': 'testing'}, 'reason': 'Review'}
+    options.update(overrides)
+    with pytest.raises(ProductError):
+        service.workspaces.manage_task(agent, 'p', **options)
+    assert service.workspaces.list_tasks(agent, 'p')[0] == task
+    with uow.read() as tx:
+        assert tx.c.execute(text('SELECT count(*) FROM sessions')).scalar_one() == 1
+        assert tx.c.execute(text('SELECT count(*) FROM worktrees')).scalar_one() == 1
+
+
+@pytest.mark.parametrize('action', ['task.reopened', 'requirement.reopened'])
+def test_reopen_audit_failure_rolls_back_state_and_version(app, action):
+    service, uow, _, agent, task, session, _ = app
+    demand = service.requirements.submit_requirement(agent, session.id, 'Pending work', 'demand')
+    service.requirements.archive_requirement(agent, session.id, demand.id, 1, 'Premature')
+    current = service.workspaces.list_tasks(agent, 'p')[0]
+    if action == 'requirement.reopened':
+        current = service.workspaces.manage_task(agent, 'p', 'update', task.id,
+            current.revision, {'status': 'active'}, 'Continue')
+    with uow.write() as tx:
+        before = {table: tx.c.execute(text(f'SELECT count(*) FROM {table}')).scalar_one()
+                  for table in ('sessions', 'worktrees', 'audit')}
+        tx.c.execute(text(
+            f"CREATE TRIGGER reject_reopen BEFORE INSERT ON audit WHEN NEW.action='{action}' "
+            "BEGIN SELECT RAISE(ABORT,'injected failure'); END"))
+    with pytest.raises(Exception, match='injected failure'):
+        if action == 'requirement.reopened':
+            service.requirements.reopen_requirement(agent, session.id, demand.id, 2, 'Continue')
+        else:
+            service.workspaces.manage_task(agent, 'p', 'update', task.id,
+                current.revision, {'status': 'active'}, 'Continue')
+    with uow.read() as tx:
+        assert tx.workspaces.get_task(task.id, 'p') == current
+        requirement = tx.requirements.get_requirement(demand.id, task.id)
+        assert requirement.status == 'archived' and requirement.version == 2
+        assert requirement.summary == 'Premature'
+        assert tx.c.execute(text('SELECT count(*) FROM requirement_versions WHERE requirement_id=:id'),
+                            {'id': demand.id}).scalar_one() == 2
+        for table, count in before.items():
+            assert tx.c.execute(text(f'SELECT count(*) FROM {table}')).scalar_one() == count
+
+
 def test_scope_feedback_and_p0_survive_filter_and_budget(app):
     service, uow, human, agent, task, session, _ = app
     p0 = service.knowledge.create_rule(human, 'p', 'P0 guard', ('CRITICAL' * 160,), ('src/**',), Priority.P0)

@@ -2,7 +2,7 @@
 import sqlalchemy as sa
 
 metadata = sa.MetaData()
-CURRENT_SCHEMA = '2c4e8a6b901d'
+CURRENT_SCHEMA = '3d5f9b7c012e'
 
 projects = sa.Table('projects', metadata,
     sa.Column('id', sa.String(128), primary_key=True),
@@ -45,7 +45,7 @@ tasks = sa.Table('tasks', metadata,
     sa.Column('status', sa.String(16), nullable=False),
     sa.Column('revision', sa.Integer, nullable=False, server_default='0'),
     sa.Column('paused_from', sa.String(16)),
-    sa.CheckConstraint("status IN ('draft','active','testing','paused','released','archived')"),
+    sa.CheckConstraint("status IN ('draft','active','testing','paused','released','archived','deleted')", name='ck_tasks_status'),
     sa.CheckConstraint("paused_from IS NULL OR paused_from IN ('active','testing')"))
 
 worktrees = sa.Table('worktrees', metadata,
@@ -80,13 +80,14 @@ requirements = sa.Table('requirements', metadata,
     sa.Column('request_id', sa.String(128)),
     sa.Column('web_request_id', sa.String(128)),
     sa.Column('original_text', sa.Text, nullable=False),
+    sa.Column('current_text', sa.Text, nullable=False, server_default=''),
     sa.Column('status', sa.String(16), nullable=False),
     sa.Column('version', sa.Integer, nullable=False),
     sa.Column('completion_summary', sa.Text),
     sa.UniqueConstraint('session_id', 'request_id', name='uq_requirement_submission'),
     sa.UniqueConstraint('project_id', 'web_request_id', name='uq_web_requirement_intake'),
     sa.Index('ix_requirements_task_active', 'task_id', 'status'),
-    sa.CheckConstraint("status IN ('active','archived')"))
+    sa.CheckConstraint("status IN ('active','archived','deleted')", name='ck_requirements_status'))
 
 findings = sa.Table('findings', metadata,
     sa.Column('id', sa.String(128), primary_key=True),
