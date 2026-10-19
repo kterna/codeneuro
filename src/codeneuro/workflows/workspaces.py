@@ -54,6 +54,25 @@ class Workspaces:
             tx.workspaces.project_revision(project_id)
             return tx.workspaces.list_tasks(project_id)
 
+    def list_task_page(self, actor: Actor, project_id: str, *, statuses: tuple[str, ...] | None = None,
+                       cursor: str | None = None, limit: int = 20):
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ProductError('Task list limit must be 1–100.')
+        if cursor is not None and (not isinstance(cursor, str) or not cursor or len(cursor) > 128):
+            raise ProductError('Task list cursor must be a Task ID of 1–128 characters.')
+        allowed = {status.value for status in TaskStatus if status != TaskStatus.DELETED}
+        if statuses is not None and (not statuses or len(set(statuses)) != len(statuses)
+                                     or any(status not in allowed for status in statuses)):
+            raise ProductError('Task list statuses must be distinct non-deleted Task states; omit for all states.')
+        with self.uow.read() as tx:
+            tx.workspaces.project_revision(project_id)
+            tasks = tx.workspaces.list_tasks(project_id, statuses=statuses, cursor=cursor, limit=limit + 1)
+        return {'items': [{'id': task.id, 'title': task.title[:200], 'description': task.description[:200],
+                           'status': task.status, 'version': task.revision,
+                           'truncated': len(task.title) > 200 or len(task.description) > 200}
+                          for task in tasks[:limit]],
+                'next_cursor': tasks[limit - 1].id if len(tasks) > limit else None}
+
     def create_task(self, actor: Actor, project_id: str, title: str, description: str = '',
                     initial_status: str = 'active'):
         if not title.strip():
@@ -104,9 +123,13 @@ class Workspaces:
                                 {'status': status}, reason)
 
     def manage_task(self, actor: Actor, project_id: str, action: str, entity_id: str | None = None,
-                    expected_version: int | None = None, changes: dict | None = None, reason: str = ''):
+                    expected_version: int | None = None, changes: dict | None = None, reason: str = '',
+                    *, statuses: tuple[str, ...] | None = None, cursor: str | None = None,
+                    limit: int | None = None):
         changes = changes or {}
         validate_crud(action, entity_id, expected_version, changes, reason)
+        if action != 'list' and any(value is not None for value in (statuses, cursor, limit)):
+            raise ProductError('statuses, cursor and limit apply only to Task list.')
         if set(changes) - {'title', 'description', 'status'}:
             raise ProductError('Task changes support title, description and status.')
         if ('title' in changes and (not isinstance(changes['title'], str) or not changes['title'].strip())
@@ -116,7 +139,8 @@ class Workspaces:
             return self.create_task(actor, project_id, changes.get('title', ''),
                                     changes.get('description', ''), changes.get('status', 'active'))
         if action == 'list':
-            return self.list_tasks(actor, project_id)
+            return self.list_task_page(actor, project_id, statuses=statuses, cursor=cursor,
+                                       limit=20 if limit is None else limit)
         transaction = self.uow.read if action == 'get' else self.uow.write
         with transaction() as tx:
             task = tx.workspaces.get_task(entity_id, project_id)

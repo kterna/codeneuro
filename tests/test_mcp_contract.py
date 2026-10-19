@@ -9,6 +9,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from codeneuro.adapters.mcp.tools import create_mcp
 from codeneuro.adapters.sqlite.uow import SqliteUnitOfWork
+from codeneuro.modules.knowledge import Priority
 from codeneuro.modules.workspaces import Actor
 from codeneuro.workflows.product import Product
 from v2_helpers import configure_fixture, PLAN
@@ -31,6 +32,8 @@ def mcp(tmp_path):
 
 def unwrap(result):
     assert not result.is_error, result
+    assert result.structured_content is None
+    assert len(result.content) == 1
     return json.loads(result.content[0].text)
 
 
@@ -87,7 +90,7 @@ async def test_mcp_status_update_reopens_task_and_selected_requirement(mcp):
     with pytest.raises(ToolError, match='active/testing'):
         await server.call_tool('codeneuro_start_session', {
             'project_id': 'p', 'workspace': 'follow-up', 'task_id': task['id']})
-    listed = unwrap(await server.call_tool('codeneuro_task', {'project_id': 'p', 'action': 'list'}))
+    listed = unwrap(await server.call_tool('codeneuro_task', {'project_id': 'p', 'action': 'list'}))['items']
     assert isinstance(listed[0], dict) and listed[0]['status'] == 'archived'
     reopened = unwrap(await server.call_tool('codeneuro_task', {
         'project_id': 'p', 'action': 'update', 'id': task['id'], 'expected_version': listed[0]['version'],
@@ -119,6 +122,8 @@ async def test_mcp_status_update_reopens_task_and_selected_requirement(mcp):
 async def test_mcp_crud_revisions_soft_deletion_and_schema(mcp):
     server, _, _, _ = mcp
     tools = {tool.name: tool for tool in await server.list_tools()}
+    assert all(tool.output_schema is None for tool in tools.values())
+    assert {'statuses', 'cursor', 'limit'} <= tools['codeneuro_task'].input_schema['properties'].keys()
     common = {'action', 'id', 'expected_version', 'changes', 'reason'}
     for name in ('codeneuro_task', 'codeneuro_requirement'):
         assert common <= tools[name].input_schema['properties'].keys()
@@ -157,7 +162,8 @@ async def test_mcp_crud_revisions_soft_deletion_and_schema(mcp):
     assert current['status'] == 'active'
     unwrap(await server.call_tool('codeneuro_task', {'project_id': 'p', 'action': 'delete',
         'id': task['id'], 'expected_version': current['version'], 'reason': 'Withdrawn'}))
-    assert unwrap(await server.call_tool('codeneuro_task', {'project_id': 'p', 'action': 'list'})) == []
+    assert unwrap(await server.call_tool('codeneuro_task', {'project_id': 'p', 'action': 'list'})) == {
+        'items': [], 'next_cursor': None}
     assert unwrap(await server.call_tool('codeneuro_task', {'project_id': 'p', 'action': 'get', 'id': task['id']}))['status'] == 'deleted'
 
 
@@ -194,8 +200,113 @@ async def test_finding_mcp_reminds_other_task_session_and_appears_in_ledger(mcp)
         'session_id': another['id'], 'priorities': ['P0', 'P1', 'P2'],
         'file_path': 'src/refund/pay.py', 'intent': 'debugging'}))
     assert [finding['id'], 1] in delivery['finding_refs']
-    assert any(item['id'] == finding['id'] and item['kind'] == 'finding' for item in delivery['sections']['module_gotchas'])
+    assert 'sections' not in delivery
+    assert 'Unreviewed Finding' in delivery['markdown'] and finding['text'] in delivery['markdown']
     assert finding['id'] in {item['id'] for item in product.ledger.project(agent, 'p')['findings']}
+
+
+@pytest.mark.asyncio
+async def test_task_pages_bound_large_history_and_preserve_full_detail(mcp):
+    server, product, human, agent = mcp
+    tasks = []
+    for index in range(123):
+        task = product.workspaces.create_task(agent, 'p', f'{index:03d} ' + '任务标题' * 100,
+                                             '任务背景和业务描述' * 1000)
+        if index < 121:
+            task = product.workspaces.manage_task(agent, 'p', 'update', task.id, task.revision,
+                                                  {'status': 'archived'}, 'Historical task')
+        elif index == 121:
+            task = product.workspaces.manage_task(agent, 'p', 'update', task.id, task.revision,
+                                                  {'status': 'testing'}, 'Awaiting verification')
+        tasks.append(task)
+    deleted = tasks.pop(0)
+    product.workspaces.manage_task(agent, 'p', 'delete', deleted.id, deleted.revision, reason='Withdrawn')
+    product.workspaces.register_project(human, 'q', 'Other project')
+    product.workspaces.create_task(agent, 'q', 'Outside project')
+
+    args = {'project_id': 'p', 'action': 'list'}
+    seen = []
+    pages = 0
+    while True:
+        result = await server.call_tool('codeneuro_task', args)
+        page = unwrap(result)
+        assert len(result.content[0].text.encode('utf-8')) < 50 * 1024
+        assert 1 <= len(page['items']) <= 20
+        assert all(item['truncated'] and len(item['title']) == len(item['description']) == 200
+                   for item in page['items'])
+        seen.extend(item['id'] for item in page['items'])
+        pages += 1
+        if page['next_cursor'] is None:
+            break
+        assert page['next_cursor'] == page['items'][-1]['id']
+        args['cursor'] = page['next_cursor']
+    assert pages == 7
+    assert seen == sorted(task.id for task in tasks)
+
+    cursor = None
+    selected = []
+    for _ in range(2):
+        page = unwrap(await server.call_tool('codeneuro_task', {
+            'project_id': 'p', 'action': 'list', 'statuses': ['active', 'testing'], 'limit': 1, 'cursor': cursor}))
+        selected.extend(page['items'])
+        cursor = page['next_cursor']
+    assert cursor is None and {item['status'] for item in selected} == {'active', 'testing'}
+    assert {item['id'] for item in selected} == {task.id for task in tasks[-2:]}
+    archived = unwrap(await server.call_tool('codeneuro_task', {
+        'project_id': 'p', 'action': 'list', 'statuses': ['archived'], 'limit': 100}))
+    assert len(archived['items']) == 100 and archived['next_cursor']
+    assert all(item['status'] == 'archived' for item in archived['items'])
+    detail = unwrap(await server.call_tool('codeneuro_task', {
+        'project_id': 'p', 'action': 'get', 'id': tasks[-1].id}))
+    assert detail['title'] == tasks[-1].title and detail['description'] == tasks[-1].description
+    assert detail['version'] == tasks[-1].revision
+    empty = unwrap(await server.call_tool('codeneuro_task', {
+        'project_id': 'p', 'action': 'list', 'statuses': ['draft']}))
+    assert empty == {'items': [], 'next_cursor': None}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('options', [
+    {'limit': 0}, {'limit': 101}, {'cursor': ''}, {'cursor': 'x' * 129},
+    {'statuses': []}, {'statuses': ['active', 'active']}, {'statuses': ['deleted']},
+    {'statuses': ['unknown']},
+    {'action': 'create', 'changes': {'title': 'Wrong action'}, 'limit': 20},
+])
+async def test_task_list_rejects_invalid_or_misplaced_paging_options(mcp, options):
+    server, _, _, _ = mcp
+    with pytest.raises(ToolError):
+        await server.call_tool('codeneuro_task', {'project_id': 'p', 'action': 'list', **options})
+
+
+@pytest.mark.asyncio
+async def test_context_output_contains_body_once_and_preserves_delivery_snapshot(mcp):
+    server, product, human, agent = mcp
+    task = product.workspaces.create_task(agent, 'p', 'Compact context')
+    session = product.workspaces.start_session(agent, 'p', 'compact-worktree', task.id)
+    rule = product.knowledge.create_rule(human, 'p', 'Refund contract',
+        ('Unique rule clause for compact output',), ('src/**',), priority=Priority.P0, task_id=task.id)
+    requirement = product.requirements.manage_requirement(agent, task.id, 'create',
+        changes={'text': 'Unique requirement for compact output'})
+    finding = product.context.record_finding(agent, session.id, 'src/**',
+                                             'Unique finding for compact output')
+    args = {'session_id': session.id, 'priorities': ['P0', 'P1', 'P2'],
+            'files': ['src/pay.py'], 'request_id': 'compact-context'}
+    result = await server.call_tool('codeneuro_get_context', args)
+    delivery = unwrap(result)
+    assert 'sections' not in delivery
+    for text in (rule.points[0], requirement.text, finding.text):
+        assert result.content[0].text.count(text) == 1
+    assert [rule.id, 1, 'full'] in delivery['rule_refs']
+    assert [requirement.id, 1] in delivery['requirement_refs']
+    assert [finding.id, 1] in delivery['finding_refs']
+    replay = await server.call_tool('codeneuro_get_context', args)
+    assert unwrap(replay) == delivery
+    with product.workspaces.uow.read() as tx:
+        _, snapshot = tx.context.find_delivery(session.id, 'compact-context')
+    assert snapshot.markdown == delivery['markdown']
+    assert snapshot.sections['must_obey_contracts']
+    assert snapshot.sections['task_actionable_checklist']
+    assert snapshot.sections['module_gotchas'][0]['content'].endswith(finding.text + '\n')
 
 
 @pytest.mark.asyncio

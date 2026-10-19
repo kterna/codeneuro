@@ -45,7 +45,9 @@ async def test_real_stdio_mcp_works_without_token_or_client_declarations(configu
             await session.initialize()
             tools = await session.list_tools()
             assert {'codeneuro_task', 'codeneuro_requirement', 'codeneuro_get_context'} <= {item.name for item in tools.tools}
+            assert all(item.output_schema is None for item in tools.tools)
             projects = await session.call_tool('codeneuro_list_projects', {})
+            assert projects.structured_content is None and len(projects.content) == 1
             assert json.loads(projects.content[0].text) == [{'id': 'p', 'name': 'test project', 'rule_revision': 0,
                                                             'taxonomy_revision': 0, 'topic_query_enabled': False}]
             task = await session.call_tool('codeneuro_task', {
@@ -58,12 +60,19 @@ async def test_real_stdio_mcp_works_without_token_or_client_declarations(configu
             demand = await session.call_tool('codeneuro_requirement', {
                 'task_id': task_id, 'action': 'create', 'changes': {'text': 'Unfinished work'}})
             requirement_id = json.loads(demand.content[0].text)['id']
+            context = await session.call_tool('codeneuro_get_context', {
+                'session_id': session_id, 'priorities': ['P1'], 'files': ['src/pay.py']})
+            assert not context.is_error and context.structured_content is None
+            assert 'sections' not in json.loads(context.content[0].text)
             archived = await session.call_tool('codeneuro_requirement', {
                 'task_id': task_id, 'action': 'update', 'id': requirement_id, 'expected_version': 1,
                 'changes': {'status': 'archived', 'summary': 'Premature completion'}, 'reason': 'Completed'})
             assert not archived.is_error
             tasks = await session.call_tool('codeneuro_task', {'project_id': 'p', 'action': 'list'})
-            current = json.loads(tasks.content[0].text)[0]
+            assert tasks.structured_content is None
+            page = json.loads(tasks.content[0].text)
+            assert page['next_cursor'] is None
+            current = page['items'][0]
             assert 'codeneuro_reopen_task' not in {item.name for item in tools.tools}
             reopened = await session.call_tool('codeneuro_task', {
                 'project_id': 'p', 'action': 'update', 'id': task_id, 'expected_version': current['version'],
@@ -209,15 +218,27 @@ async def test_real_streamable_http_mcp_matches_stdio_without_bearer(configured)
                     assert {'codeneuro_get_context', 'codeneuro_task', 'codeneuro_requirement'} <= names
                     assert 'codeneuro_reopen_task' not in names
                     result = await session.call_tool('codeneuro_list_projects', {})
-                    assert not result.is_error
+                    assert not result.is_error and result.structured_content is None
+                    assert len(result.content) == 1
                     assert json.loads(result.content[0].text)[0]['id'] == 'p'
                     created = await session.call_tool('codeneuro_task',
                         {'project_id': 'p', 'action': 'create', 'changes': {'title': 'Remote Task'}})
                     task = json.loads(created.content[0].text)
+                    listed = await session.call_tool('codeneuro_task', {
+                        'project_id': 'p', 'action': 'list', 'statuses': ['active'], 'limit': 1})
+                    assert listed.structured_content is None
+                    page = json.loads(listed.content[0].text)
+                    assert page['next_cursor'] is None and page['items'][0]['id'] == task['id']
+                    assert page['items'][0]['truncated'] is False
                     opened = await session.call_tool('codeneuro_start_session', {
                         'project_id': 'p', 'workspace': 'C:/Work/Repo', 'task_id': task['id'],
                         'machine_name': 'office', 'platform': 'windows', 'repo_identity': 'git-common-id'})
-                    assert json.loads(opened.content[0].text)['worktree_id'].startswith('wt_')
+                    opened_session = json.loads(opened.content[0].text)
+                    assert opened_session['worktree_id'].startswith('wt_')
+                    context = await session.call_tool('codeneuro_get_context', {
+                        'session_id': opened_session['id'], 'priorities': ['P1'], 'files': ['src/pay.py']})
+                    assert not context.is_error and context.structured_content is None
+                    assert 'sections' not in json.loads(context.content[0].text)
 
 
 @pytest.mark.asyncio
@@ -232,4 +253,6 @@ async def test_http_mcp_accepts_unauthenticated_project_reads(configured):
                                      base_url='http://localhost') as client:
             response = await client.post('/mcp/', headers=headers, json=body)
     assert response.status_code == 200 and response.json()['result']['isError'] is False
+    assert 'structuredContent' not in response.json()['result']
+    assert len(response.json()['result']['content']) == 1
     assert 'test project' in response.text
