@@ -57,9 +57,17 @@ class WorkspacesRepo(Repo):
             statement = statement.where(s.tasks.c.project_id == project_id)
         return _task(self._one(statement))
 
-    def list_tasks(self, project_id):
-        return [_task(r) for r in self.c.execute(sa.select(s.tasks).where(
-            s.tasks.c.project_id == project_id, s.tasks.c.status != TaskStatus.DELETED).order_by(s.tasks.c.id)).mappings()]
+    def list_tasks(self, project_id, *, statuses=None, cursor=None, limit=None):
+        statement = sa.select(s.tasks).where(
+            s.tasks.c.project_id == project_id, s.tasks.c.status != TaskStatus.DELETED)
+        if statuses is not None:
+            statement = statement.where(s.tasks.c.status.in_(statuses))
+        if cursor is not None:
+            statement = statement.where(s.tasks.c.id > cursor)
+        statement = statement.order_by(s.tasks.c.id)
+        if limit is not None:
+            statement = statement.limit(limit)
+        return [_task(row) for row in self.c.execute(statement).mappings()]
 
     def create_task(self, task):
         self.c.execute(s.tasks.insert().values(id=task.id, project_id=task.project_id,

@@ -5,11 +5,14 @@ from pydantic import BaseModel, ConfigDict
 Action = Literal['create', 'list', 'get', 'update', 'delete']
 
 
+TaskState = Literal['draft', 'active', 'testing', 'paused', 'released', 'archived']
+
+
 class TaskChanges(BaseModel):
     model_config = ConfigDict(extra='forbid')
     title: str | None = None
     description: str | None = None
-    status: Literal['draft', 'active', 'testing', 'paused', 'released', 'archived'] | None = None
+    status: TaskState | None = None
 
 
 class RequirementChanges(BaseModel):

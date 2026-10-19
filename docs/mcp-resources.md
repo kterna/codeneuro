@@ -14,6 +14,9 @@ Task 使用 `codeneuro_task`，Requirement 使用 `codeneuro_requirement`。两�
 | `changes` | 条件必填 | 条件必填 | create/update 的类型化字段对象，不接受未知字段 |
 | `reason` | 条件必填 | 条件必填 | update/delete 的非空变更原因 |
 | `request_id` | — | 可选 | 仅 create 使用，在项目内去重需求录入；重试必须保持同一 Task 和初始原文 |
+| `statuses` | 可选 | — | 仅 list：非空、不重复的状态数组；省略时查询全部未删除状态 |
+| `cursor` | 可选 | — | 仅 list：上一页的 next_cursor，续页时保持相同 statuses |
+| `limit` | 可选 | — | 仅 list：每页 1–100 条，省略时为 20 条 |
 
 Task 的 changes 支持 `title`、`description`、`status`。create 要求非空 title，默认 status=active，允许 draft；update 可同时修改元数据与状态。
 
@@ -29,11 +32,28 @@ Requirement 的 changes 支持 `text`、`status`、`summary`。create 要求非�
 {"project_id":"p","action":"create","changes":{"title":"退款处理"}}
 ```
 
-查询 Task 列表：
+查询 Task 列表（默认包含归档、发布等历史状态，按 ID 排序）：
 
 ```json
 {"project_id":"p","action":"list"}
 ```
+
+返回分页摘要，不再返回完整数组：
+
+```json
+{"items":[{"id":"task-id","title":"退款处理","description":"业务说明","status":"active","version":0,"truncated":false}],"next_cursor":null}
+```
+
+每条摘要保留 id、title、description、status、version、truncated。title 和 description 各最多 200 字符，任一截断则 truncated=true；需要完整标题或正文时调用 `get`。本地正则未匹配到截断摘要，不能据此断言完整正文不匹配。
+
+查询可绑定任务与后续页面：
+
+```json
+{"project_id":"p","action":"list","statuses":["active","testing"],"limit":20}
+{"project_id":"p","action":"list","statuses":["active","testing"],"limit":20,"cursor":"上一页的 next_cursor"}
+```
+
+next_cursor=null 表示没有下一页；非空时继续读取。创建任务前还应检查历史任务，避免遗漏可重开的记录；可用 statuses=["archived","released"] 查询历史。deleted 不接受为列表过滤状态，仍通过 get 读取。Web 列表和账本继续使用完整任务对象。
 
 重新打开归档 Task（version 为示例，须使用查询结果）：
 
@@ -76,8 +96,17 @@ Requirement 的 changes 支持 `text`、`status`、`summary`。create 要求非�
 - 删除 Task 保留子需求记录，但其内容退出正常列表和活跃上下文；删除需求不等于完成需求，不自动完成 Task。相关短期规则停用，历史引用不删除。
 - start_session 只负责创建会话和绑定 active/testing Task，恢复为原有参数。Task/Requirement CRUD 不依赖会话，避免为管理记录而启动会话。
 
+## MCP 输出与上下文回执
+
+- 所有工具只返回一份 JSON 文本，不再通过 structuredContent.result 重复携带相同内容，也不声明结构化 outputSchema。两种 MCP 传输保持一致；客户端解析 content 中的 JSON 文本。
+- get_context 的 MCP 返回保留 markdown、规则/需求/Finding 版本引用、遗漏信息、查询与匹配元数据，去掉重复正文的 sections。数据库内完整 Delivery 及其 sections 保留，历史回执不改写。
+- max_chars 仍是 Markdown 正文预算，不是最终 JSON 或字节预算；已准入 P0 保持全文，超预算通过 budget_exceeded 标记。输出去重不截断规则正文或引用。
+- get_context 使用同一 session_id 和 request_id 重放同一次请求；相同 request_id 搭配不同查询会冲突。需要获取当前知识时省略 request_id 或使用新 ID，不按查询参数永久缓存。
+
 ## 更新部署
 
-本改动移除旧的 Task 创建/列表、需求提交/列表/归档/恢复 MCP 工具，不保留重复别名。宿主须刷新工具目录。
+Task list 返回形态改为分页对象；get_context 不再返回 sections；全部工具取消重复的 structuredContent。宿主须刷新工具目录，调用方相应读取 items/next_cursor、markdown 与版本引用。本次输出调整不需要数据库迁移。
+
+此前的 CRUD 改动移除旧的 Task 创建/列表、需求提交/列表/归档/恢复 MCP 工具，不保留重复别名。
 
 数据库新增迁移 `3d5f9b7c012e`：扩展 deleted 状态、增加 current_text 并从原文初始化；原文、历史版本和外键引用保留。更新运行环境时须先按授权执行显式迁移，再启动新版本；应用启动不会自动修改数据库。

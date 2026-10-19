@@ -8,10 +8,10 @@ from typing import Optional
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from ...modules.context import ContextQuery
+from ...modules.context import ContextQuery, Delivery
 from ...modules.knowledge import Priority
 from ...modules.tasks import ProductError, Task
-from .inputs import Action, TaskChanges, RequirementChanges
+from .inputs import Action, TaskChanges, TaskState, RequirementChanges
 from ...modules.workspaces import Actor
 from ...workflows.product import Product
 
@@ -21,7 +21,10 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
     if actor_for_context is None:
         actor_for_context = lambda _ctx: Actor('mcp')
     server = MCPServer(name, instructions=(
-        'Use codeneuro_task(action="list") first; match titles/descriptions and explicitly select a Task. '
+        'Use codeneuro_task(action="list") first; it returns paged summaries in items and next_cursor. '
+        'Use statuses=["active","testing"] for bindable Tasks; omit statuses to include history. '
+        'Follow next_cursor with the same statuses; get full detail when truncated=true. '
+        'Match titles/descriptions locally and explicitly select a Task; check history before creating a duplicate. '
         'Task and Requirement CRUD use action, id, expected_version, changes and reason. '
         'Reopen via update with changes.status="active"; archive completed Requirements with '
         'changes.status="archived" and changes.summary. Delete is soft; history is preserved. '
@@ -36,6 +39,10 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
             if isinstance(item, Task):
                 fields = asdict(item)
                 fields['version'] = fields.pop('revision')
+                return fields
+            if isinstance(item, Delivery):
+                fields = asdict(item)
+                fields.pop('sections')  # Markdown carries the content; persisted Deliveries retain sections.
                 return fields
             return asdict(item) if is_dataclass(item) else str(item)
         return json.dumps(value, ensure_ascii=False, default=encode)
@@ -52,22 +59,26 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         except ProductError as error:
             raise ToolError(f'{error.code}: {error}') from error
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_list_projects(ctx: Context) -> str:
         """List registered projects."""
         return invoke(product.workspaces.list_projects, actor(ctx))
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_task(project_id: str, action: Action, ctx: Context, id: Optional[str] = None,
                         expected_version: Optional[int] = None, changes: Optional[TaskChanges] = None,
-                        reason: str = '') -> str:
-        """Task CRUD. List before create; get includes deleted records. Create/update use changes.
-        Update/delete require id, current version and reason. Status updates cover pause, resume,
-        archive and reopen. Delete is soft; neither reopen nor deletion restores Rules."""
+                        reason: str = '', statuses: Optional[list[TaskState]] = None,
+                        cursor: Optional[str] = None, limit: Optional[int] = None) -> str:
+        """Task CRUD. List returns {items, next_cursor}: summaries (title/description up to 200 chars),
+        version and truncated flag. Default 20 items, limit 1–100; statuses filters states (omitted = all
+        non-deleted states). Follow next_cursor with the same filter; get returns full/deleted records.
+        List before create. Create/update use changes; update/delete need id, version and reason.
+        Status updates cover pause, resume, archive and reopen. Neither reopen nor deletion restores Rules."""
         return invoke(product.workspaces.manage_task, actor(ctx), project_id, action, id,
-                      expected_version, changes.model_dump(exclude_unset=True) if changes else None, reason)
+                      expected_version, changes.model_dump(exclude_unset=True) if changes else None, reason,
+                      statuses=tuple(statuses) if statuses is not None else None, cursor=cursor, limit=limit)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_requirement(task_id: str, action: Action, ctx: Context, id: Optional[str] = None,
                                expected_version: Optional[int] = None, changes: Optional[RequirementChanges] = None,
                                reason: str = '', request_id: Optional[str] = None) -> str:
@@ -79,7 +90,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         return invoke(product.requirements.manage_requirement, actor(ctx), task_id, action, id,
                       expected_version, changes.model_dump(exclude_unset=True) if changes else None, reason, request_id)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_start_session(project_id: str, workspace: str, ctx: Context,
                                 task_id: Optional[str] = None, debug: bool = False,
                                 machine_name: str = 'not_attested', platform: str = 'unknown',
@@ -95,14 +106,17 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
                     'topic_catalog': product.topics.list_topics(who, project_id, limit=30)}
         return invoke(start)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_get_context(session_id: str, priorities: list[str], ctx: Context,
                               file_path: Optional[str] = None, files: Optional[list[str]] = None,
                               topics: Optional[list[str]] = None, request_id: Optional[str] = None,
                               max_chars: int = 24000, intent: str = 'implementing', mode: str = 'detailed') -> str:
         """V2: explicitly select priority levels (no defaults/threshold/implicit P0).
         Topics define business focus; paths only rank within that focus. Without topics,
-        real paths determine applicability. Pure-topic queries need project cutover approval."""
+        real paths determine applicability. Pure-topic queries need project cutover approval.
+        Returns one JSON text with markdown, refs and metadata, without duplicate sections.
+        max_chars budgets markdown, not the entire JSON; selected P0 may exceed it explicitly.
+        Reuse request_id to replay a request; omit it or use a new ID to fetch current knowledge."""
         try:
             if files is not None and file_path is not None:
                 raise ProductError('Supply files or file_path, not both.')
@@ -113,7 +127,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
             raise ToolError(f'invalid_request: {error}') from error
         return invoke(product.context.get_context, actor(ctx), session_id, query, request_id)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_create_task_rule(session_id: str, title: str, content_points: list[str],
                                    scope_patterns: list[str], topics: list[str], validation_spec: dict,
                                    reason: str, ctx: Context, priority: str = 'P1',
@@ -132,7 +146,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
                       validation_spec=validation_spec, priority=selected, requirement_id=requirement_id, is_global=is_global,
                       priority_reason=priority_reason)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_report_test(session_id: str, request_id: str, command: list[str],
                               paths: list[str], exit_code: int, started_at: str,
                               finished_at: str, test_cases: list[dict], ctx: Context) -> str:
@@ -141,7 +155,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         return invoke(product.governance.report_test, actor(ctx), session_id, request_id,
                       tuple(command), tuple(paths), exit_code, started_at, finished_at, tuple(test_cases))
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_observe_rule(session_id: str, rule_id: str, expected_version: int,
                                test_report_id: str, supports: bool, reason: str,
                                check_ids: list[str], ctx: Context) -> str:
@@ -149,7 +163,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         return invoke(product.governance.observe_rule, actor(ctx), session_id, rule_id,
                       expected_version, test_report_id, supports, reason, tuple(check_ids))
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_mutate_task_rule(session_id: str, rule_id: str,
                                    expected_version: int, action: str, reason: str,
                                    ctx: Context, title: Optional[str] = None,
@@ -169,13 +183,13 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
                       tuple(scope_patterns) if scope_patterns is not None else None, selected,
                       tuple(topics) if topics is not None else None, is_global, priority_reason, validation_spec)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_promote_rule(session_id: str, rule_id: str, expected_version: int,
                                reason: str, ctx: Context) -> str:
         """Promote an active Task Rule by version without widening its clauses or scope."""
         return invoke(product.knowledge.promote_rule, actor(ctx), session_id, rule_id, expected_version, reason)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_propose_contract(session_id: str, target_rule_id: str, expected_target_version: int,
                                   candidate_rule_id: str, expected_candidate_version: int,
                                   reason: str, ctx: Context) -> str:
@@ -183,7 +197,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         return invoke(product.knowledge.propose_contract, actor(ctx), session_id, target_rule_id,
                       expected_target_version, candidate_rule_id, expected_candidate_version, reason)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_record_finding(session_id: str, text: str, topics: list[str],
                                  ctx: Context, target_path: Optional[str] = None, priority: str = 'P1') -> str:
         """Record a Task-scoped unreviewed observation for matching topics/files across sessions."""
@@ -193,7 +207,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
             raise ToolError(f'invalid_request: {error}') from error
         return invoke(product.context.record_finding, actor(ctx), session_id, target_path, text, selected, topics=tuple(topics))
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_update_finding(session_id: str, finding_id: str, expected_version: int,
                                  reason: str, ctx: Context, topics: Optional[list[str]] = None,
                                  resolve: bool = False) -> str:
@@ -201,37 +215,37 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         return invoke(product.context.update_finding, actor(ctx), finding_id, expected_version, reason,
                       tuple(topics) if topics is not None else None, resolve, session_id=session_id)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_list_topics(project_id: str, ctx: Context, query: str = '',
                               include_deleted: bool = False, cursor: Optional[str] = None, limit: int = 50) -> str:
         """List the project's registered vocabulary; reuse topics instead of silently inventing tags."""
         return invoke(product.topics.list_topics, actor(ctx), project_id, query, include_deleted, cursor, limit)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_get_topic(project_id: str, key: str, ctx: Context, include_usage: bool = False) -> str:
         """Inspect a topic version, immutable boundary and optionally blocking references."""
         return invoke(product.topics.get_topic, actor(ctx), project_id, key, include_usage)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_create_topic(session_id: str, key: str, name: str, description: str,
                                reason: str, ctx: Context) -> str:
         """Explicitly register a new project topic after checking existing definitions; keys cannot be reused."""
         return invoke(product.topics.create_topic, actor(ctx), key, name, description, reason, session_id=session_id)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_update_topic(session_id: str, key: str, expected_version: int, reason: str,
                                ctx: Context, name: Optional[str] = None, description: Optional[str] = None) -> str:
         """Versioned metadata update; referenced topic boundaries and all keys are immutable."""
         return invoke(product.topics.update_topic, actor(ctx), key, expected_version, reason,
                       name, description, session_id=session_id)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_delete_topic(session_id: str, key: str, expected_version: int,
                                reason: str, ctx: Context) -> str:
         """Soft-delete an unreferenced topic; never cascade, merge, or reinterpret its history."""
         return invoke(product.topics.delete_topic, actor(ctx), key, expected_version, reason, session_id=session_id)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_rate_rule(session_id: str, delivery_id: str, rule_id: str,
                             score: int, ctx: Context, reason: str = '') -> str:
         """Rate an actually delivered Rule on a scale from 0 to 5:
@@ -244,7 +258,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         Requires the session to have been started with debug=True."""
         return invoke(product.feedback.rate_rule, actor(ctx), session_id, delivery_id, rule_id, score, reason)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_report_issue(session_id: str, issue_type: str, title: str,
                                description: str, file_path: str, ctx: Context,
                                related_rule_ids: Optional[list[str]] = None,
@@ -254,7 +268,7 @@ def create_mcp(product: Product, actor_for_context=None, *, name: str = 'CodeNeu
         return invoke(product.feedback.report_issue, actor(ctx), session_id, issue_type,
             title, description, file_path, tuple(related_rule_ids or ()), suggested_action)
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def codeneuro_end_session(session_id: str, ctx: Context) -> str:
         """Close this caller's session; this does not complete a Task."""
         return invoke(product.workspaces.end_session, actor(ctx), session_id)
