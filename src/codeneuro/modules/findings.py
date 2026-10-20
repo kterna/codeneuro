@@ -9,7 +9,6 @@ class Finding:
     id: str
     project_id: str
     task_id: str
-    session_id: str
     target_path: str | None
     text: str
     priority: Priority
@@ -22,11 +21,11 @@ class Finding:
 class Issue:
     id: str
     project_id: str
-    session_id: str
+    task_id: str | None
     issue_type: str
     title: str
     description: str
-    file_path: str
+    file_path: str | None
     related_rule_ids: tuple[str, ...]
     suggested_action: str
     related_rule_versions: tuple[tuple[str, int], ...] = ()

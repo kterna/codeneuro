@@ -1,9 +1,11 @@
-"""Feature-scoped SQLAlchemy Core repository; domain decisions live in workflows."""
-from __future__ import annotations
+"""Project, task snapshots and explicit request receipts."""
+from dataclasses import asdict
+import json
 import sqlalchemy as sa
-from ...modules.tasks import Conflict, ProductError, TaskStatus
+from ...modules.tasks import Conflict, ProductError
 from . import schema as s
-from .common import Repo, _task, _session, _worktree
+from .common import Repo, _task, _worktree, _json
+
 
 class WorkspacesRepo(Repo):
     def project_revision(self, project_id):
@@ -13,126 +15,115 @@ class WorkspacesRepo(Repo):
         return row['rule_revision']
 
     def create_project(self, project_id, name):
-        self.c.execute(s.projects.insert().values(id=project_id, name=name, rule_revision=0))
+        self.c.execute(s.projects.insert().values(id=project_id, name=name))
 
     def delete_project(self, project_id):
-        # Clear origin_rule_id self-referential foreign keys first
         self.c.execute(s.rules.update().where(s.rules.c.project_id == project_id).values(origin_rule_id=None))
-        # All predicates refer to parents, which remain until their children are removed.
         rules = sa.select(s.rules.c.id).where(s.rules.c.project_id == project_id)
         requirements = sa.select(s.requirements.c.id).where(s.requirements.c.project_id == project_id)
-        sessions = sa.select(s.sessions.c.id).where(s.sessions.c.project_id == project_id)
-        deliveries = sa.select(s.deliveries.c.id).where(s.deliveries.c.session_id.in_(sessions))
+        tasks = sa.select(s.tasks.c.id).where(s.tasks.c.project_id == project_id)
+        deliveries = sa.select(s.deliveries.c.id).where(s.deliveries.c.project_id == project_id)
         indirect = {
-            'agent_rule_state': s.agent_rule_state.c.rule_id.in_(rules),
+            'rule_validation_state': s.rule_validation_state.c.rule_id.in_(rules),
             'rule_observations': s.rule_observations.c.rule_id.in_(rules),
             'requirement_versions': s.requirement_versions.c.requirement_id.in_(requirements),
-            'requirement_rule_links': s.requirement_rule_links.c.rule_id.in_(rules),
+            'task_versions': s.task_versions.c.task_id.in_(tasks),
             'rule_versions': s.rule_versions.c.rule_id.in_(rules),
-            'deliveries': s.deliveries.c.session_id.in_(sessions),
-            'delivery_rules': s.delivery_rules.c.delivery_id.in_(deliveries),
-            'delivery_requirements': s.delivery_requirements.c.delivery_id.in_(deliveries),
-            'delivery_findings': s.delivery_findings.c.delivery_id.in_(deliveries),
-            'feedback': s.feedback.c.delivery_id.in_(deliveries),
             'projects': s.projects.c.id == project_id,
         }
+        for name in ('delivery_rules', 'delivery_requirements', 'delivery_tasks', 'delivery_findings', 'feedback'):
+            indirect[name] = s.metadata.tables[name].c.delivery_id.in_(deliveries)
         for table in reversed(s.metadata.sorted_tables):
-            predicate = (table.c.project_id == project_id if 'project_id' in table.c
-                         else indirect[table.name])
+            predicate = table.c.project_id == project_id if 'project_id' in table.c else indirect[table.name]
             self.c.execute(table.delete().where(predicate))
 
-    def transition_task(self, task, status):
-        result = self.c.execute(s.tasks.update().where(
-            s.tasks.c.id == task.id, s.tasks.c.revision == task.revision).values(
-            status=status, paused_from=None, revision=s.tasks.c.revision + 1))
-        if result.rowcount != 1:
-            raise Conflict('Task changed before this transition.')
-
     def list_projects(self):
-        return [dict(r) for r in self.c.execute(sa.select(s.projects).order_by(s.projects.c.id)).mappings()]
+        return [dict(row) for row in self.c.execute(sa.select(s.projects).order_by(s.projects.c.id)).mappings()]
+
+    def counts(self, project_id):
+        result = {}
+        for name, table in (('requirements', s.requirements), ('tasks', s.tasks)):
+            working = ('active', 'accepting') if name == 'requirements' else ('active', 'testing')
+            row = self._one(sa.select(sa.func.count().label('total'),
+                sa.func.sum(sa.case((sa.and_(table.c.status.in_(working), table.c.archived_at.is_(None)), 1), else_=0)).label('working'),
+                sa.func.sum(sa.case((table.c.status == 'completed', 1), else_=0)).label('completed'),
+                sa.func.sum(sa.case((table.c.archived_at.is_not(None), 1), else_=0)).label('archived')).where(
+                    table.c.project_id == project_id, table.c.deleted_at.is_(None)))
+            result[name] = {key: value or 0 for key, value in row.items()}
+        return result
 
     def get_task(self, task_id, project_id=None):
-        statement = sa.select(s.tasks).where(s.tasks.c.id == task_id)
+        query = sa.select(s.tasks).where(s.tasks.c.id == task_id)
         if project_id is not None:
-            statement = statement.where(s.tasks.c.project_id == project_id)
-        return _task(self._one(statement))
+            query = query.where(s.tasks.c.project_id == project_id)
+        return _task(self._one(query))
 
-    def list_tasks(self, project_id, *, statuses=None, cursor=None, limit=None):
-        statement = sa.select(s.tasks).where(
-            s.tasks.c.project_id == project_id, s.tasks.c.status != TaskStatus.DELETED)
+    def list_tasks(self, project_id, *, requirement_id=None, statuses=None, cursor=None, limit=None):
+        query = sa.select(s.tasks).where(s.tasks.c.project_id == project_id, s.tasks.c.deleted_at.is_(None))
+        if requirement_id is not None:
+            query = query.where(s.tasks.c.requirement_id == requirement_id)
         if statuses is not None:
-            statement = statement.where(s.tasks.c.status.in_(statuses))
+            query = query.where(s.tasks.c.status.in_(statuses))
         if cursor is not None:
-            statement = statement.where(s.tasks.c.id > cursor)
-        statement = statement.order_by(s.tasks.c.id)
+            query = query.where(s.tasks.c.id > cursor)
+        query = query.order_by(s.tasks.c.id)
         if limit is not None:
-            statement = statement.limit(limit)
-        return [_task(row) for row in self.c.execute(statement).mappings()]
+            query = query.limit(limit)
+        return [_task(row) for row in self.c.execute(query).mappings()]
+
+    def _values(self, task):
+        values = asdict(task)
+        values['verification_report_ids_json'] = _json(values.pop('verification_report_ids'))
+        return values
+
+    def _snapshot(self, task):
+        self.c.execute(s.task_versions.insert().values(task_id=task.id, version=task.version,
+                                                       snapshot_json=_json(asdict(task))))
 
     def create_task(self, task):
-        self.c.execute(s.tasks.insert().values(id=task.id, project_id=task.project_id,
-            title=task.title, description=task.description, status=task.status,
-            revision=task.revision, paused_from=task.paused_from))
+        self.c.execute(s.tasks.insert().values(**self._values(task)))
+        self._snapshot(task)
 
     def update_task(self, task, expected_version):
-        result = self.c.execute(s.tasks.update().where(
-            s.tasks.c.id == task.id, s.tasks.c.revision == expected_version).values(
-            title=task.title, description=task.description, status=task.status,
-            paused_from=task.paused_from, revision=task.revision))
-        if result.rowcount != 1:
+        changed = self.c.execute(s.tasks.update().where(s.tasks.c.id == task.id,
+            s.tasks.c.version == expected_version).values(**self._values(task),
+                context_revision=s.tasks.c.context_revision + 1))
+        if changed.rowcount != 1:
             raise Conflict('Task version is stale.')
+        self._snapshot(task)
 
-    def complete_task(self, task_id):
-        self.c.execute(s.tasks.update().where(s.tasks.c.id == task_id).values(
-            status=TaskStatus.ARCHIVED, revision=s.tasks.c.revision + 1))
+    def task_context_revision(self, task_id):
+        return self.c.execute(sa.select(s.tasks.c.context_revision).where(s.tasks.c.id == task_id)).scalar_one()
 
-    def pause_task(self, task):
-        result = self.c.execute(s.tasks.update().where(
-            s.tasks.c.id == task.id, s.tasks.c.revision == task.revision,
-            s.tasks.c.status == task.status).values(status=TaskStatus.PAUSED,
-                paused_from=task.status, revision=s.tasks.c.revision + 1))
-        if result.rowcount != 1:
-            raise Conflict('Task changed before pause.')
+    def task_versions(self, task_id, cursor=None, limit=20):
+        query = sa.select(s.task_versions).where(s.task_versions.c.task_id == task_id)
+        if cursor is not None:
+            query = query.where(s.task_versions.c.version > cursor)
+        return [json.loads(row.snapshot_json) for row in self.c.execute(
+            query.order_by(s.task_versions.c.version).limit(limit))]
 
-    def resume_task(self, task):
-        result = self.c.execute(s.tasks.update().where(
-            s.tasks.c.id == task.id, s.tasks.c.revision == task.revision,
-            s.tasks.c.status == TaskStatus.PAUSED).values(status=task.paused_from,
-                paused_from=None, revision=s.tasks.c.revision + 1))
-        if result.rowcount != 1:
-            raise Conflict('Task changed before resume.')
+    def request(self, project_id, operation, request_id):
+        if request_id is None:
+            return None
+        row = self._one(sa.select(s.request_receipts).where(s.request_receipts.c.project_id == project_id,
+            s.request_receipts.c.operation == operation, s.request_receipts.c.request_id == request_id))
+        return (row['fingerprint'], json.loads(row['response_json'])) if row else None
 
-    def get_session(self, session_id):
-        return _session(self._one(sa.select(s.sessions).where(s.sessions.c.id == session_id)))
+    def record_request(self, project_id, operation, request_id, fingerprint, result):
+        if request_id is not None:
+            self.c.execute(s.request_receipts.insert().values(project_id=project_id, operation=operation,
+                request_id=request_id, fingerprint=fingerprint, resource_id=result['id'], response_json=_json(result)))
 
     def register_worktree(self, worktree):
         existing = self._one(sa.select(s.worktrees).where(s.worktrees.c.id == worktree.id))
         if existing:
-            if (existing['project_id'] != worktree.project_id or
-                existing['actor_id'] != worktree.actor_id or
-                (existing['workspace'].casefold() if worktree.platform == 'windows' else existing['workspace']) !=
-                (worktree.workspace.casefold() if worktree.platform == 'windows' else worktree.workspace) or
-                existing['machine_name'].casefold() != worktree.machine_name.casefold() or
-                existing['platform'] != worktree.platform or
-                (existing['repo_identity'] and worktree.repo_identity and
-                 existing['repo_identity'] != worktree.repo_identity)):
-                raise Conflict('Worktree identity cannot be rebound.')
+            if existing['repo_identity'] and worktree.repo_identity and existing['repo_identity'] != worktree.repo_identity:
+                raise Conflict('Worktree repository identity cannot be rebound.')
             self.c.execute(s.worktrees.update().where(s.worktrees.c.id == worktree.id).values(
-                repo_identity=worktree.repo_identity or existing['repo_identity'],
-                git_branch=worktree.git_branch))
+                git_branch=worktree.git_branch, repo_identity=worktree.repo_identity or existing['repo_identity']))
         else:
-            self.c.execute(s.worktrees.insert().values(**worktree.__dict__))
+            self.c.execute(s.worktrees.insert().values(**asdict(worktree)))
 
     def project_worktrees(self, project_id):
         return [_worktree(row) for row in self.c.execute(sa.select(s.worktrees).where(
             s.worktrees.c.project_id == project_id).order_by(s.worktrees.c.id)).mappings()]
-
-    def create_session(self, session, agent_client):
-        self.c.execute(s.sessions.insert().values(id=session.id, project_id=session.project_id,
-            task_id=session.task_id, worktree_id=session.worktree_id,
-            workspace=session.workspace, agent_client=agent_client,
-            actor_id=session.actor_id, debug=session.debug, state=session.state,
-            knowledge_revision=session.knowledge_revision))
-
-    def close_session(self, session_id):
-        self.c.execute(s.sessions.update().where(s.sessions.c.id == session_id).values(state='closed'))

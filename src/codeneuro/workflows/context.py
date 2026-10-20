@@ -1,69 +1,78 @@
-"""Context application workflow; domain rules remain in their owning modules."""
-from __future__ import annotations
-
+"""Direct project/task context with immutable request replay and bounded retries."""
 from dataclasses import asdict, replace
 
-from ..modules.context import ContextQuery, Delivery, assemble
+from ..modules.context import assemble, restore_delivery
 from ..modules.findings import Finding
 from ..modules.knowledge import Priority, relative_path
-from ..modules.tasks import Conflict, ProductError, TaskStatus
-from ..modules.workspaces import Actor
-from .common import _id, _fingerprint
+from ..modules.tasks import Conflict, ProductError
+from .common import _id, replay
 from .workspaces import Workspaces
 from .topics import require_topics
 
 
 class Context(Workspaces):
-    def get_context(self, actor: Actor, session_id: str, query: ContextQuery,
-                    request_id: str | None = None) -> Delivery:
-        fingerprint = _fingerprint(query)
+    def _snapshot(self, tx, project_id, task_id):
+        revision = tx.workspaces.project_revision(project_id)
+        taxonomy = tx.topics.state(project_id)
+        task, parent = self._task(tx, task_id, project_id) if task_id else (None, None)
+        signature = (revision, taxonomy, parent.version if parent else None, task.version if task else None,
+                     tx.workspaces.task_context_revision(task.id) if task else None)
+        return signature, task, parent, taxonomy
+
+    def get_context(self, actor, project_id, query, request_id=None, *, task_id=None, source=None):
         request_id = request_id or _id('request')
+        payload = {'task_id': task_id, 'query': asdict(query), 'source': source or {}}
         for _ in range(2):
             with self.uow.read() as tx:
-                session = self._session(tx, actor, session_id)
-                old = tx.context.find_delivery(session_id, request_id)
+                tx.workspaces.project_revision(project_id)
+                fingerprint, old = replay(tx, project_id, 'context.get', request_id, payload)
                 if old:
-                    if old[0] != fingerprint:
-                        raise Conflict('request_id already used for another query.')
-                    return old[1]
-                project_revision = tx.workspaces.project_revision(session.project_id)
-                taxonomy = tx.topics.state(session.project_id)
+                    return restore_delivery(old)
+                signature, task, parent, taxonomy = self._snapshot(tx, project_id, task_id)
                 if query.topics and not taxonomy['topic_query_enabled']:
                     raise Conflict('Topic queries are disabled until project classification is reviewed.')
-                require_topics(tx, session.project_id, query.topics, lock=False)
-                resolved = tuple(asdict(tx.topics.get(session.project_id, key)) for key in query.topics)
-                task = tx.workspaces.get_task(session.task_id, session.project_id) if session.task_id else None
-                effective_task = task.id if task and task.status in (TaskStatus.ACTIVE, TaskStatus.TESTING) else None
-                task_revision = task.revision if task else None
-                knowledge_revision = session.knowledge_revision
-                rules = tuple(tx.knowledge.visible_rules(session.project_id, effective_task))
-                requirements = tuple(tx.requirements.active_requirements(effective_task)) if effective_task else ()
-                known = tx.feedback.known_rules(session_id)
-                findings = tuple(tx.context.pending_findings(session.project_id, effective_task)) if effective_task else ()
-                conflicts = tuple(tx.feedback.conflict_issues(session.project_id, effective_task))
-            result = replace(assemble(_id('delivery'), query, rules, requirements, known, findings, conflicts),
-                             taxonomy_revision=taxonomy['taxonomy_revision'], resolved_topics=resolved)
+                require_topics(tx, project_id, query.topics, lock=False)
+                resolved = tuple(asdict(tx.topics.get(project_id, key)) for key in query.topics)
+                eligible = bool(task and not task.archived_at and not parent.archived_at
+                                and parent.status in ('active', 'accepting')
+                                and task.status in ('active', 'testing', 'completed'))
+                effective_task = task.id if eligible else None
+                rules = tuple(tx.knowledge.visible_rules(project_id, effective_task))
+                findings = tuple(tx.context.pending_findings(project_id, effective_task)) if eligible else ()
+                conflicts = tuple(tx.feedback.conflict_issues(project_id, effective_task))
+                scope = {'project_id': project_id, 'task_id': task_id,
+                         'requirement_id': parent.id if parent else None,
+                         'requirement_version': parent.version if parent else None,
+                         'task_version': task.version if task else None,
+                         'requirement_status': parent.status if parent else None,
+                         'task_status': task.status if task else None,
+                         'read_only': bool(task and (not eligible or task.status == 'completed'))}
+            result = replace(assemble(_id('delivery'), query, rules, (parent,) if parent else (), task,
+                                      findings, conflicts), taxonomy_revision=taxonomy['taxonomy_revision'],
+                             resolved_topics=resolved, scope=scope)
             with self.uow.write() as tx:
-                current = self._session(tx, actor, session_id)
-                old = tx.context.find_delivery(session_id, request_id)
+                _, old = replay(tx, project_id, 'context.get', request_id, payload)
                 if old:
-                    if old[0] != fingerprint:
-                        raise Conflict('request_id already used for another query.')
-                    return old[1]
-                task_now = tx.workspaces.get_task(session.task_id, session.project_id) if session.task_id else None
-                if (tx.workspaces.project_revision(session.project_id), task_now.revision if task_now else None,
-                    current.knowledge_revision, tx.topics.state(session.project_id)) != (
-                        project_revision, task_revision, knowledge_revision, taxonomy):
+                    return restore_delivery(old)
+                if self._snapshot(tx, project_id, task_id)[0] != signature:
                     continue
-                tx.context.save_delivery(session_id, request_id, fingerprint, result)
-                tx.audit.record(session.project_id, actor.id, 'context.delivered', result.id,
-                         {'rules': len(result.rule_refs), 'requirements': len(result.requirement_refs),
-                          'findings': len(result.finding_refs)})
+                provenance = self._source(tx, actor, project_id, source)
+                tx.context.save_delivery(project_id, task_id, result, provenance)
+                tx.workspaces.record_request(project_id, 'context.get', request_id, fingerprint, asdict(result))
+                tx.audit.record(project_id, actor.id, 'context.delivered', result.id,
+                    {'task_id': task_id, 'rules': len(result.rule_refs), 'requirements': len(result.requirement_refs),
+                     'findings': len(result.finding_refs), 'source': provenance})
                 return result
         raise Conflict('Knowledge changed during context assembly; retry the request.')
 
-    def record_finding(self, actor: Actor, session_id: str, target_path: str | None,
-                       text: str, priority: Priority = Priority.P1, *, topics: tuple[str, ...]):
+    def get_delivery(self, actor, delivery_id, project_id=None):
+        with self.uow.read() as tx:
+            scope = tx.context.delivery_scope(delivery_id)
+            if not scope or (project_id is not None and scope['project_id'] != project_id):
+                raise ProductError('Delivery not found in the selected scope.', 'not_found')
+            return tx.context.get_delivery(delivery_id)
+
+    def record_finding(self, actor, task_id, target_path, text, priority=Priority.P1, *, topics, source=None):
         if not text.strip():
             raise ProductError('Finding text is required.')
         if target_path is not None:
@@ -71,41 +80,34 @@ class Context(Workspaces):
         if not topics or not isinstance(priority, Priority):
             raise ProductError('Finding requires registered topics and a valid priority.')
         with self.uow.write() as tx:
-            session = self._session(tx, actor, session_id)
-            if not session.task_id:
-                raise ProductError('Finding requires a Task-bound session.')
-            task = tx.workspaces.get_task(session.task_id, session.project_id)
-            if task.status not in (TaskStatus.ACTIVE, TaskStatus.TESTING):
-                raise Conflict('This Task no longer accepts Findings.')
-            require_topics(tx, session.project_id, topics)
-            item = Finding(_id('finding'), session.project_id, task.id,
-                           session.id, target_path, text, priority, topics=tuple(sorted(topics)))
+            task, _ = self._task(tx, task_id, writable=True)
+            require_topics(tx, task.project_id, topics)
+            item = Finding(_id('finding'), task.project_id, task.id, target_path, text,
+                           priority, topics=tuple(sorted(topics)))
             tx.context.record_finding(item)
-            tx.audit.record(session.project_id, actor.id, 'finding.recorded', item.id, {'task_id': task.id})
+            tx.audit.record(task.project_id, actor.id, 'finding.recorded', item.id,
+                {'task_id': task.id, 'source': self._source(tx, actor, task.project_id, source)})
             return item
 
-    def update_finding(self, actor: Actor, finding_id: str, expected_version: int, reason: str,
-                       topics: tuple[str, ...] | None = None, resolve: bool = False,
-                       *, session_id: str | None = None, project_id: str | None = None):
+    def update_finding(self, actor, finding_id, expected_version, reason, topics=None, resolve=False,
+                       *, task_id=None, project_id=None):
         if not reason.strip() or type(resolve) is not bool:
             raise ProductError('A reason and explicit resolution flag are required.')
         with self.uow.write() as tx:
             item = tx.context.get_finding(finding_id)
-            if session_id:
-                session = self._session(tx, actor, session_id)
-                if not item or (item.project_id, item.task_id) != (session.project_id, session.task_id):
-                    raise ProductError('Finding outside this session Task.', 'not_found')
-            elif actor.role != 'human' or not item or item.project_id != project_id:
-                raise ProductError('Human project review or a matching session is required.', 'forbidden')
+            if not item or (task_id is not None and item.task_id != task_id):
+                raise ProductError('Finding outside the selected Task.', 'not_found')
+            if task_id is None and (actor.role != 'human' or item.project_id != project_id):
+                raise ProductError('Select the Finding Task or use the human project review entry.', 'forbidden')
+            self._task(tx, item.task_id, item.project_id, writable=not resolve)
             if item.version != expected_version or item.status != 'pending_review':
                 raise Conflict('Finding version or state changed.')
             keys = item.topics if topics is None else tuple(sorted(topics))
             if not resolve and not keys:
                 raise ProductError('Pending Findings require topics.')
             require_topics(tx, item.project_id, keys)
-            changed = replace(item, topics=keys, status='resolved' if resolve else item.status,
-                              version=item.version + 1)
+            changed = replace(item, topics=keys, status='resolved' if resolve else item.status, version=item.version + 1)
             tx.context.update_finding(changed)
             tx.audit.record(item.project_id, actor.id, 'finding.updated', item.id,
-                            {'version': changed.version, 'reason': reason, 'resolved': resolve})
+                {'version': changed.version, 'reason': reason, 'resolved': resolve})
             return changed

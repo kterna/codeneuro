@@ -1,33 +1,44 @@
-# CodeNeuro 架构与约束
+# 架构
 
-产品规则以 [现行产品契约](product-contract.md) 为准。CodeNeuro 是一个模块化单体：领域策略不依赖数据库或 MCP；跨模块业务由工作流在一个 Unit of Work 内协调；仓储按 Workspaces、Requirements、Knowledge、Topics、Context、Feedback、Governance 与 Audit 分工；HTTP/Web 和 MCP 只做 DTO 映射，不要求 Token。源码位于 `src/codeneuro/`，不存在需长期并行维护的 `codeneuro_rebuild` 包。
+CodeNeuro 是模块化单体：同一 Hub 提供 Web、HTTP API 与 stdio/Streamable HTTP MCP，以本地 SQLite 保存业务知识和实际下发。
 
-```text
-Web/Vue ──► HTTP API ─┐
-stdio MCP ────────────┼──► 工作流 ─► 领域策略
-streamable HTTP MCP ──┘       │
-                              ▼
-                       Unit of Work / SQLAlchemy Core
-                              │
-                       Hub 本机 SQLite WAL
-```
+## 分层
 
-## 主要实体
+- `modules/`：领域数据与纯策略，不依赖数据库或网络框架。
+- `workflows/`：需求/任务生命周期、上下文装配、规则治理、主题和反馈等用例。
+- `ports.py`：工作流依赖的仓储和事务边界。
+- `adapters/sqlite/`：当前表结构与 SQLAlchemy Core 仓储。
+- `adapters/http/`、`adapters/mcp/`：参数校验和 DTO 映射，共享工作流。
+- `web/`：Vue 3、TypeScript、Vite 工作台；构建产物位于 `src/codeneuro/static/`。
 
-- Task 六态；Requirement 独立保存原文、归属、归档摘要及不可变版本快照。最后一条活跃需求归档在同一事务中完成 Task、停用短期规则；`paused/released` 拒绝归档。
-- Rule 区分任务临时规则和项目长期契约。`rule_versions` 保存不可变历史；晋升复制有效版本为新长期 Rule，保留来源版本和理由。对既有长期契约的更新须 Agent 提案、人类按版本审阅。
-- Topic 使用项目内稳定 key、定义锁定和目录修订；当前关联使用同项目复合外键，版本快照存 JSON。CRUD 与知识引用/删除保护处于同一写事务。
-- Session 固定调用来源标签、项目、Task 和客户端声明的 Worktree；标签不构成身份鉴别。Delivery 记录实际输出及 Rule/Requirement/Finding 版本；反馈引用本会话真实下发。0=已知仅简写该会话版本，已适用且被等级集合选中的 P0 保持完整。
-- 未经审阅的 Finding 保持任务作用域：同任务跨会话按主题/路径匹配提醒，注明未审阅；不跨任务下发，也不自行变成长期规范。宿主上报的测试报告标记为 `client_reported`，测试计划逐检查满足两个独立成功证据和无反证等条件才可激活任务草稿；规范计划须人类固定版本审阅，测试路径与检索范围独立；CodeNeuro 不执行测试。
+依赖从接口流向工作流与领域，架构测试检查导入方向。没有宿主品牌分支、隐式全局服务或自动执行宿主测试的组件。
 
-## JIT 并发与作用域
+## 业务关系
 
-短只读快照获取项目规则修订、Task 修订、会话已知修订及主题目录状态，释放数据库读事务后纯装配，最后短写事务重核修订并原子签发 Delivery；冲突有界重算，不签发旧快照/新版本混合结果。先按项目、Task、活跃状态、显式等级集合及主题/路径适用性准入；有主题时路径只辅助排序，没有主题才按路径准入；`implementing/debugging` 决定同优先级内顺序，清单与详细模式均保留条款。结果同时给出 Markdown 和 `must_obey_contracts`、`task_actionable_checklist`、`module_gotchas` 结构化章节。P0 不绕过等级和适用性，但准入后不因预算或已知反馈消失；省略项分别报告。
+Project → Requirement → Task。Requirement 保存整体目标、验收要求和验收结论；Task 保存独立实现范围、验证要求及结果。Task 验证完成只推动父需求进入待整体验收，用户确认后才完成父需求。
 
-语义模型不是 JIT 热路径的依赖。当前未配置语义评估时返回 `not_assessed`；Agent 主动上报的潜在冲突只有涉及的规则 ID/版本都仍在本次候选时才以“未验证报告”形式提示，**不冒充模型诊断或自动仲裁**。不把相似文本机械合并。账本上的“密度”由已存 Rule 的具体作用域前缀计算，不暗示服务器扫描过远程文件树。
+归档和软删除使用独立时间字段。记录修订号防止并发覆盖；需求、任务与规则快照保留当时内容。子任务变化同步更新父需求修订，验收检查在同一写事务里完成。
 
-## 数据与部署
+当前运行时没有 Session 实体。工作范围由明确的 Project/Task/记录 ID 决定。Worktree/source 是可选的客户端声明，既不证明身份，也不推导业务任务。
 
-schema 由初始迁移 `1f7a79740655` 和 v2 后继 `2c4e8a6b901d` 管理；迁移必须由所有者显式选定目标，新库初始化及版本升级共用同一迁移链。旧库升级先在隔离副本验证，项目分类确认后才启用主题查询；历史 category 仅留在 v1 快照，当前规则不保留兼容分类。运行入口拒绝旧版或未知 schema，不对真实旧库做隐式写入。Web、同机 stdio MCP 与远程 HTTP MCP 使用 Hub 本机同一数据库。远程机器不能在网络共享盘直接打开 SQLite WAL；服务将工作区路径视为客户端的有界声明；JIT 对文件参数做工作区相对路径校验，并执行项目/Task/会话一致性检查，不声称做了远端 OS 文件验证。
+## 上下文与证据
 
-v2 的 CRUD、查询真值表、证据、接口和迁移验收见 [主题升级契约](topics-v2.md)。更多工程边界见 [实现规范](rebuild-plan.md)。历史 R01–R31 清单及旧架构交付记录不是当前入口代码的规范；已取消的宿主专用钩子、静态副本及 CodeNeuro 代跑测试能力不会恢复。
+上下文采用短只读快照、事务外纯装配、短写事务重核修订的流程，避免长时间持锁和混合新旧数据。重核范围包括项目规则、主题目录、父需求、Task 和任务知识；冲突时有限重算。
+
+调用方显式选择优先级、主题或真实文件。主题决定业务适用性；无主题时按文件匹配。Task 查询附带父目标与自身范围，不包含兄弟任务。被选中且适用的 P0 全文保留；预算省略明确返回。
+
+Delivery 保存实际正文与引用；预览不生成真实下发凭据。请求回执按项目、操作和 request_id 保存输入指纹与原结果。反馈引用真实 Delivery；0 分仅用于统计，不压缩其他 Agent 的正文。
+
+规则验证按声明的检查和测试项绑定宿主报告。同事件的时间区或排序差异不会增加证据次数。规范规则走人工审阅；长期契约修改使用固定候选和目标修订。所有证据仍是客户端上报，不等于 Hub 执行或认证。
+
+## 存储与运行
+
+只维护 `adapters/sqlite/schema.py` 中的当前模型，没有数据库升级链或协议版本分支。`codeneuro init-db --db ...` 在空库建表；服务启动只检查实际表结构，不隐式改库。既有本地数据由 `scripts/migrate_local_data.py` 一次性转到新库，源库保留。
+
+SQLite 写事务使用 `BEGIN IMMEDIATE`，连接启用外键和有界等待。读写事务短且显式，历史快照与业务更新同事务提交。详情和列表有界，账本使用真实聚合计数。
+
+Web、同机 MCP 和 HTTP MCP 共用 Hub 本机数据库。远程客户端连接 HTTP，不在共享网络盘直接并发打开 SQLite。文件查询只校验声明路径的语法和项目业务范围，不声称扫描了远端工作区。
+
+Web 与 MCP 均无鉴权。actor/human 等字段仅是操作来源标签。默认监听回环地址；工程部署和 Git 提交要求见项目已有约定。
+
+业务细节见[需求与任务](requirement-task-hierarchy.md)、[主题](topics.md)、[规则治理](governance.md)和[接口](mcp-resources.md)。

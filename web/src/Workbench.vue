@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { Ledger, Project, Proposal, Requirement, TabId, TabItem, Task, TaskStatus } from './types/ledger'
+import type { Ledger, Project, Proposal, TabId, TabItem } from './types/ledger'
 import { apiService, ApiError } from './api/client'
 
 // 布局组件
@@ -21,7 +21,7 @@ import OverviewView from './components/views/OverviewView.vue'
 
 const tabs: readonly TabItem[] = [
   { id: 'overview', icon: '◫', title: '数据全貌看板', subtitle: '查看项目核心指标、契约规则健康度与资产分布全貌。' },
-  { id: 'tasks', icon: '▥', title: '需求与任务看板', subtitle: '录入业务需求，推进任务流转与归档。' },
+  { id: 'tasks', icon: '▥', title: '需求与任务看板', subtitle: '管理整体目标、独立子任务、验证与整体验收。' },
   { id: 'rules', icon: '≋', title: '项目规则库', subtitle: '长期契约与任务短期规则统一管理，多维分类检索。' },
   { id: 'explorer', icon: '⌘', title: '规则作用域', subtitle: '按路径检索代码模块适用的工程规范与核心约束。' },
   { id: 'review', icon: '◈', title: '规范变更审阅', subtitle: '审阅编码助手提交的长期契约变更提案并核准。' },
@@ -79,48 +79,16 @@ let ledgerAbortCtrl: AbortController | null = null
 const paletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
 const dialogRef = ref<InstanceType<typeof ActionDialog> | null>(null)
 
-// 模态弹窗状态 (新增 transition 模式支持 D22)
-const modalMode = ref<'project' | 'pause' | 'resume' | 'archive' | 'reopen-requirement' | 'approve' | 'reject' | 'transition'>('project')
+// 项目注册与长期契约审阅；需求/任务操作由其资源视图管理。
+const modalMode = ref<'project' | 'approve' | 'reject'>('project')
 const modalTitle = computed(() => {
   switch (modalMode.value) {
     case 'project': return '注册新项目'
-    case 'archive': return '确认业务需求完成归档'
-    case 'reopen-requirement': return '恢复已归档业务需求'
     case 'approve': return '批准长期契约变更'
     case 'reject': return '拒绝契约变更提案'
-    case 'pause': return '暂停任务流转'
-    case 'resume': return '恢复任务流转'
-    case 'transition': return '流转任务状态'
   }
 })
-const modalTarget = ref<Task | Requirement | Proposal | null>(null)
-
-const transitionAvailableStatuses = computed<TaskStatus[]>(() => {
-  if (modalMode.value !== 'transition' || !modalTarget.value) return []
-  const currentStatus = (modalTarget.value as Task).status
-  const transitions: Record<TaskStatus, TaskStatus[]> = {
-    draft: ['active', 'archived'],
-    active: ['testing', 'archived'],
-    testing: ['active', 'released', 'archived'],
-    released: ['active', 'archived'],
-    archived: ['active', 'released'],
-    paused: [],
-    deleted: [],
-  }
-  return transitions[currentStatus] || []
-})
-
-function formatTaskStatusName(st?: TaskStatus | string): string {
-  const map: Record<string, string> = {
-    draft: '待开始',
-    active: '进行中',
-    paused: '已暂停',
-    testing: '待验证',
-    released: '已发布',
-    archived: '已归档',
-  }
-  return (st && map[st]) || st || ''
-}
+const modalTarget = ref<Proposal | null>(null)
 
 function fail(cause: unknown) {
   const err = cause as Error
@@ -332,10 +300,10 @@ async function handleDeleteProject(targetId?: string) {
 
 // 统计衍生属性 (解决 D12: 核心契约严格过滤 P0)
 const activeRequirementsCount = computed(
-  () => ledger.value?.requirements.filter(r => r.status === 'active').length ?? 0,
+  () => ledger.value?.counts.requirements.working ?? 0,
 )
 const activeTasksCount = computed(
-  () => ledger.value?.tasks.filter(t => ['active', 'testing'].includes(t.status)).length ?? 0,
+  () => ledger.value?.counts.tasks.working ?? 0,
 )
 const contractsCount = computed(
   () => ledger.value?.rules.filter(r => r.task_id === null && r.status === 'active' && r.priority === 'P0').length ?? 0,
@@ -344,75 +312,12 @@ const pendingProposalsCount = computed(
   () => ledger.value?.proposals.filter(p => p.status === 'pending').length ?? 0,
 )
 
-// 需求录入提交 (解决 D09: 失败保留文本与选择，保持同一请求 ID 幂等)
-async function handleSubmitDemand(payload: { text: string; taskId?: string; requestId?: string; onSuccess?: () => void }) {
-  if (!projectId.value || !payload.text.trim()) return
-  const capturedProjectEpoch = projectEpoch
-  const capturedPid = projectId.value
-  const token = startAction()
-  error.value = ''
-  try {
-    await apiService.submitRequirement(capturedPid, {
-      text: payload.text,
-      request_id: payload.requestId || crypto.randomUUID(),
-      ...(payload.taskId ? { task_id: payload.taskId } : { title: payload.text.trim().split(/[。.!?\n]/)[0].slice(0, 80) }),
-    })
-    if (capturedProjectEpoch === projectEpoch && capturedPid === projectId.value) {
-      notice.value = '业务需求已保存，将作为独立执行约束下发给编码助手。'
-      payload.onSuccess?.()
-      await refresh()
-    }
-  } catch (cause) {
-    if (capturedProjectEpoch === projectEpoch && capturedPid === projectId.value) {
-      fail(cause)
-    }
-  } finally {
-    finishAction(token, capturedProjectEpoch)
-  }
-}
-
 // 打开弹窗系列
 function openCreateProject() {
   modalEpoch++
   modalMode.value = 'project'
   modalTarget.value = null
   dialogRef.value?.open()
-}
-
-function openArchive(req: Requirement) {
-  modalEpoch++
-  modalMode.value = 'archive'
-  modalTarget.value = req
-  dialogRef.value?.open()
-}
-
-function openReopenRequirement(req: Requirement) {
-  modalEpoch++
-  modalMode.value = 'reopen-requirement'
-  modalTarget.value = req
-  dialogRef.value?.open()
-}
-
-function openPause(task: Task) {
-  modalEpoch++
-  modalMode.value = 'pause'
-  modalTarget.value = task
-  dialogRef.value?.open()
-}
-
-function openResume(task: Task) {
-  modalEpoch++
-  modalMode.value = 'resume'
-  modalTarget.value = task
-  dialogRef.value?.open()
-}
-
-function openTransition(task: Task) {
-  modalEpoch++
-  modalMode.value = 'transition'
-  modalTarget.value = task
-  const first = transitionAvailableStatuses.value[0] || 'active'
-  dialogRef.value?.open('', first)
 }
 
 function openApprove(prop: Proposal) {
@@ -433,12 +338,11 @@ function handleDialogClose() {
   modalEpoch++
 }
 
-// 弹窗提交处理 (处理常规表单及 task transition D22)
+// 项目和长期契约弹窗提交。
 async function handleDialogSubmit(data: {
   projectId?: string
   projectName?: string
   reason?: string
-  targetStatus?: TaskStatus
 }) {
   const capturedProjectEpoch = projectEpoch
   const capturedProjectId = projectId.value
@@ -472,66 +376,6 @@ async function handleDialogSubmit(data: {
       dialogRef.value?.close()
       projectId.value = created.id
       syncUrl()
-      await refresh()
-    } else if (capturedMode === 'archive') {
-      const req = capturedTarget as Requirement
-      await apiService.archiveRequirement(
-        capturedProjectId,
-        req.task_id,
-        req.id,
-        req.version,
-        data.reason || '',
-      )
-      if (!isModalContextValid()) return
-      notice.value = '需求已归档。'
-      modalEpoch++
-      dialogRef.value?.close()
-      await refresh()
-    } else if (capturedMode === 'reopen-requirement') {
-      const req = capturedTarget as Requirement
-      await apiService.reopenRequirement(
-        capturedProjectId,
-        req.task_id,
-        req.id,
-        req.version,
-        data.reason || '',
-      )
-      if (!isModalContextValid()) return
-      notice.value = '需求已恢复为进行中，历史归档版本保留；已停用规则未恢复。'
-      modalEpoch++
-      dialogRef.value?.close()
-      await refresh()
-    } else if (capturedMode === 'pause') {
-      const t = capturedTarget as Task
-      await apiService.pauseTask(capturedProjectId, t.id, t.revision, data.reason || '')
-      if (!isModalContextValid()) return
-      notice.value = '任务已暂停。'
-      modalEpoch++
-      dialogRef.value?.close()
-      await refresh()
-    } else if (capturedMode === 'resume') {
-      const t = capturedTarget as Task
-      await apiService.resumeTask(capturedProjectId, t.id, t.revision, data.reason || '')
-      if (!isModalContextValid()) return
-      notice.value = '任务已恢复。'
-      modalEpoch++
-      dialogRef.value?.close()
-      await refresh()
-    } else if (capturedMode === 'transition') {
-      const t = capturedTarget as Task
-      await apiService.transitionTask(
-        capturedProjectId,
-        t.id,
-        t.revision,
-        data.targetStatus || 'active',
-        data.reason || '人工状态转换',
-      )
-      if (!isModalContextValid()) return
-      notice.value = t.status === 'archived' && data.targetStatus === 'active'
-        ? '任务已重新激活；历史需求和已停用规则保持不变，可按需恢复指定需求。'
-        : `任务状态已成功流转至 ${formatTaskStatusName(data.targetStatus)}。`
-      modalEpoch++
-      dialogRef.value?.close()
       await refresh()
     } else if (capturedMode === 'approve' || capturedMode === 'reject') {
       const p = capturedTarget as Proposal
@@ -659,14 +503,10 @@ onUnmounted(() => {
           <!-- 2. 需求与任务看板 (Tasks) -->
           <TasksView
             v-else-if="tab === 'tasks'"
+            :key="projectId"
+            :project-id="projectId"
             :ledger="ledger"
-            :busy="busy"
-            @submit-demand="handleSubmitDemand"
-            @open-archive="openArchive"
-            @open-reopen-requirement="openReopenRequirement"
-            @open-pause="openPause"
-            @open-resume="openResume"
-            @open-transition="openTransition"
+            @refresh="refresh"
           />
 
           <!-- 3. 项目规则库 (Rules) -->
@@ -710,8 +550,6 @@ onUnmounted(() => {
       :busy="busy"
       :error-text="error"
       :is-project-modal="modalMode === 'project'"
-      :is-transition-modal="modalMode === 'transition'"
-      :available-statuses="transitionAvailableStatuses"
       @submit="handleDialogSubmit"
       @close="handleDialogClose"
     />

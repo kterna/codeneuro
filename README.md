@@ -2,7 +2,7 @@
 
 面向 Coding Agent 的任务、需求和规则上下文 Hub，提供 Web 工作台与 MCP 接口。
 
-- 按项目和任务管理需求原文、完成摘要与任务状态。
+- 按 Project → Requirement → Task 管理整体业务目标和可独立开发、验证的子任务。
 - 按业务主题或文件范围检索规则，显式选择 P0–P3 优先级。
 - 管理规则审阅、测试证据、下发记录与反馈。
 
@@ -15,7 +15,7 @@ uv venv
 uv pip install --python .venv/bin/python -r requirements.txt
 
 # 初始化新数据库
-.venv/bin/python -m codeneuro migrate --db /absolute/path/codeneuro.db
+.venv/bin/python -m codeneuro init-db --db /absolute/path/codeneuro.db
 
 # 启动 Hub
 .venv/bin/python -m codeneuro serve --db /absolute/path/codeneuro.db
@@ -23,7 +23,9 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 Windows 将 `.venv/bin/python` 替换为 `.venv/Scripts/python.exe`。
 
-打开 [http://127.0.0.1:8801/app/](http://127.0.0.1:8801/app/)，注册项目后即可使用工作台。已有数据库升级前须备份，参见[升级说明](docs/topics-v2.md)。
+打开 [http://127.0.0.1:8801/app/](http://127.0.0.1:8801/app/)，注册项目后即可使用工作台。所有子任务验证完成后，需求等待用户整体验收。Agent 直接传项目和任务，无需创建或关闭 Session。
+
+代码只维护当前模型和接口。已有本地数据用[一次性迁移脚本](scripts/migrate_local_data.py)转入新库，原库保留；操作说明见[需求与任务设计](docs/requirement-task-hierarchy.md#本地数据处理)。
 
 ## MCP 接入
 
@@ -40,7 +42,7 @@ Windows 将 `.venv/bin/python` 替换为 `.venv/Scripts/python.exe`。
 }
 ```
 
-Hub 的 Streamable HTTP MCP 地址为 `http://127.0.0.1:8801/mcp/`。详细配置见 [MCP 接入指南](docs/agent-integrations.md)。
+Hub 的 Streamable HTTP MCP 地址为 `http://127.0.0.1:8801/mcp/`。详细使用见 [客户端接入与使用](docs/client.md)。
 
 ## 使用边界
 
@@ -50,6 +52,9 @@ Hub 的 Streamable HTTP MCP 地址为 `http://127.0.0.1:8801/mcp/`。详细配�
 
 ## 文档
 
+- [文档目录](docs/README.md)
+- [需求与任务](docs/requirement-task-hierarchy.md)
 - [客户端使用](docs/client.md)
-- [主题与规则查询](docs/topics-v2.md)
+- [MCP 与 HTTP 接口](docs/mcp-resources.md)
+- [主题与规则查询](docs/topics.md)
 - [规则治理](docs/governance.md)

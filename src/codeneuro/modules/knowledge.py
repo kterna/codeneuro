@@ -22,7 +22,6 @@ class ContractProposal:
     id: str
     project_id: str
     task_id: str
-    session_id: str
     target_rule_id: str
     target_version: int
     title: str
@@ -39,7 +38,6 @@ class ContractProposal:
     validation_spec: dict | None = None
     source_rule_id: str | None = None
     source_version: int | None = None
-    schema_version: int = 2
 
 
 @dataclass(frozen=True)
@@ -81,6 +79,9 @@ def relative_path(value: str, *, pattern: bool = False) -> str:
     if not isinstance(value, str) or not value or value.startswith('/') or '\\' in value or '\x00' in value:
         raise ProductError('Expected a workspace-relative POSIX path.')
     parts = value.split('/')
+    if value.endswith('/'):
+        raise ProductError('Use a directory pattern such as src/**.' if pattern
+                           else 'Supply a real file such as src/app.py; directory paths are not files.')
     if any(p in ('', '.', '..') or ':' in p for p in parts):
         raise ProductError('Path escapes or ambiguously names the workspace.')
     if pattern and any('**' in p and p != '**' for p in parts):

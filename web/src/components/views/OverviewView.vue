@@ -14,8 +14,7 @@ const emit = defineEmits<{
   (e: 'navigate', tabId: TabId): void
 }>()
 
-const totalRequirements = computed(() => props.ledger.requirements.length)
-const archivedRequirements = computed(() => totalRequirements.value - props.activeRequirementsCount)
+const archivedRequirements = computed(() => props.ledger.counts.requirements.archived)
 const totalRules = computed(() => props.ledger.rules.length)
 const activeRules = computed(() => props.ledger.rules.filter(r => r.status === 'active').length)
 const totalFindings = computed(() => props.ledger.findings?.length ?? 0)
@@ -51,7 +50,7 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
           <div class="card-value">{{ activeTasksCount }}</div>
           <div class="card-meta">
             <span>执行中：{{ activeTasksCount }} 个</span>
-            <span>任务总数：{{ ledger.tasks.length }} 个</span>
+            <span>任务总数：{{ ledger.counts.tasks.total }} 个</span>
           </div>
           <div class="card-action">查看任务流转 →</div>
         </div>
