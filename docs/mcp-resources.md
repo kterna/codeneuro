@@ -44,7 +44,7 @@ codeneuro_get_context(project_id="archive", task_id="明确选中的任务ID",
 
 Task 查询包含父需求和本任务，不带入兄弟内容；项目级查询不推导 Task。结果含正文、实际引用、查询、匹配依据与省略信息，不重复返回 sections。
 
-相同项目、操作和 request_id 的相同输入重放原响应，变更输入冲突；省略或更换 ID 获取当前知识。`codeneuro_get_delivery(delivery_id)` 读取当时快照，不重新计算。迁入的旧下发正文仍是原始记录，其中旧字段不会用于当前上下文装配。
+相同项目、操作和 request_id 的相同输入重放原响应，变更输入冲突；省略或更换 ID 获取当前知识。`codeneuro_get_delivery(delivery_id)` 直接读取保存的完整 JSON，不重新计算，也不裁剪 sections 等已存字段；它与精简的新上下文输出不同。迁入的旧下发正文仍是原始记录，其中旧字段不会用于当前上下文装配。
 
 `codeneuro_rate_rule(delivery_id, rule_id, score, reason)` 只接受真实下发的规则；score=0 是已知统计，不隐藏未来正文。`codeneuro_report_issue(project_id, issue_type, title, description, ...)` 可选 Task；conflict 必须指定 Task 和至少两条不同规则。两者没有 debug 前置。
 

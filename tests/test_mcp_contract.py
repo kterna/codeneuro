@@ -55,7 +55,7 @@ async def test_catalogue_has_no_session_lifecycle_or_duplicate_output(mcp):
 
 @pytest.mark.asyncio
 async def test_task_verification_then_explicit_requirement_acceptance(mcp):
-    server, *_ = mcp
+    server, product, _, agent = mcp
     requirement, task = await scope(server)
     context = unwrap(await server.call_tool('codeneuro_get_context', {
         'project_id': 'p', 'task_id': task['id'], 'files': ['src/pay.py'], 'priorities': ['P1'],
@@ -79,10 +79,25 @@ async def test_task_verification_then_explicit_requirement_acceptance(mcp):
         'reason': 'User explicitly confirmed overall acceptance'}))
     assert accepted['status'] == 'completed'
     replay = unwrap(await server.call_tool('codeneuro_get_delivery', {'delivery_id': context['id']}))
-    assert replay == context
+    assert replay == product.context.get_delivery(agent, context['id'])
+    assert {key: value for key, value in replay.items() if key != 'sections'} == context
     fresh = unwrap(await server.call_tool('codeneuro_get_context', {
         'project_id': 'p', 'task_id': task['id'], 'files': ['src/pay.py'], 'priorities': ['P1']}))
     assert fresh['scope']['requirement_status'] == 'completed' and fresh['scope']['read_only']
+
+
+@pytest.mark.asyncio
+async def test_saved_delivery_preserves_all_original_fields(mcp):
+    server, product, _, _ = mcp
+    saved = {'id': 'historical-delivery', 'markdown': '原始下发正文', 'rule_refs': [],
+             'sections': {'original': [{'text': '保留当时已存的结构化正文'}]},
+             'historical_metadata': {'unchanged': True}}
+    with product.context.uow.write() as tx:
+        tx.c.exec_driver_sql(
+            'INSERT INTO deliveries (id,project_id,task_id,response_json,source_json,created_at) VALUES (?,?,?,?,?,?)',
+            (saved['id'], 'p', None, json.dumps(saved, ensure_ascii=False), '{}', '2024-01-01T00:00:00+00:00'))
+    replay = unwrap(await server.call_tool('codeneuro_get_delivery', {'delivery_id': saved['id']}))
+    assert replay == saved
 
 
 @pytest.mark.asyncio

@@ -31,7 +31,7 @@ def configured(tmp_path):
     uow.dispose()
 
 
-async def exercise_mcp(session):
+async def exercise_mcp(session, product):
     await session.initialize()
     tools = (await session.list_tools()).tools
     names = {item.name for item in tools}
@@ -55,7 +55,9 @@ async def exercise_mcp(session):
         'source': {'workspace': 'C:/Synthetic/worktree', 'machine_name': 'fixture', 'platform': 'windows'}})
     assert 'protocol_version' not in context and 'sections' not in context
     assert context['task_refs'] == [[task['id'], 1]]
-    assert await call('codeneuro_get_delivery', {'delivery_id': context['id']}) == context
+    saved = await call('codeneuro_get_delivery', {'delivery_id': context['id']})
+    assert saved == product.context.get_delivery(Actor('snapshot-check'), context['id'])
+    assert {key: value for key, value in saved.items() if key != 'sections'} == context
     listed = await call('codeneuro_task', {'project_id': 'p', 'action': 'list', 'requirement_id': parent['id']})
     assert listed['next_cursor'] is None and listed['items'][0]['id'] == task['id']
     invalid = await session.call_tool('codeneuro_get_context', {'project_id': 'p', 'task_id': task['id'],
@@ -65,14 +67,14 @@ async def exercise_mcp(session):
 
 @pytest.mark.asyncio
 async def test_real_stdio_mcp_without_session_lifecycle(configured):
-    root, filename, _ = configured
+    root, filename, product = configured
     env = {key: value for key, value in os.environ.items() if not key.startswith('CODENEURO_')}
     env.update(PYTHONPATH=str(root / 'src'), PYTHONDONTWRITEBYTECODE='1')
     params = StdioServerParameters(command=sys.executable,
         args=['-B', '-m', 'codeneuro', 'mcp', '--db', filename], env=env)
     async with stdio_client(params) as (reader, writer):
         async with ClientSession(reader, writer) as session:
-            await exercise_mcp(session)
+            await exercise_mcp(session, product)
 
 
 @pytest.mark.asyncio
@@ -84,7 +86,7 @@ async def test_real_streamable_http_mcp_matches_stdio(configured):
         async with http:
             async with streamable_http_client('http://localhost/mcp/', http_client=http) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
-                    await exercise_mcp(session)
+                    await exercise_mcp(session, product)
 
 
 @pytest.mark.asyncio
