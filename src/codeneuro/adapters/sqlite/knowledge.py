@@ -14,14 +14,14 @@ def _proposal(row):
     if not row:
         return None
     return ContractProposal(
-        id=row['id'], project_id=row['project_id'], task_id=row['task_id'], session_id=row['session_id'],
+        id=row['id'], project_id=row['project_id'], task_id=row['task_id'],
         target_rule_id=row['target_rule_id'], target_version=row['target_version'], title=row['title'],
         points=tuple(json.loads(row['points_json'])), patterns=tuple(json.loads(row['patterns_json'])),
         priority=Priority(row['priority']), topics=tuple(json.loads(row['topics_json'])), reason=row['reason'],
         status=row['status'], decision_reason=row['decision_reason'], reviewer_id=row['reviewer_id'],
         is_global=bool(row['is_global']), priority_reason=row['priority_reason'],
         validation_spec=json.loads(row['validation_spec_json']) if row['validation_spec_json'] else None,
-        source_rule_id=row['source_rule_id'], source_version=row['source_version'], schema_version=row['schema_version'])
+        source_rule_id=row['source_rule_id'], source_version=row['source_version'])
 
 
 def _content(rule):
@@ -71,12 +71,12 @@ class KnowledgeRepo(Repo):
 
     def _rule_snapshot(self, rule):
         self.c.execute(s.rule_versions.insert().values(rule_id=rule.id, version=rule.version,
-            topics_json=_json(rule.topics), schema_version=2, **_content(rule)))
+                                                       snapshot_json=_json(asdict(rule))))
 
     def _bump_rule_scope(self, rule):
         if rule.task_id:
             self.c.execute(s.tasks.update().where(s.tasks.c.id == rule.task_id).values(
-                revision=s.tasks.c.revision + 1))
+                context_revision=s.tasks.c.context_revision + 1))
         else:
             self.c.execute(s.projects.update().where(s.projects.c.id == rule.project_id).values(
                 rule_revision=s.projects.c.rule_revision + 1))
@@ -88,15 +88,7 @@ class KnowledgeRepo(Repo):
     def rule_snapshot(self, rule_id, version):
         row = self._one(sa.select(s.rule_versions).where(
             s.rule_versions.c.rule_id == rule_id, s.rule_versions.c.version == version))
-        if row is None:
-            return None
-        result = dict(row)
-        for name in ('points', 'patterns', 'topics', 'validation_spec'):
-            value = result.pop(name + '_json')
-            result[name] = json.loads(value) if value is not None else None
-        if result['schema_version'] == 2:
-            result.pop('category')
-        return result
+        return json.loads(row['snapshot_json']) if row else None
 
     def promoted_rule(self, source_id, source_version):
         found = self._rules(sa.select(s.rules).where(s.rules.c.origin_rule_id == source_id,
@@ -127,7 +119,7 @@ class KnowledgeRepo(Repo):
             values[name + '_json'] = _json(value) if value is not None else None
         self.c.execute(s.contract_proposals.insert().values(**values))
         self.c.execute(s.tasks.update().where(s.tasks.c.id == proposal.task_id).values(
-            revision=s.tasks.c.revision + 1))
+            context_revision=s.tasks.c.context_revision + 1))
 
     def get_proposal(self, proposal_id):
         return _proposal(self._one(sa.select(s.contract_proposals).where(s.contract_proposals.c.id == proposal_id)))

@@ -47,9 +47,9 @@ onUnmounted(() => {
   invalidateInspect()
 })
 
-// 任务候选（过滤 active / testing 状态）
+// 有效工作任务；完整子任务清单在需求页面分页查询。
 const availableTasks = computed(() => {
-  return props.ledger.tasks.filter(t => ['active', 'testing'].includes(t.status))
+  return props.ledger.tasks.filter(t => !t.archived_at && ['active', 'testing', 'completed'].includes(t.status))
 })
 
 function formatTaskStatus(status: string): string {
@@ -58,8 +58,7 @@ function formatTaskStatus(status: string): string {
     active: '进行中',
     paused: '已暂停',
     testing: '待验证',
-    released: '已发布',
-    archived: '已归档',
+    completed: '已完成',
   }
   return map[status] || status
 }

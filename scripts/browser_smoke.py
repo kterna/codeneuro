@@ -1,4 +1,4 @@
-"""Isolated Chromium acceptance of intake/archive and the v2 Topic workbench.
+"""Isolated Chromium acceptance of the Requirement/Task and Topic workbench.
 
 Only a new temporary database, loopback service and disposable browser profile are
 used. The script never connects to an existing service or normal browser profile.
@@ -17,7 +17,8 @@ import urllib.request
 from websockets.exceptions import ConnectionClosed
 from websockets.sync.client import connect
 
-from browser_topics_v2 import run_topics_flow
+from browser_topics import run_topics_flow
+from browser_tasks import run_task_flow
 
 
 def free_port():
@@ -116,7 +117,7 @@ def main(argv=None):
         temp = Path(temporary)
         database = temp / 'new.db'
         env = {**os.environ, 'PYTHONPATH': str(root / 'src'), 'PYTHONDONTWRITEBYTECODE': '1'}
-        subprocess.run([sys.executable, '-B', '-m', 'codeneuro', 'migrate', '--db', str(database)],
+        subprocess.run([sys.executable, '-B', '-m', 'codeneuro', 'init-db', '--db', str(database)],
                        cwd=root, env=env, check=True)
         http_port, debug_port = free_port(), free_port()
         base_url = f'http://127.0.0.1:{http_port}'
@@ -155,20 +156,10 @@ def main(argv=None):
                         page.fill('#new-project-name', 'Browser test')
                         page.click('保存', '#editor')
                         page.until("document.querySelector('#project').value === 'browser-project'")
-                        page.click('需求与任务看板', '#navigation')
-                        page.until("!!document.querySelector('#demand-text')")
-                        page.fill('#demand-text', '新增退款流程并确保幂等。')
-                        page.click('提交原文需求')
-                        page.until("document.querySelectorAll('.original-text').length === 1")
-                        page.click('确认归档')
-                        page.until("document.querySelector('#editor').open")
-                        page.fill('#editor textarea', 'Coding Agent confirmed completion.')
-                        page.click('保存', '#editor')
-                        page.until("document.body.innerText.includes('完成摘要：Coding Agent confirmed completion.')")
-                        page.until("!!document.querySelector('[data-task-id][data-status=archived]')")
+                        task_checks = run_task_flow(page, fetch, base_url, wait)
                         topic_checks = run_topics_flow(database, page, fetch, base_url, wait)
                         assert not page.errors, page.errors
-                        result = {'result': 'passed', 'flows': ['intake_archival_ledger', *topic_checks],
+                        result = {'result': 'passed', 'flows': [*task_checks, *topic_checks],
                                   'javascript_errors': len(page.errors)}
                     except BaseException:
                         print(json.dumps({'browser_failure': page.js('document.body.innerText.slice(0,2400)'),

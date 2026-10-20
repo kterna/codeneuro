@@ -3,26 +3,44 @@ export type Project = {
   name: string
 }
 
-export type TaskStatus = 'draft' | 'active' | 'paused' | 'testing' | 'released' | 'archived' | 'deleted'
+export type TaskStatus = 'draft' | 'active' | 'paused' | 'testing' | 'completed'
+export type RequirementStatus = 'draft' | 'active' | 'accepting' | 'completed'
+export type Page<T> = { items: T[]; next_cursor: string | null }
+export type VersionPage<T> = { items: T[]; next_cursor: number | null }
 
 export type Task = {
   id: string
+  project_id: string
+  requirement_id: string
   title: string
   description: string
+  acceptance_criteria: string
   status: TaskStatus
-  revision: number
+  version: number
+  paused_from: 'active' | 'testing' | null
+  verification_summary: string | null
+  verification_report_ids: string[]
+  archived_at: string | null
+  deleted_at: string | null
 }
-
-export type RequirementStatus = 'active' | 'archived' | 'deleted'
 
 export type Requirement = {
   id: string
-  task_id: string
+  project_id: string
+  title: string
+  original_text: string
   text: string
+  acceptance_criteria: string
   status: RequirementStatus
   version: number
-  summary: string | null
+  completion_summary: string | null
+  archived_at: string | null
+  deleted_at: string | null
+  progress: { total: number; completed: number }
 }
+export type TaskSummary = Pick<Task, 'id' | 'project_id' | 'requirement_id' | 'title' | 'description' | 'status' | 'version' | 'archived_at'> & { truncated: boolean }
+export type RequirementSummary = Pick<Requirement, 'id' | 'project_id' | 'title' | 'text' | 'status' | 'version' | 'archived_at' | 'progress'> & { truncated: boolean }
+export type ResourceCounts = { total: number; working: number; completed: number; archived: number }
 
 export type RulePriority = 'P0' | 'P1' | 'P2' | 'P3'
 export type ValidationSpec =
@@ -60,7 +78,6 @@ export type RuleSnapshot = {
   is_global: boolean
   priority_reason: string
   validation_spec: ValidationSpec | null
-  schema_version: number
   status: RuleStatus
 }
 
@@ -110,7 +127,6 @@ export type Proposal = {
   validation_spec: ValidationSpec | null
   source_rule_id: string | null
   source_version: number | null
-  schema_version: number
   reason: string
   status: ProposalStatus
   decision_reason: string | null
@@ -143,7 +159,6 @@ export type Finding = {
   id: string
   project_id: string
   task_id: string
-  session_id: string
   target_path: string | null
   topics: string[]
   text: string
@@ -183,9 +198,12 @@ export type Ledger = {
   taxonomy: { taxonomy_revision: number; topic_query_enabled: boolean }
   topics: Topic[]
   topic_coverage: { rules: string[]; findings: string[] }
-  tasks: Task[]
+  tasks: TaskSummary[]
+  tasks_next_cursor: string | null
+  counts: { tasks: ResourceCounts; requirements: ResourceCounts }
   worktrees: Worktree[]
-  requirements: Requirement[]
+  requirements: RequirementSummary[]
+  requirements_next_cursor: string | null
   rules: Rule[]
   proposals: Proposal[]
   findings?: Finding[]

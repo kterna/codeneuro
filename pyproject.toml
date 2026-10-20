@@ -15,7 +15,6 @@ dependencies = [
     "mcp>=2.3.0,<3",
     "httpx>=0.28.1,<0.29",
     "sqlalchemy>=2.0.44,<2.1",
-    "alembic>=1.17.2,<2",
 ]
 
 [project.optional-dependencies]

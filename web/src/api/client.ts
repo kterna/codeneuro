@@ -1,6 +1,6 @@
 import type {
-  Project, Ledger, ScopeTreeResponse, InspectResponse, EventsResponse, TaskStatus,
-  Topic, TopicPage, RulePriority, Rule
+  Project, Ledger, ScopeTreeResponse, InspectResponse, EventsResponse,
+  Topic, TopicPage, RulePriority, Rule, Task, Requirement, TaskSummary, RequirementSummary, Page, VersionPage
 } from '../types/ledger'
 
 export class ApiError extends Error {
@@ -127,41 +127,38 @@ export const apiService = {
     return requestApi<EventsResponse>(buildProjectPath(projectId, `events${query}`), 'GET', undefined, signal)
   },
 
-  submitRequirement: (projectId: string, payload: { text: string; request_id: string; task_id?: string; title?: string }) =>
-    requestApi(buildProjectPath(projectId, 'requirements'), 'POST', payload),
+  getRequirements: (projectId: string, cursor?: string | null, signal?: AbortSignal) =>
+    requestApi<Page<RequirementSummary>>(buildProjectPath(projectId, `requirements?limit=20${cursor ? '&cursor=' + encodeURIComponent(cursor) : ''}`), 'GET', undefined, signal),
 
-  archiveRequirement: (projectId: string, taskId: string, requirementId: string, expectedVersion: number, summary: string) =>
-    requestApi(
-      buildProjectPath(projectId, `tasks/${encodeURIComponent(taskId)}/requirements/${encodeURIComponent(requirementId)}/archive`),
-      'POST',
-      { expected_version: expectedVersion, summary },
-    ),
+  getRequirement: (projectId: string, id: string, signal?: AbortSignal) =>
+    requestApi<Requirement>(buildProjectPath(projectId, `requirements/${encodeURIComponent(id)}`), 'GET', undefined, signal),
 
-  reopenRequirement: (projectId: string, taskId: string, requirementId: string, expectedVersion: number, reason: string) =>
-    requestApi(
-      buildProjectPath(projectId, `tasks/${encodeURIComponent(taskId)}/requirements/${encodeURIComponent(requirementId)}/reopen`),
-      'POST',
-      { expected_version: expectedVersion, reason },
-    ),
+  createRequirement: (projectId: string, changes: Record<string, unknown>, requestId: string) =>
+    requestApi<Requirement>(buildProjectPath(projectId, 'requirements'), 'POST', { changes, request_id: requestId }),
 
-  pauseTask: (projectId: string, taskId: string, expectedRevision: number, reason: string) =>
-    requestApi(buildProjectPath(projectId, `tasks/${encodeURIComponent(taskId)}/pause`), 'POST', {
-      expected_revision: expectedRevision,
-      reason,
-    }),
+  updateRequirement: (projectId: string, id: string, version: number, changes: Record<string, unknown>, reason: string) =>
+    requestApi<Requirement>(buildProjectPath(projectId, `requirements/${encodeURIComponent(id)}`), 'PATCH', { expected_version: version, changes, reason }),
 
-  resumeTask: (projectId: string, taskId: string, expectedRevision: number, reason: string) =>
-    requestApi(buildProjectPath(projectId, `tasks/${encodeURIComponent(taskId)}/resume`), 'POST', {
-      expected_revision: expectedRevision,
-      reason,
-    }),
+  deleteRequirement: (projectId: string, id: string, version: number, reason: string) =>
+    requestApi<Requirement>(buildProjectPath(projectId, `requirements/${encodeURIComponent(id)}`), 'DELETE', { expected_version: version, reason }),
 
-  transitionTask: (projectId: string, taskId: string, expectedRevision: number, status: TaskStatus, reason: string) =>
-    requestApi(buildProjectPath(projectId, `tasks/${encodeURIComponent(taskId)}/transition`), 'POST', {
-      expected_revision: expectedRevision,
-      status,
-      reason,
-    }),
+  getTasks: (projectId: string, requirementId: string, cursor?: string | null, signal?: AbortSignal) =>
+    requestApi<Page<TaskSummary>>(buildProjectPath(projectId, `requirements/${encodeURIComponent(requirementId)}/tasks?limit=20${cursor ? '&cursor=' + encodeURIComponent(cursor) : ''}`), 'GET', undefined, signal),
+
+  getTask: (projectId: string, id: string, signal?: AbortSignal) =>
+    requestApi<Task>(buildProjectPath(projectId, `tasks/${encodeURIComponent(id)}`), 'GET', undefined, signal),
+
+  createTask: (projectId: string, requirementId: string, changes: Record<string, unknown>, requestId: string) =>
+    requestApi<Task>(buildProjectPath(projectId, 'tasks'), 'POST', { requirement_id: requirementId, changes, request_id: requestId }),
+
+  updateTask: (projectId: string, id: string, version: number, changes: Record<string, unknown>, reason: string) =>
+    requestApi<Task>(buildProjectPath(projectId, `tasks/${encodeURIComponent(id)}`), 'PATCH', { expected_version: version, changes, reason }),
+
+  deleteTask: (projectId: string, id: string, version: number, reason: string) =>
+    requestApi<Task>(buildProjectPath(projectId, `tasks/${encodeURIComponent(id)}`), 'DELETE', { expected_version: version, reason }),
+
+  getVersions: (projectId: string, kind: 'requirements' | 'tasks', id: string, cursor?: number | null) =>
+    requestApi<VersionPage<Requirement | Task>>(buildProjectPath(projectId, `${kind}/${encodeURIComponent(id)}/versions?limit=20${cursor ? '&cursor=' + cursor : ''}`)),
 
   getTopics: (projectId: string, query = '', includeDeleted = false, cursor?: string | null, signal?: AbortSignal) => {
     const params = new URLSearchParams({ query, include_deleted: String(includeDeleted) })

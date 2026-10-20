@@ -31,17 +31,32 @@ class SqliteTransaction:
         self.topics = TopicsRepo(connection)
 
 
+def initialize_database(filename: str):
+    """Create the current tables in an empty file; never modify an existing database."""
+    location = Path(filename).resolve()
+    with closing(sqlite3.connect(location)) as raw:
+        if raw.execute("SELECT 1 FROM sqlite_master WHERE type='table'").fetchone():
+            raise ProductError('Database is not empty; initialization cannot overwrite it.')
+    engine = sa.create_engine(URL.create('sqlite', database=str(location)))
+    try:
+        with engine.begin() as connection:
+            connection.exec_driver_sql('PRAGMA foreign_keys=ON')
+            connection.exec_driver_sql('PRAGMA journal_mode=WAL')
+            s.metadata.create_all(connection)
+    finally:
+        engine.dispose()
+
+
 class SqliteUnitOfWork:
     def __init__(self, filename: str):
         location = Path(filename).resolve()
         if not location.is_file():
-            raise ProductError('New schema is not initialized; run the explicit Alembic migration.')
+            raise ProductError('Database is not initialized; run codeneuro init-db with an explicit path.')
         with closing(sqlite3.connect(location.as_uri() + '?mode=ro', uri=True)) as existing:
-            if not existing.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='alembic_version'").fetchone():
-                raise ProductError('Refusing an unversioned or legacy database.')
-            version = existing.execute('SELECT version_num FROM alembic_version').fetchone()
-            if not version or version[0] != s.CURRENT_SCHEMA:
-                raise ProductError('Database schema version does not match this application.')
+            for table in s.metadata.sorted_tables:
+                columns = {row[1] for row in existing.execute(f'PRAGMA table_info("{table.name}")')}
+                if columns != set(table.c.keys()):
+                    raise ProductError(f'Database structure differs at {table.name}; use the one-time local migration script.')
         self.engine = sa.create_engine(URL.create('sqlite', database=str(location)),
                                        connect_args={'timeout': 15})
 

@@ -5,7 +5,7 @@ import json
 from .findings import Finding
 from .knowledge import RANK, Priority, Rule, matches, relative_path
 from .topics import validate_keys
-from .tasks import ProductError, Requirement
+from .tasks import ProductError, Requirement, Task
 
 
 @dataclass(frozen=True)
@@ -52,45 +52,71 @@ class Delivery:
     sections: dict[str, tuple[dict, ...]] = field(default_factory=dict)
     reported_conflicts: tuple[dict, ...] = ()
     omitted_conflict_ids: tuple[str, ...] = ()
-    protocol_version: int = 2
     query: dict = field(default_factory=dict)
     taxonomy_revision: int | None = None
     resolved_topics: tuple[dict, ...] = ()
     match_reasons: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    task_refs: tuple[tuple[str, int], ...] = ()
+    omitted_task_ids: tuple[str, ...] = ()
+    scope: dict = field(default_factory=dict)
+
+
+def restore_delivery(value: dict) -> Delivery:
+    value = dict(value)
+    for key in ('rule_refs', 'requirement_refs', 'task_refs', 'finding_refs'):
+        value[key] = tuple(tuple(ref) for ref in value.get(key, ()))
+    for key in ('omitted_rule_ids', 'omitted_requirement_ids', 'omitted_task_ids',
+                'omitted_finding_ids', 'omitted_conflict_ids'):
+        value[key] = tuple(value.get(key, ()))
+    value['sections'] = {key: tuple(items) for key, items in value.get('sections', {}).items()}
+    value['resolved_topics'] = tuple(value.get('resolved_topics', ()))
+    value['reported_conflicts'] = tuple({**item, 'rule_refs': tuple(tuple(ref) for ref in item['rule_refs'])}
+                                        for item in value.get('reported_conflicts', ()))
+    value['match_reasons'] = {key: tuple(items) for key, items in value.get('match_reasons', {}).items()}
+    if 'query' in value:
+        value['query'] = {**value['query'], **{key: tuple(value['query'][key])
+                         for key in ('priorities', 'topics', 'files')}}
+    return Delivery(**value)
 
 
 def assemble(delivery_id: str, query: ContextQuery, rules: tuple[Rule, ...],
-             requirements: tuple[Requirement, ...], known: frozenset[tuple[str, int]],
+             requirements: tuple[Requirement, ...], task: Task | None = None,
              findings: tuple[Finding, ...] = (), conflict_reports: tuple[dict, ...] = ()) -> Delivery:
     candidates = [rule for rule in rules if rule.status == 'active' and rule.priority in query.priorities
                   and (rule.is_global or (bool(set(rule.topics) & set(query.topics)) if query.topics
                                           else rule.matches(query.files)))]
-    header = (f'CodeNeuro delivery {delivery_id}\nFiles: {", ".join(query.files)}\n'
-              f'Topics: {", ".join(query.topics)}\nPriorities: {", ".join(query.priorities)}\n')
+    header = f'CodeNeuro delivery {delivery_id}\n'
+    if query.files:
+        header += f'Files: {", ".join(query.files)}\n'
+    if query.topics:
+        header += f'Topics: {", ".join(query.topics)}\n'
+    header += f'Priorities: {", ".join(query.priorities)}\n'
     reasons = {}
     entries: list[tuple[str, str, int, str, str, int, int, bool]] = []
     for rule in candidates:
-        reminder = rule.priority != Priority.P0 and (rule.id, rule.version) in known
-        if reminder:
-            content = f'[{rule.priority}] {rule.id}@{rule.version}: already known; recheck if relevant.\n'
-        else:
-            bullet = '- [ ] ' if query.mode == 'checklist' else '- '
-            clauses = '\n'.join(f'{bullet}{p}' for p in rule.points)
-            content = f'[{rule.priority}] {rule.title} ({rule.id}@{rule.version})\n{clauses}\n'
+        bullet = '- [ ] ' if query.mode == 'checklist' else '- '
+        clauses = '\n'.join(f'{bullet}{p}' for p in rule.points)
+        content = f'[{rule.priority}] {rule.title} ({rule.id}@{rule.version})\n{clauses}\n'
         topic_hit = bool(set(rule.topics) & set(query.topics))
         path_hit = rule.matches(query.files)
         reasons[rule.id] = tuple(name for name, hit in (
             ('topic', topic_hit), ('path', path_hit), ('global', rule.is_global)) if hit)
         boost = -(4 * topic_hit + 2 * path_hit)
-        entries.append(('rule', rule.id, rule.version, 'reminder' if reminder else 'full',
+        entries.append(('rule', rule.id, rule.version, 'full',
                         content, RANK[rule.priority], boost, rule.priority == Priority.P0))
     for requirement in requirements:
-        if requirement.status != 'active':
-            continue
         prefix = '- [ ] ' if query.mode == 'checklist' else '> '
-        quote = '\n'.join(f'{prefix}{line}' for line in requirement.text.splitlines())
-        content = f'Requirement {requirement.id}@{requirement.version}\n{quote}\n'
+        body = requirement.text
+        if requirement.acceptance_criteria:
+            body += '\nAcceptance: ' + requirement.acceptance_criteria
+        quote = '\n'.join(f'{prefix}{line}' for line in body.splitlines())
+        content = f'Requirement {requirement.title} ({requirement.id}@{requirement.version})\n{quote}\n'
         entries.append(('requirement', requirement.id, requirement.version, '', content, 1, -8, False))
+    if task:
+        content = f'Task {task.title} ({task.id}@{task.version}, {task.status})\n{task.description}\n'
+        if task.acceptance_criteria:
+            content += f'Acceptance: {task.acceptance_criteria}\n'
+        entries.append(('task', task.id, task.version, '', content, 1, -7, False))
     for finding in findings:
         if finding.status != 'pending_review' or finding.priority not in query.priorities:
             continue
@@ -122,7 +148,7 @@ def assemble(delivery_id: str, query: ContextQuery, rules: tuple[Rule, ...],
 
     def omissions() -> str:
         return ''.join(f'Omitted {kind}s: {", ".join(e[1] for e in omitted if e[0] == kind)}\n'
-                       for kind in ('rule', 'requirement', 'finding', 'conflict') if any(e[0] == kind for e in omitted))
+                       for kind in ('rule', 'requirement', 'task', 'finding', 'conflict') if any(e[0] == kind for e in omitted))
 
     while length + len(omissions()) > query.max_chars:
         last = next((i for i in range(len(selected) - 1, -1, -1) if not selected[i][7]), None)
@@ -152,4 +178,6 @@ def assemble(delivery_id: str, query: ContextQuery, rules: tuple[Rule, ...],
         reported_conflicts=tuple(report for report in conflict_reports if report['id'] in
                                  {e[1] for e in selected if e[0] == 'conflict'}),
         omitted_conflict_ids=tuple(e[1] for e in omitted if e[0] == 'conflict'),
-        query=asdict(query), match_reasons={e[1]: reasons[e[1]] for e in selected if e[0] == 'rule'})
+        query=asdict(query), match_reasons={e[1]: reasons[e[1]] for e in selected if e[0] == 'rule'},
+        task_refs=tuple((e[1], e[2]) for e in selected if e[0] == 'task'),
+        omitted_task_ids=tuple(e[1] for e in omitted if e[0] == 'task'))

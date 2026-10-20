@@ -24,38 +24,30 @@ class FeedbackRepo(Repo):
                          'avg_score': float(row.avg_score) if row.avg_score is not None else None}
                 for row in self.c.execute(statement)}
 
-    def known_rules(self, session_id):
-        statement = sa.select(s.feedback.c.rule_id, s.feedback.c.rule_version).join(
-            s.deliveries, s.deliveries.c.id == s.feedback.c.delivery_id).where(
-            s.deliveries.c.session_id == session_id, s.feedback.c.score == 0)
-        return frozenset((row.rule_id, row.rule_version) for row in self.c.execute(statement))
-
     def record_issue(self, issue: Issue):
         self.c.execute(s.issues.insert().values(id=issue.id, project_id=issue.project_id,
-            session_id=issue.session_id, issue_type=issue.issue_type, title=issue.title,
+            task_id=issue.task_id, issue_type=issue.issue_type, title=issue.title,
             description=issue.description, file_path=issue.file_path,
             related_rules_json=_json(issue.related_rule_versions),
             suggested_action=issue.suggested_action, status='open'))
-        self.c.execute(s.tasks.update().where(s.tasks.c.id == sa.select(s.sessions.c.task_id).where(
-            s.sessions.c.id == issue.session_id).scalar_subquery()).values(
-            revision=s.tasks.c.revision + 1))
+        if issue.task_id:
+            self.c.execute(s.tasks.update().where(s.tasks.c.id == issue.task_id).values(
+                context_revision=s.tasks.c.context_revision + 1))
 
     def conflict_issues(self, project_id, task_id):
         if not task_id:
             return []
         statement = sa.select(s.issues.c.id, s.issues.c.title,
-            s.issues.c.related_rules_json).join(s.sessions,
-            s.sessions.c.id == s.issues.c.session_id).where(
-            s.issues.c.project_id == project_id, s.sessions.c.task_id == task_id,
+            s.issues.c.related_rules_json).where(
+            s.issues.c.project_id == project_id, s.issues.c.task_id == task_id,
             s.issues.c.issue_type == 'conflict', s.issues.c.status == 'open')
         return [{'id': row.id, 'title': row.title,
                  'rule_refs': tuple(tuple(ref) for ref in json.loads(row.related_rules_json))}
                 for row in self.c.execute(statement)]
 
-    def delivered_rule(self, session_id, delivery_id, rule_id):
-        row = self._one(sa.select(s.delivery_rules.c.version).join(s.deliveries,
-            s.deliveries.c.id == s.delivery_rules.c.delivery_id).where(
-            s.deliveries.c.session_id == session_id, s.deliveries.c.id == delivery_id,
+    def delivered_rule(self, delivery_id, rule_id):
+        row = self._one(sa.select(s.delivery_rules.c.version).where(
+            s.delivery_rules.c.delivery_id == delivery_id,
             s.delivery_rules.c.rule_id == rule_id))
         return row['version'] if row else None
 
@@ -64,9 +56,6 @@ class FeedbackRepo(Repo):
             s.feedback.c.delivery_id == delivery_id, s.feedback.c.rule_id == rule_id))
         return (row['score'], row['reason']) if row else None
 
-    def record_feedback(self, session_id, delivery_id, rule_id, version, score, reason):
+    def record_feedback(self, delivery_id, rule_id, version, score, reason):
         self.c.execute(s.feedback.insert().values(delivery_id=delivery_id,
             rule_id=rule_id, rule_version=version, score=score, reason=reason))
-        if score == 0:
-            self.c.execute(s.sessions.update().where(s.sessions.c.id == session_id).values(
-                knowledge_revision=s.sessions.c.knowledge_revision + 1))

@@ -8,6 +8,7 @@ from ..modules.knowledge import matches, relative_path
 from ..modules.tasks import ProductError
 from ..modules.workspaces import Actor
 from .workspaces import Workspaces
+from .common import page_cursor
 
 
 class Ledger(Workspaces):
@@ -41,13 +42,25 @@ class Ledger(Workspaces):
                     'target_snapshot': tx.knowledge.rule_snapshot(proposal.target_rule_id, proposal.target_version),
                     'current_target_version': target.version if target else None})
             events = self._events(tx, project_id)
+            tasks = tx.workspaces.list_tasks(project_id, limit=101)
+            requirements = tx.requirements.project_requirements(project_id, limit=21)
+            progress = tx.requirements.progress([item.id for item in requirements[:20]])
             return {'project_id': project_id,
+                    'counts': tx.workspaces.counts(project_id),
                     'taxonomy': tx.topics.state(project_id),
                     'topic_coverage': tx.topics.coverage(project_id),
                     'topics': [asdict(item) for item in tx.topics.list(project_id, limit=100)],
-                    'tasks': [asdict(task) for task in tx.workspaces.list_tasks(project_id)],
+                    'tasks': [{**{key: getattr(task, key) for key in ('id', 'project_id', 'requirement_id',
+                        'status', 'version', 'archived_at')}, 'title': task.title[:200],
+                        'description': task.description[:200], 'truncated': len(task.title) > 200 or len(task.description) > 200}
+                        for task in tasks[:100]],
+                    'tasks_next_cursor': page_cursor(tasks[99].id, 'tasks', project_id) if len(tasks) > 100 else None,
                     'worktrees': [asdict(worktree) for worktree in tx.workspaces.project_worktrees(project_id)],
-                    'requirements': [asdict(item) for item in tx.requirements.project_requirements(project_id)],
+                    'requirements': [{**{key: getattr(item, key) for key in ('id', 'project_id', 'status', 'version', 'archived_at')},
+                        'title': item.title[:200], 'text': item.text[:200],
+                        'truncated': len(item.title) > 200 or len(item.text) > 200,
+                        'progress': progress.get(item.id, {'total': 0, 'completed': 0})} for item in requirements[:20]],
+                    'requirements_next_cursor': page_cursor(requirements[19].id, 'requirements', project_id) if len(requirements) > 20 else None,
                     'findings': [asdict(item) for item in tx.context.project_findings(project_id)],
                     'rules': rules,
                     'scope_density': density(rules),
@@ -82,11 +95,13 @@ class Ledger(Workspaces):
         query = ContextQuery(priorities=priorities, files=(path,))
         with self.uow.read() as tx:
             tx.workspaces.project_revision(project_id)
+            effective_task = task_id
             if task_id:
-                task = tx.workspaces.get_task(task_id, project_id)
-                if not task or task.status not in ('active', 'testing'):
-                    raise ProductError('Select an active/testing Task in this project.')
-            rules = [r for r in tx.knowledge.visible_rules(project_id, task_id)
+                task, parent = self._task(tx, task_id, project_id)
+                if (task.archived_at or parent.archived_at or task.status not in ('active', 'testing', 'completed')
+                        or parent.status not in ('active', 'accepting')):
+                    effective_task = None
+            rules = [r for r in tx.knowledge.visible_rules(project_id, effective_task)
                      if r.priority in query.priorities and
                      (r.is_global or any(matches(pattern, path) for pattern in r.patterns))]
             return {'path': path, 'task_id': task_id, 'rule_ids': [r.id for r in rules],

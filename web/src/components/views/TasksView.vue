@@ -1,1003 +1,385 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
-import type { Ledger, Requirement, Task, TaskStatus } from '../../types/ledger'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import type { Ledger, Requirement, RequirementSummary, Task, TaskSummary } from '../../types/ledger'
+import { apiService } from '../../api/client'
 import GhDrawer from '../ui/GhDrawer.vue'
 
-const props = defineProps<{
-  ledger: Ledger
-  busy: boolean
-}>()
+const props = defineProps<{ projectId: string; ledger: Ledger }>()
+const emit = defineEmits<{ (e: 'refresh'): void }>()
+const requirements = ref<RequirementSummary[]>([])
+const requirementCursor = ref<string | null>(null)
+const selectedId = ref('')
+const selected = ref<Requirement | null>(null)
+const tasks = ref<TaskSummary[]>([])
+const taskCursor = ref<string | null>(null)
+const loadingMoreTasks = ref(false)
+const focusedTask = ref<Task | null>(null)
+const busy = ref(false)
+const loading = ref(false)
+const error = ref('')
+const notice = ref('')
+const newRequirement = ref({ title: '', text: '', acceptance_criteria: '' })
+const newTask = ref({ title: '', description: '', acceptance_criteria: '' })
+const requirementRequest = ref(crypto.randomUUID())
+const taskRequest = ref(crypto.randomUUID())
+watch(newRequirement, () => { requirementRequest.value = crypto.randomUUID() }, { deep: true })
+watch([newTask, selectedId], () => { taskRequest.value = crypto.randomUUID() }, { deep: true })
+let alive = true
+let listSequence = 0
+let selectionSequence = 0
+let taskSequence = 0
+const abort = new AbortController()
+onUnmounted(() => { alive = false; abort.abort() })
 
-const emit = defineEmits<{
-  (e: 'submit-demand', payload: { text: string; taskId?: string; requestId?: string; onSuccess?: () => void }): void
-  (e: 'open-archive', req: Requirement): void
-  (e: 'open-reopen-requirement', req: Requirement): void
-  (e: 'open-pause', task: Task): void
-  (e: 'open-resume', task: Task): void
-  (e: 'open-transition', task: Task): void
-}>()
+const labels: Record<string, string> = {
+  draft: '待开始', active: '进行中', testing: '待验证', paused: '已暂停', accepting: '待整体验收', completed: '已完成',
+}
+const canWork = computed(() => selected.value && !selected.value.archived_at && selected.value.status !== 'completed')
+const relatedRules = computed(() => props.ledger.rules.filter(rule => rule.task_id === focusedTask.value?.id))
+const relatedFindings = computed(() => props.ledger.findings?.filter(item => item.task_id === focusedTask.value?.id) ?? [])
+const history = ref<(Requirement | Task)[]>([])
+const historyCursor = ref<number | null>(null)
+const historyTarget = ref<{ kind: 'requirements' | 'tasks'; id: string } | null>(null)
+let historySequence = 0
 
-const demand = ref('')
-const selectedTaskId = ref('')
-const viewMode = ref<'swimlane' | 'list'>('swimlane')
-const searchKeyword = ref('')
-const onlyActive = ref(false)
-const focusedTaskId = ref<string | null>(null)
-let taskOpenerElement: HTMLElement | null = null
-const taskCloseBtnRef = ref<HTMLButtonElement | null>(null)
+type EditAction = {
+  kind: 'requirements' | 'tasks'
+  target: Requirement | Task
+  title: string
+  changes: Record<string, unknown>
+  edit?: boolean
+  remove?: boolean
+}
+const action = ref<EditAction | null>(null)
+const actionReason = ref('')
+const actionSummary = ref('')
+const editTitle = ref('')
+const editText = ref('')
+const editAcceptance = ref('')
 
-// 保持重试请求 ID 幂等 (解决 D09)
-const draftRequestId = ref(crypto.randomUUID())
-const lastSubmittedText = ref('')
-const lastSubmittedTaskId = ref<string | undefined>(undefined)
-
-watch([demand, selectedTaskId], () => {
-  if (demand.value !== lastSubmittedText.value || selectedTaskId.value !== lastSubmittedTaskId.value) {
-    draftRequestId.value = crypto.randomUUID()
-  }
-})
-
-const focusedTask = computed<Task | null>(() => {
-  if (!focusedTaskId.value) return null
-  return props.ledger.tasks.find(t => t.id === focusedTaskId.value) || null
-})
-
-const activeLanes: { key: TaskStatus; label: string; dotCls: string }[] = [
-  { key: 'draft', label: '待开始', dotCls: 'draft' },
-  { key: 'active', label: '进行中', dotCls: 'active' },
-  { key: 'paused', label: '已暂停', dotCls: 'paused' },
-  { key: 'testing', label: '待验证', dotCls: 'testing' },
-]
-
-function taskStatusLabel(status: TaskStatus | string): string {
-  switch (status) {
-    case 'draft': return '待开始'
-    case 'active': return '进行中'
-    case 'paused': return '已暂停'
-    case 'testing': return '待验证'
-    case 'released': return '已发布'
-    case 'archived': return '已归档'
-    default: return status
-  }
+function failed(cause: unknown) {
+  if (alive && (cause as Error).name !== 'AbortError') error.value = (cause as Error).message
 }
 
-function reqStatusLabel(status: string): string {
-  switch (status) {
-    case 'active': return '进行中'
-    case 'archived': return '已归档'
-    default: return status
-  }
+async function loadRequirements(more = false) {
+  const sequence = ++listSequence
+  const page = await apiService.getRequirements(props.projectId, more ? requirementCursor.value : null, abort.signal)
+  if (!alive || sequence !== listSequence) return
+  requirements.value = more ? [...requirements.value, ...page.items] : page.items
+  requirementCursor.value = page.next_cursor
 }
 
-function escaped(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+async function selectRequirement(id: string) {
+  const sequence = ++selectionSequence
+  ++taskSequence
+  ++historySequence
+  loadingMoreTasks.value = false
+  selectedId.value = id
+  selected.value = null
+  tasks.value = []
+  taskCursor.value = null
+  focusedTask.value = null
+  historyTarget.value = null
+  error.value = ''
+  loading.value = true
+  try {
+    const [detail, page] = await Promise.all([
+      apiService.getRequirement(props.projectId, id, abort.signal),
+      apiService.getTasks(props.projectId, id, null, abort.signal),
+    ])
+    if (!alive || sequence !== selectionSequence) return
+    selected.value = detail
+    tasks.value = page.items
+    taskCursor.value = page.next_cursor
+  } catch (cause) { failed(cause) }
+  finally { if (alive && sequence === selectionSequence) loading.value = false }
 }
 
-const matchedTasks = computed(() => {
-  const text = demand.value.trim()
-  if (!text) return []
-  return props.ledger.tasks.filter(
-    task => ['active', 'testing'].includes(task.status) && new RegExp(escaped(task.title), 'i').test(text),
-  )
-})
-
-function handleSubmit() {
-  const text = demand.value.trim()
-  if (!text) return
-  const chosen = selectedTaskId.value || (matchedTasks.value.length === 1 ? matchedTasks.value[0].id : undefined)
-  lastSubmittedText.value = text
-  lastSubmittedTaskId.value = chosen
-  const submittedReqId = draftRequestId.value
-  emit('submit-demand', {
-    text,
-    taskId: chosen,
-    requestId: submittedReqId,
-    onSuccess: () => {
-      // 仅当用户在请求途中未修改内容时清空
-      if (demand.value.trim() === text) {
-        demand.value = ''
-        selectedTaskId.value = ''
-      }
-      draftRequestId.value = crypto.randomUUID()
-    },
-  })
+async function loadMoreTasks() {
+  if (loadingMoreTasks.value || !taskCursor.value) return
+  const id = selectedId.value
+  const sequence = selectionSequence
+  loadingMoreTasks.value = true
+  try {
+    const page = await apiService.getTasks(props.projectId, id, taskCursor.value, abort.signal)
+    if (!alive || selectedId.value !== id || sequence !== selectionSequence) return
+    tasks.value = [...tasks.value, ...page.items]
+    taskCursor.value = page.next_cursor
+  } catch (cause) { failed(cause) }
+  finally { if (alive && sequence === selectionSequence) loadingMoreTasks.value = false }
 }
 
-const filteredTasks = computed(() => {
-  return props.ledger.tasks.filter(t => {
-    if (onlyActive.value && !['active', 'testing', 'paused'].includes(t.status)) return false
-    if (searchKeyword.value.trim()) {
-      const q = searchKeyword.value.toLowerCase()
-      if (!t.title.toLowerCase().includes(q) && !(t.description || '').toLowerCase().includes(q)) return false
+async function openTask(id: string) {
+  const sequence = ++taskSequence
+  const parent = selectedId.value
+  try {
+    const detail = await apiService.getTask(props.projectId, id, abort.signal)
+    if (alive && sequence === taskSequence && parent === selectedId.value) focusedTask.value = detail
+  } catch (cause) { failed(cause) }
+}
+
+async function refreshView() {
+  try {
+    await loadRequirements()
+    const id = selectedId.value
+    if (id) {
+      const sequence = ++selectionSequence
+      const [detail, page] = await Promise.all([
+        apiService.getRequirement(props.projectId, id, abort.signal),
+        apiService.getTasks(props.projectId, id, null, abort.signal),
+      ])
+      if (!alive || selectedId.value !== id || sequence !== selectionSequence) return
+      if (detail.deleted_at) { selected.value = null; selectedId.value = ''; tasks.value = []; loading.value = false; return }
+      selected.value = detail
+      loading.value = false
+      loadingMoreTasks.value = false
+      tasks.value = page.items
+      taskCursor.value = page.next_cursor
+      if (focusedTask.value) await openTask(focusedTask.value.id)
     }
-    return true
-  })
-})
+  } catch (cause) { failed(cause) }
+}
+watch(() => props.ledger, () => { void refreshView() })
+onMounted(() => { void refreshView() })
 
-function getTaskRequirements(taskId: string): Requirement[] {
-  return props.ledger.requirements.filter(r => r.task_id === taskId)
+async function createRequirement() {
+  if (busy.value) return
+  busy.value = true
+  error.value = ''
+  try {
+    const result = await apiService.createRequirement(props.projectId, { ...newRequirement.value }, requirementRequest.value)
+    if (!alive) return
+    newRequirement.value = { title: '', text: '', acceptance_criteria: '' }
+    await loadRequirements()
+    await selectRequirement(result.id)
+    notice.value = '需求已创建，可以分别添加子任务。'
+    emit('refresh')
+  } catch (cause) { failed(cause) }
+  finally { if (alive) busy.value = false }
 }
 
-function getTaskProgress(taskId: string) {
-  const reqs = getTaskRequirements(taskId)
-  if (!reqs.length) return { total: 0, done: 0, percent: 0 }
-  const done = reqs.filter(r => r.status === 'archived').length
-  return { total: reqs.length, done, percent: Math.round((done / reqs.length) * 100) }
+async function createTask() {
+  if (busy.value || !selected.value) return
+  busy.value = true
+  error.value = ''
+  try {
+    const status = selected.value.status === 'draft' ? 'draft' : 'active'
+    await apiService.createTask(props.projectId, selected.value.id, { ...newTask.value, status }, taskRequest.value)
+    if (!alive) return
+    newTask.value = { title: '', description: '', acceptance_criteria: '' }
+    await refreshView()
+    notice.value = '子任务已创建。'
+    emit('refresh')
+  } catch (cause) { failed(cause) }
+  finally { if (alive) busy.value = false }
 }
 
-function openTaskDetail(task: Task, opener?: HTMLElement | null) {
-  taskOpenerElement = opener || (document.activeElement as HTMLElement | null)
-  focusedTaskId.value = task.id
-  nextTick(() => {
-    const btn = taskCloseBtnRef.value || (document.querySelector('.task-drawer-content button') as HTMLElement | null)
-    if (btn && typeof btn.focus === 'function') {
-      btn.focus()
+function openAction(kind: EditAction['kind'], target: Requirement | Task, title: string,
+                    changes: Record<string, unknown> = {}, edit = false, remove = false) {
+  if (busy.value) return
+  action.value = { kind, target: { ...target }, title, changes, edit, remove }
+  actionReason.value = ''
+  actionSummary.value = ''
+  editTitle.value = target.title
+  editText.value = 'text' in target ? target.text : target.description
+  editAcceptance.value = target.acceptance_criteria
+  error.value = ''
+}
+
+async function submitAction() {
+  const current = action.value
+  if (!current || busy.value) return
+  busy.value = true
+  error.value = ''
+  const changes = { ...current.changes }
+  if (current.edit) {
+    changes.title = editTitle.value
+    changes[current.kind === 'requirements' ? 'text' : 'description'] = editText.value
+    changes.acceptance_criteria = editAcceptance.value
+  }
+  if (changes.status === 'completed') {
+    changes[current.kind === 'requirements' ? 'completion_summary' : 'verification_summary'] = actionSummary.value
+  }
+  try {
+    const reason = current.kind === 'requirements' && changes.status === 'completed'
+      ? `用户在工作台明确确认整体验收通过：${actionReason.value}` : actionReason.value
+    if (current.kind === 'requirements') {
+      if (current.remove) await apiService.deleteRequirement(props.projectId, current.target.id, current.target.version, reason)
+      else await apiService.updateRequirement(props.projectId, current.target.id, current.target.version, changes, reason)
     } else {
-      (document.querySelector('.task-drawer-content') as HTMLElement | null)?.focus()
+      if (current.remove) await apiService.deleteTask(props.projectId, current.target.id, current.target.version, reason)
+      else await apiService.updateTask(props.projectId, current.target.id, current.target.version, changes, reason)
     }
-  })
+    if (!alive) return
+    action.value = null
+    if (current.remove && current.kind === 'tasks') focusedTask.value = null
+    await refreshView()
+    notice.value = `${current.title}已保存。`
+    emit('refresh')
+  } catch (cause) { failed(cause) }
+  finally { if (alive) busy.value = false }
 }
 
-function closeTaskDetail() {
-  const taskId = focusedTaskId.value
-  focusedTaskId.value = null
-  nextTick(() => {
-    if (taskOpenerElement && document.body.contains(taskOpenerElement) && typeof taskOpenerElement.focus === 'function') {
-      taskOpenerElement.focus()
-      return
-    }
-    if (taskId) {
-      const escapedId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(taskId) : taskId
-      const currentCardOrRow = document.querySelector(`[data-task-id="${escapedId}"]`) as HTMLElement | null
-      if (currentCardOrRow && typeof currentCardOrRow.focus === 'function') {
-        currentCardOrRow.focus()
-        return
-      }
-    }
-    const contentEl = document.getElementById('content') || (document.querySelector('#content') as HTMLElement | null)
-    if (contentEl && typeof contentEl.focus === 'function') {
-      contentEl.focus()
-    }
-  })
+async function showHistory(kind: EditAction['kind'], id: string, more = false) {
+  const sequence = ++historySequence
+  try {
+    const page = await apiService.getVersions(props.projectId, kind, id, more ? historyCursor.value : null)
+    if (!alive || sequence !== historySequence) return
+    historyTarget.value = { kind, id }
+    history.value = more ? [...history.value, ...page.items] : page.items
+    historyCursor.value = page.next_cursor
+  } catch (cause) { failed(cause) }
 }
 </script>
 
 <template>
-  <div class="tasks-view-root">
-    <!-- 1. 原文需求输入卡片 (GitHub Inset 风格) -->
-    <section class="intake-panel">
-      <div class="intake-title">
-        <h2>录入业务需求</h2>
-        <span class="caption">输入需求原文，作为任务执行约束下发。</span>
-      </div>
-
-      <div class="intake-form">
-        <textarea
-          id="demand-text"
-          v-model="demand"
-          rows="3"
-          placeholder="请输入业务需求原文，例如：在结算服务中增加对超期图纸的自动退回与提醒逻辑…"
-          @input="selectedTaskId = ''"
-        ></textarea>
-
-        <!-- 候选任务匹配提示 -->
-        <div v-if="matchedTasks.length > 1" class="match-box">
-          <p class="muted"><strong>检测到多个候选任务，请明确选择归属：</strong></p>
-          <div class="choices-row">
-            <label v-for="t in matchedTasks" :key="t.id" class="choice-label">
-              <input v-model="selectedTaskId" type="radio" :value="t.id" />
-              <span>{{ t.title }}</span>
-            </label>
+  <div class="task-workspace">
+    <div v-if="error" role="alert" class="error">{{ error }}</div>
+    <div v-if="notice" role="status" class="caption">{{ notice }}</div>
+    <details class="resource-panel">
+      <summary>＋ 新建业务需求</summary>
+      <form @submit.prevent="createRequirement">
+        <fieldset :disabled="busy">
+          <label class="field">需求名称<input v-model="newRequirement.title" required maxlength="500" placeholder="例如：档号要素维护" /></label>
+          <label class="field">整体目标<textarea v-model="newRequirement.text" required rows="3" /></label>
+          <label class="field">整体验收要求<textarea v-model="newRequirement.acceptance_criteria" rows="2" /></label>
+          <button class="primary" type="submit">创建需求</button>
+        </fieldset>
+      </form>
+    </details>
+    <div class="resource-layout">
+      <aside class="resource-panel requirement-list" aria-label="业务需求列表">
+        <div class="row"><h2>业务需求</h2><button :disabled="busy" @click="refreshView">刷新</button></div>
+        <p v-if="!requirements.length" class="muted">尚无需求，请先创建整体业务目标。</p>
+        <button v-for="item in requirements" :key="item.id" class="requirement-item" :class="{ selected: selectedId === item.id }"
+                :disabled="busy" @click="selectRequirement(item.id)">
+          <strong>{{ item.title }}</strong>
+          <span>{{ labels[item.status] }}<template v-if="item.archived_at"> · 已归档</template></span>
+          <span>已验证 {{ item.progress.completed }} / {{ item.progress.total }}</span>
+          <span class="muted">{{ item.text }}{{ item.truncated ? '…' : '' }}</span>
+        </button>
+        <button v-if="requirementCursor" :disabled="busy" @click="loadRequirements(true).catch(failed)">加载更多需求</button>
+      </aside>
+      <section class="resource-panel requirement-detail" aria-label="需求详情">
+        <p v-if="loading">正在读取需求…</p>
+        <p v-else-if="!selected" class="empty">选择一个需求，查看和推进其子任务。</p>
+        <template v-else>
+          <div class="row"><h2>{{ selected.title }}</h2><span>{{ labels[selected.status] }} · v{{ selected.version }}</span></div>
+          <p v-if="selected.archived_at" class="caption">已归档；恢复归档后才能继续修改。</p>
+          <p class="body-text">{{ selected.text }}</p>
+          <h3>整体验收要求</h3><p class="body-text">{{ selected.acceptance_criteria || '尚未填写' }}</p>
+          <p>已验证子任务：{{ selected.progress.completed }} / {{ selected.progress.total }}</p>
+          <p v-if="selected.completion_summary" class="body-text">验收结论：{{ selected.completion_summary }}</p>
+          <div class="actions">
+            <template v-if="!selected.archived_at">
+              <button v-if="selected.status === 'draft'" @click="openAction('requirements', selected, '开始需求', { status: 'active' })">开始需求</button>
+              <button v-if="selected.status === 'accepting'" class="primary" @click="openAction('requirements', selected, '确认整体验收通过', { status: 'completed' })">确认整体验收通过</button>
+              <button v-if="selected.status === 'accepting'" @click="openAction('requirements', selected, '退回继续处理', { status: 'active' })">验收未通过</button>
+              <button v-if="selected.status === 'active' && selected.progress.total > 0 && selected.progress.completed === selected.progress.total"
+                      @click="openAction('requirements', selected, '重新提交整体验收', { status: 'accepting' })">提交整体验收</button>
+              <button v-if="selected.status === 'completed'" @click="openAction('requirements', selected, '重开需求', { status: 'active' })">重开需求</button>
+              <button v-else @click="openAction('requirements', selected, '修订需求', {}, true)">修订需求</button>
+              <button @click="openAction('requirements', selected, '归档需求', { archived: true })">归档</button>
+              <button v-if="!selected.progress.total" @click="openAction('requirements', selected, '删除需求', {}, false, true)">删除</button>
+            </template>
+            <button v-else @click="openAction('requirements', selected, '恢复归档需求', { archived: false })">恢复归档</button>
+            <button @click="showHistory('requirements', selected.id)">版本历史</button>
           </div>
-        </div>
-        <div v-else-if="matchedTasks.length === 1" class="match-hint">
-          ✓ 将自动归入已有任务：<strong>{{ matchedTasks[0].title }}</strong>
-        </div>
-
-        <div class="intake-footer">
-          <button
-            class="primary"
-            :disabled="busy || !demand.trim() || (matchedTasks.length > 1 && !selectedTaskId)"
-            @click="handleSubmit"
-          >
-            {{ busy ? '正在提交…' : '提交原文需求' }}
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- 2. 看板控制栏 -->
-    <div class="board-header">
-      <div class="board-header-left">
-        <h2>任务看板</h2>
-        <span class="muted">全项目共 {{ ledger.tasks.length }} 个任务 · {{ ledger.requirements.length }} 条需求</span>
-      </div>
-
-      <div class="board-header-right">
-        <input
-          v-model="searchKeyword"
-          placeholder="搜索任务标题或描述…"
-          style="width: 220px"
-        />
-        <label class="filter-check">
-          <input v-model="onlyActive" type="checkbox" /> 仅看活跃任务
-        </label>
-        <div class="view-toggle">
-          <button
-            type="button"
-            :class="{ active: viewMode === 'swimlane' }"
-            @click="viewMode = 'swimlane'"
-          >
-            泳道看板
-          </button>
-          <button
-            type="button"
-            :class="{ active: viewMode === 'list' }"
-            @click="viewMode = 'list'"
-          >
-            清单列表
-          </button>
-        </div>
-      </div>
+          <p v-if="selected.status === 'accepting'" class="acceptance-note">子任务已分别验证完成，请确认整体验收结果。</p>
+          <h3>子任务</h3>
+          <p v-if="!tasks.length" class="muted">尚无子任务；空需求不会自动进入验收。</p>
+          <table v-else class="tasks-table">
+            <thead><tr><th>任务</th><th>状态</th><th>版本</th></tr></thead>
+            <tbody><tr v-for="item in tasks" :key="item.id">
+              <td><button class="subtle" @click="openTask(item.id)">{{ item.title }}</button></td>
+              <td>{{ labels[item.status] }}{{ item.archived_at ? ' · 已归档' : '' }}</td><td>{{ item.version }}</td>
+            </tr></tbody>
+          </table>
+          <button v-if="taskCursor" :disabled="busy || loadingMoreTasks" @click="loadMoreTasks">加载更多子任务</button>
+          <details v-if="canWork" class="new-task">
+            <summary>＋ 添加子任务</summary>
+            <form @submit.prevent="createTask"><fieldset :disabled="busy">
+              <label class="field">任务名称<input v-model="newTask.title" required maxlength="500" placeholder="例如：全宗号" /></label>
+              <label class="field">实现范围<textarea v-model="newTask.description" rows="3" /></label>
+              <label class="field">验证要求<textarea v-model="newTask.acceptance_criteria" rows="2" /></label>
+              <button class="primary" type="submit">创建子任务</button>
+            </fieldset></form>
+          </details>
+        </template>
+      </section>
     </div>
-
-    <!-- 3. GitHub Projects 高质感悬浮泳道看板视图 -->
-    <div v-if="viewMode === 'swimlane'" class="kanban-wrapper">
-      <div class="kanban-grid">
-        <!-- 4 根核心流转泳道 -->
-        <div
-          v-for="lane in activeLanes"
-          :key="lane.key"
-          class="kanban-col"
-        >
-          <div class="col-head">
-            <div class="col-title">
-              <span class="status-dot" :class="lane.dotCls"></span>
-              <h3>{{ lane.label }}</h3>
-            </div>
-            <span class="badge-count">{{ filteredTasks.filter(t => t.status === lane.key).length }}</span>
-          </div>
-
-          <div class="col-scroll">
-            <div
-              v-if="!filteredTasks.filter(t => t.status === lane.key).length"
-              class="col-empty"
-            >
-              暂无任务
-            </div>
-
-            <!-- GitHub Projects 立体悬浮卡片 -->
-            <article
-              v-for="task in filteredTasks.filter(t => t.status === lane.key)"
-              :key="task.id"
-              :data-task-id="task.id"
-              :data-status="task.status"
-              class="task-card"
-              :class="{ 'card-active': task.status === 'active' }"
-              tabindex="0"
-              role="button"
-              :aria-label="task.title"
-              @click="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
-              @keydown.enter.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
-              @keydown.space.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
-            >
-              <div class="task-card-top">
-                <span class="task-id">#{{ task.id.replace('task_', '').slice(0, 10) }}</span>
-                <span class="tag" :class="task.status">{{ taskStatusLabel(task.status) }}</span>
-              </div>
-
-              <h4 class="task-title">{{ task.title }}</h4>
-
-              <p v-if="task.description" class="task-desc">
-                {{ task.description }}
-              </p>
-
-              <!-- 需求紧凑单行预览胶囊 (满足结构与断言，坚决不换行折叠) -->
-              <div v-if="getTaskRequirements(task.id).length" class="req-mini-preview-line">
-                <div
-                  v-for="req in getTaskRequirements(task.id).slice(0, 1)"
-                  :key="req.id"
-                  class="original-text compact-pill"
-                >
-                  <span class="tag mini" :class="req.status">{{ reqStatusLabel(req.status) }}</span>
-                  <span class="preview-text">{{ req.text }}</span>
-                  <button
-                    v-if="req.status === 'active' && ['active', 'testing'].includes(task.status)"
-                    class="subtle btn-inline-archive"
-                    :disabled="busy"
-                    @click.stop="emit('open-archive', req)"
-                    @keydown.stop
-                  >
-                    确认归档
-                  </button>
-                </div>
-              </div>
-
-              <!-- 需求紧凑微标进度与操作 -->
-              <div class="task-card-footer">
-                <span class="req-progress-pill" :class="{ 'all-done': getTaskProgress(task.id).percent === 100 }">
-                  需求达成 {{ getTaskProgress(task.id).done }} / {{ getTaskProgress(task.id).total }}
-                </span>
-
-                <div class="actions-group" @click.stop @keydown.stop>
-                  <button
-                    v-if="['active', 'testing'].includes(task.status)"
-                    class="subtle action-btn"
-                    :disabled="busy"
-                    @click.stop="emit('open-pause', task)"
-                    @keydown.stop
-                  >
-                    暂停
-                  </button>
-                  <button
-                    v-if="task.status === 'paused'"
-                    class="subtle action-btn"
-                    :disabled="busy"
-                    @click.stop="emit('open-resume', task)"
-                    @keydown.stop
-                  >
-                    恢复
-                  </button>
-                  <button
-                    v-if="task.status !== 'paused'"
-                    class="subtle action-btn"
-                    :disabled="busy"
-                    @click.stop="emit('open-transition', task)"
-                    @keydown.stop
-                  >
-                    流转
-                  </button>
-                </div>
-              </div>
-            </article>
-          </div>
+    <GhDrawer :model-value="!!focusedTask" :title="focusedTask?.title" content-class="task-detail" width="min(680px, 94vw)" @update:model-value="value => { if (!value) focusedTask = null }">
+      <template v-if="focusedTask">
+        <p>{{ labels[focusedTask.status] }} · v{{ focusedTask.version }} · 所属需求：{{ selected?.title }}</p>
+        <h3>实现范围</h3><p class="body-text">{{ focusedTask.description || '尚未填写' }}</p>
+        <h3>验证要求</h3><p class="body-text">{{ focusedTask.acceptance_criteria || '尚未填写' }}</p>
+        <p v-if="focusedTask.verification_summary" class="body-text">验证结论：{{ focusedTask.verification_summary }}</p>
+        <p v-if="focusedTask.verification_report_ids.length" class="body-text">报告：{{ focusedTask.verification_report_ids.join(', ') }}</p>
+        <div class="actions">
+          <template v-if="canWork && !focusedTask.archived_at && !focusedTask.deleted_at">
+            <button v-if="focusedTask.status === 'draft' && selected?.status !== 'draft'" @click="openAction('tasks', focusedTask, '开始任务', { status: 'active' })">开始任务</button>
+            <button v-if="focusedTask.status === 'active'" @click="openAction('tasks', focusedTask, '提交验证', { status: 'testing' })">开发完成，提交验证</button>
+            <button v-if="focusedTask.status === 'testing'" class="primary" @click="openAction('tasks', focusedTask, '确认子任务验证通过', { status: 'completed' })">验证通过</button>
+            <button v-if="focusedTask.status === 'testing' || focusedTask.status === 'completed'" @click="openAction('tasks', focusedTask, '退回开发', { status: 'active' })">退回开发</button>
+            <button v-if="['active', 'testing'].includes(focusedTask.status)" @click="openAction('tasks', focusedTask, '暂停任务', { status: 'paused' })">暂停</button>
+            <button v-if="focusedTask.status === 'paused'" @click="openAction('tasks', focusedTask, '恢复任务', { status: focusedTask.paused_from })">恢复</button>
+            <button v-if="['draft', 'active'].includes(focusedTask.status)" @click="openAction('tasks', focusedTask, '修订任务', {}, true)">修订任务</button>
+            <button @click="openAction('tasks', focusedTask, '删除子任务', {}, false, true)">删除</button>
+          </template>
+          <button v-if="selected && !selected.archived_at && !focusedTask.deleted_at"
+                  @click="openAction('tasks', focusedTask, focusedTask.archived_at ? '恢复归档任务' : '归档任务', { archived: !focusedTask.archived_at })">{{ focusedTask.archived_at ? '恢复归档' : '归档' }}</button>
+          <button @click="showHistory('tasks', focusedTask.id)">版本历史</button>
         </div>
-
-        <!-- 完结历史沉淀泳道 -->
-        <div class="kanban-col col-closed">
-          <div class="col-head">
-            <div class="col-title">
-              <span class="status-dot dot-closed"></span>
-              <h3>已完成</h3>
-            </div>
-            <span class="badge-count">
-              {{ filteredTasks.filter(t => ['released', 'archived'].includes(t.status)).length }}
-            </span>
-          </div>
-
-          <div class="col-scroll">
-            <div
-              v-if="!filteredTasks.filter(t => ['released', 'archived'].includes(t.status)).length"
-              class="col-empty"
-            >
-              暂无已完结任务
-            </div>
-
-            <article
-              v-for="task in filteredTasks.filter(t => ['released', 'archived'].includes(t.status))"
-              :key="task.id"
-              :data-task-id="task.id"
-              :data-status="task.status"
-              class="task-card card-closed"
-              tabindex="0"
-              role="button"
-              :aria-label="task.title"
-              @click="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
-              @keydown.enter.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
-              @keydown.space.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
-            >
-              <div class="task-card-top">
-                <span class="task-id">#{{ task.id.replace('task_', '').slice(0, 10) }}</span>
-                <span class="tag online">{{ taskStatusLabel(task.status) }}</span>
-              </div>
-              <h4 class="task-title">{{ task.title }}</h4>
-              <p v-if="task.description" class="task-desc muted">{{ task.description }}</p>
-
-              <div class="task-card-footer">
-                <span class="req-progress-pill all-done">
-                  ✓ {{ getTaskProgress(task.id).total }} 条需求已完成
-                </span>
-              </div>
-              <div v-if="getTaskRequirements(task.id).some(r => r.summary)" style="margin-top: 4px">
-                <div
-                  v-for="req in getTaskRequirements(task.id).filter(r => r.summary).slice(0, 1)"
-                  :key="req.id"
-                  class="original-text compact-pill"
-                  style="border-left-color: var(--green); color: var(--green)"
-                >
-                  <span class="tag mini online">{{ reqStatusLabel(req.status) }}</span>
-                  <span class="preview-text">完成摘要：{{ req.summary }}</span>
-                </div>
-              </div>
-            </article>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 4. 清单列表模式 -->
-    <div v-else class="table-wrap">
-      <table class="rules-table">
-        <thead>
-          <tr>
-            <th style="width: 100px">状态</th>
-            <th>任务标题 / 业务描述</th>
-            <th style="width: 160px">需求达成度</th>
-            <th style="width: 120px; text-align: right">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="task in filteredTasks"
-            :key="task.id"
-            :data-task-id="task.id"
-            :data-status="task.status"
-            style="cursor: pointer"
-            tabindex="0"
-            role="row"
-            :aria-label="task.title"
-            @click="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
-            @keydown.enter.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
-            @keydown.space.self.prevent="openTaskDetail(task, ($event.currentTarget as HTMLElement))"
-          >
-            <td>
-              <span class="tag" :class="task.status">{{ taskStatusLabel(task.status) }}</span>
-            </td>
-            <td>
-              <strong>{{ task.title }}</strong>
-              <p class="muted" style="margin: 3px 0 0; font-size: 12px">{{ task.description }}</p>
-            </td>
-            <td>
-              <span style="font-size: 11px; font-variant-numeric: tabular-nums">
-                {{ getTaskProgress(task.id).done }} / {{ getTaskProgress(task.id).total }} 达成
-              </span>
-              <div class="progress-track" style="margin-top: 4px; height: 3px">
-                <div class="progress-bar" :style="{ width: getTaskProgress(task.id).percent + '%' }"></div>
-              </div>
-            </td>
-            <td style="text-align: right" @click.stop @keydown.stop>
-              <button
-                v-if="['active', 'testing'].includes(task.status)"
-                class="subtle action-btn"
-                :disabled="busy"
-                @click.stop="emit('open-pause', task)"
-                @keydown.stop
-              >
-                暂停
-              </button>
-              <button
-                v-if="task.status === 'paused'"
-                class="subtle action-btn"
-                :disabled="busy"
-                @click.stop="emit('open-resume', task)"
-                @keydown.stop
-              >
-                恢复
-              </button>
-              <button
-                v-if="task.status !== 'paused'"
-                class="subtle action-btn"
-                :disabled="busy"
-                @click.stop="emit('open-transition', task)"
-                @keydown.stop
-              >
-                流转
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- 5. 任务与需求舒适详情大抽屉 (采用通用 GhDrawer 统一封装) -->
-    <GhDrawer
-      :model-value="!!focusedTask"
-      overlay-class="task-drawer-overlay"
-      content-class="task-drawer-content"
-      aria-labelledby="task-drawer-title"
-      :data-status="focusedTask ? focusedTask.status : undefined"
-      width="min(580px, 94vw)"
-      @close="closeTaskDetail"
-    >
-      <template #header>
-        <div v-if="focusedTask">
-          <div class="card-top" style="margin-bottom: 0">
-            <div style="display: flex; align-items: center; gap: 8px">
-              <span class="tag" :class="focusedTask.status">{{ taskStatusLabel(focusedTask.status) }}</span>
-              <span class="muted font-mono" style="font-size: 11px">任务 #{{ focusedTask.id }}</span>
-              <button
-                v-if="focusedTask.status !== 'paused'"
-                class="subtle action-btn"
-                style="padding: 2px 8px; font-size: 11px"
-                :disabled="busy"
-                @click="emit('open-transition', focusedTask)"
-              >
-                流转状态
-              </button>
-            </div>
-            <button
-              ref="taskCloseBtnRef"
-              type="button"
-              class="subtle"
-              style="font-size: 16px"
-              aria-label="关闭窗口"
-              @click="closeTaskDetail"
-            >✕</button>
-          </div>
-          <h2 id="task-drawer-title" style="font-size: 16px; margin: 10px 0 4px">{{ focusedTask.title }}</h2>
-          <p v-if="focusedTask.description" class="muted" style="font-size: 12px">{{ focusedTask.description }}</p>
-        </div>
+        <h3>任务规则</h3><p v-if="!relatedRules.length" class="muted">暂无任务规则。</p>
+        <details v-for="rule in relatedRules" :key="rule.id"><summary>{{ rule.title }} · {{ rule.status }}</summary><ul><li v-for="point in rule.points" :key="point">{{ point }}</li></ul></details>
+        <h3>发现</h3><p v-if="!relatedFindings.length" class="muted">暂无发现。</p>
+        <p v-for="finding in relatedFindings" :key="finding.id" class="body-text">{{ finding.text }} · {{ finding.status }}</p>
       </template>
-
-      <div v-if="focusedTask">
-        <div class="section-head" style="margin: 0 0 12px">
-          <h3 style="margin: 0">关联业务需求条目 ({{ getTaskRequirements(focusedTask.id).length }})</h3>
-        </div>
-
-        <p v-if="focusedTask.status === 'archived'" class="caption">
-          如需继续此任务，请先通过「流转状态」重新激活为进行中，再恢复指定需求；已停用规则不会自动恢复。
-        </p>
-
-        <div v-if="!getTaskRequirements(focusedTask.id).length" class="empty compact">
-          该任务暂未挂载具体的需求条目。
-        </div>
-
-        <div v-else class="drawer-req-list">
-          <article
-            v-for="req in getTaskRequirements(focusedTask.id)"
-            :key="req.id"
-            class="drawer-req-item"
-            :class="{ 'is-archived': req.status === 'archived' }"
-          >
-            <div class="drawer-req-top">
-              <span class="tag" :class="req.status">
-                {{ reqStatusLabel(req.status) }} · v{{ req.version }}
-              </span>
-              <button
-                v-if="req.status === 'active' && ['active', 'testing'].includes(focusedTask.status)"
-                class="primary archive-btn"
-                :disabled="busy"
-                @click="emit('open-archive', req)"
-              >
-                确认归档
-              </button>
-              <button
-                v-else-if="req.status === 'archived' && ['active', 'testing'].includes(focusedTask.status)"
-                class="subtle"
-                :disabled="busy"
-                @click="emit('open-reopen-requirement', req)"
-              >
-                恢复需求
-              </button>
-            </div>
-
-            <div class="req-original-block">
-              <div class="req-block-label">需求原文：</div>
-              <p class="original-text">{{ req.text }}</p>
-            </div>
-
-            <div v-if="req.summary" class="req-summary-block">
-              <div class="req-block-label">完成摘要与存证：</div>
-              <p class="summary-text">✓ {{ req.summary }}</p>
-            </div>
-          </article>
-        </div>
-      </div>
-
-      <template #footer>
-        <button type="button" @click="closeTaskDetail">关闭窗口</button>
-      </template>
+    </GhDrawer>
+    <GhDrawer :model-value="!!action" :title="action?.title" content-class="task-action" @update:model-value="value => { if (!value && !busy) action = null }">
+      <form v-if="action" @submit.prevent="submitAction"><fieldset :disabled="busy">
+        <p>{{ action.target.title }} · 基于版本 {{ action.target.version }}</p>
+        <p v-if="action.remove" class="caption">保留历史，删除不代表完成。</p>
+        <template v-if="action.edit">
+          <label class="field">名称<input v-model="editTitle" required maxlength="500" /></label>
+          <label class="field">说明<textarea v-model="editText" rows="5" :required="action.kind === 'requirements'" /></label>
+          <label class="field">验收要求<textarea v-model="editAcceptance" rows="3" /></label>
+        </template>
+        <label v-if="action.changes.status === 'completed'" class="field">{{ action.kind === 'requirements' ? '整体验收结论' : '验证方式与结果' }}<textarea v-model="actionSummary" required rows="4" /></label>
+        <label class="field">操作原因<textarea v-model="actionReason" required rows="3" /></label>
+        <div v-if="error" role="alert" class="error">{{ error }}</div>
+        <button class="primary" type="submit">{{ busy ? '保存中…' : action.title }}</button>
+      </fieldset></form>
+    </GhDrawer>
+    <GhDrawer :model-value="!!historyTarget" title="版本历史" content-class="resource-history" @update:model-value="value => { if (!value) { historyTarget = null; historySequence++ } }">
+      <details v-for="item in history" :key="item.version"><summary>v{{ item.version }} · {{ labels[item.status] }}{{ item.archived_at ? ' · 归档' : '' }}{{ item.deleted_at ? ' · 删除' : '' }}</summary>
+        <p class="body-text">{{ 'text' in item ? item.text : item.description }}</p><p class="body-text">{{ item.acceptance_criteria }}</p>
+        <p class="body-text">{{ 'text' in item ? item.completion_summary : item.verification_summary }}</p>
+      </details>
+      <button v-if="historyCursor && historyTarget" @click="showHistory(historyTarget.kind, historyTarget.id, true)">加载更多版本</button>
     </GhDrawer>
   </div>
 </template>
 
 <style scoped>
-.tasks-view-root {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  height: 100%;
-  overflow: hidden;
-}
-
-/* 需求录入面板 (GitHub Inset 风格) */
-.intake-panel {
-  background: var(--gh-canvas-subtle);
-  border: 1px solid var(--gh-border-default);
-  border-radius: 6px;
-  padding: 16px 20px;
-  flex-shrink: 0;
-}
-.intake-title h2 {
-  font-size: 14px;
-  margin: 0;
-}
-.intake-form {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.intake-footer {
-  display: flex;
-  justify-content: flex-end;
-}
-.match-box {
-  background: var(--gh-canvas-default);
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--gh-border-default);
-}
-.choices-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 4px;
-}
-.choice-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.match-hint {
-  color: var(--gh-success-fg);
-  font-size: 12px;
-}
-
-/* 控制栏 */
-.board-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-}
-.board-header-left h2 {
-  font-size: 15px;
-  margin: 0;
-}
-.board-header-left .muted {
-  font-size: 11px;
-}
-.board-header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.filter-check {
-  font-size: 12px;
-  color: var(--gh-fg-muted);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-.view-toggle {
-  display: flex;
-  border: 1px solid var(--gh-border-default);
-  border-radius: 6px;
-  overflow: hidden;
-}
-.view-toggle button {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  padding: 5px 12px;
-  font-size: 12px;
-  color: var(--gh-fg-muted);
-}
-.view-toggle button.active {
-  background: var(--gh-canvas-subtle);
-  color: var(--gh-fg-default);
-  font-weight: 600;
-}
-
-/* 现代化泳道网格 */
-.kanban-wrapper {
-  overflow-x: auto;
-  overflow-y: hidden;
-  flex: 1;
-}
-.kanban-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(310px, 1fr)) minmax(330px, 1.2fr);
-  gap: 14px;
-  min-width: 1580px;
-  height: 100%;
-}
-
-/* 泳道托盘 */
-.kanban-col {
-  background: var(--gh-canvas-subtle);
-  border: 1px solid var(--gh-border-default);
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  height: 100%;
-}
-.col-closed {
-  background: rgba(1, 4, 9, 0.4);
-  border-style: dashed;
-}
-
-.col-head {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--gh-border-default);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #161b22;
-  flex-shrink: 0;
-}
-.col-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.col-title h3 {
-  font-size: 12px;
-  font-weight: 600;
-  margin: 0;
-}
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--gh-fg-subtle);
-}
-.status-dot.active { background: var(--gh-success-fg); box-shadow: 0 0 6px rgba(46, 160, 67, 0.4); }
-.status-dot.paused { background: var(--gh-attention-fg); }
-.status-dot.testing { background: var(--gh-accent-fg); }
-.status-dot.dot-closed { background: var(--gh-fg-subtle); }
-
-.badge-count {
-  font-size: 11px;
-  font-family: var(--font-mono);
-  background: var(--gh-canvas-default);
-  padding: 1px 7px;
-  border-radius: 10px;
-  color: var(--gh-fg-muted);
-}
-
-.col-scroll {
-  padding: 10px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.col-empty {
-  padding: 30px 10px;
-  text-align: center;
-  color: var(--gh-fg-subtle);
-  font-size: 12px;
-}
-
-/* GitHub Projects 风格立体悬浮卡片 */
-.task-card {
-  background: var(--gh-surface-card);
-  border: 1px solid var(--gh-border-default);
-  border-radius: 6px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(1, 4, 9, 0.4);
-  transition: all 0.12s ease;
-}
-.task-card:hover {
-  background: var(--gh-surface-card-hover);
-  border-color: var(--gh-accent-fg);
-  transform: translateY(-1px);
-}
-.card-active {
-  border-left: 3px solid var(--gh-success-fg);
-}
-.card-closed {
-  opacity: 0.85;
-}
-
-.task-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.task-id {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--gh-fg-subtle);
-}
-
-.task-title {
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0;
-  line-height: 1.4;
-  color: var(--gh-fg-default);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.task-desc {
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--gh-fg-muted);
-  margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.req-mini-preview-line {
-  margin-top: 2px;
-}
-.original-text.compact-pill {
-  padding: 3px 6px;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-left-width: 2px;
-}
-.preview-text {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.btn-inline-archive {
-  padding: 1px 6px;
-  font-size: 10px;
-  color: var(--gh-success-fg);
-  border: 1px solid rgba(46, 160, 67, 0.4);
-  background: var(--gh-success-subtle);
-  border-radius: 3px;
-}
-
-.task-card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 6px;
-  border-top: 1px solid rgba(240, 246, 252, 0.05);
-}
-
-.req-progress-pill {
-  font-size: 10px;
-  color: var(--gh-fg-muted);
-  background: var(--gh-canvas-inset);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.req-progress-pill.all-done {
-  color: var(--gh-success-fg);
-  background: var(--gh-success-subtle);
-}
-
-.actions-group {
-  display: flex;
-  gap: 4px;
-}
-.action-btn {
-  padding: 2px 6px;
-  font-size: 10px;
-}
-
-/* 详情抽屉 */
-.task-drawer-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(1, 4, 9, 0.65);
-  backdrop-filter: blur(2px);
-  z-index: 100;
-  display: flex;
-  justify-content: flex-end;
-}
-.task-drawer-content {
-  width: min(580px, 94vw);
-  background: var(--gh-canvas-overlay);
-  border-left: 1px solid var(--gh-border-default);
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: -12px 0 32px rgba(1, 4, 9, 0.85);
-  animation: slideDrawer 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes slideDrawer {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
-
-.drawer-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--gh-border-default);
-  background: var(--gh-canvas-subtle);
-}
-.drawer-body {
-  padding: 20px 24px;
-  overflow-y: auto;
-  flex: 1;
-}
-.drawer-footer {
-  padding: 14px 24px;
-  border-top: 1px solid var(--gh-border-default);
-  display: flex;
-  justify-content: flex-end;
-}
-
-.drawer-req-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.drawer-req-item {
-  background: var(--gh-canvas-subtle);
-  border: 1px solid var(--gh-border-default);
-  border-left: 3px solid var(--gh-accent-fg);
-  border-radius: 6px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.drawer-req-item.is-archived {
-  border-left-color: var(--gh-success-fg);
-  opacity: 0.9;
-}
-.drawer-req-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.archive-btn {
-  padding: 3px 8px;
-  font-size: 11px;
-}
-.req-block-label {
-  font-size: 10px;
-  color: var(--gh-fg-subtle);
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-bottom: 3px;
-}
-.summary-text {
-  color: var(--gh-success-fg);
-  font-size: 12px;
-  margin: 0;
-  line-height: 1.5;
-}
-
-/* 清单表格模式 */
-.table-wrap {
-  border: 1px solid var(--gh-border-default);
-  border-radius: 6px;
-  overflow-y: auto;
-  flex: 1;
-}
-.rules-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.rules-table th, .rules-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--gh-border-muted);
-  font-size: 12px;
-}
-.rules-table th {
-  background: var(--gh-canvas-subtle);
-  color: var(--gh-fg-muted);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
+.task-workspace { display: flex; flex-direction: column; gap: 16px; }
+.resource-layout { display: grid; grid-template-columns: minmax(240px, 30%) 1fr; gap: 16px; align-items: start; }
+.resource-panel { border: 1px solid var(--gh-border-default); border-radius: 8px; background: var(--gh-canvas-default); padding: 16px; min-width: 0; }
+.requirement-item { display: flex; flex-direction: column; gap: 6px; text-align: left; width: 100%; margin: 8px 0; white-space: normal; overflow-wrap: anywhere; padding: 12px; }
+.requirement-item.selected { border-color: var(--gh-accent-fg); background: var(--gh-canvas-subtle); }
+.row, .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.row { justify-content: space-between; }
+.actions { margin: 16px 0; }
+h2 { font-size: 17px; margin: 0 0 8px; }
+h3 { font-size: 14px; margin: 20px 0 8px; }
+.body-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+fieldset { border: 0; padding: 0; margin: 12px 0; min-width: 0; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+input, textarea { width: 100%; box-sizing: border-box; }
+.tasks-table { width: 100%; border-collapse: collapse; }
+.tasks-table th, .tasks-table td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--gh-border-default); }
+.acceptance-note { padding: 12px; border-left: 3px solid var(--gh-accent-fg); background: var(--gh-canvas-subtle); }
+.new-task { margin-top: 20px; }
+summary { cursor: pointer; padding: 8px 0; }
+@media (max-width: 800px) { .resource-layout { grid-template-columns: 1fr; } }
 </style>

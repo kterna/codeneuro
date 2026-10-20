@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from .adapters.mcp.tools import create_mcp
-from .adapters.sqlite.uow import SqliteUnitOfWork
+from .adapters.sqlite.uow import SqliteUnitOfWork, initialize_database
 from .workflows.product import Product
 
 
@@ -43,18 +43,13 @@ def create_http_app(product: Product):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog='codeneuro')
-    parser.add_argument('mode', choices=('migrate', 'mcp', 'serve'))
-    parser.add_argument('--db', required=True, help='Explicitly migrated CodeNeuro database')
+    parser.add_argument('mode', choices=('init-db', 'mcp', 'serve'))
+    parser.add_argument('--db', required=True, help='CodeNeuro database file')
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=8801)
     args = parser.parse_args(argv)
-    if args.mode == 'migrate':
-        from alembic import command
-        from alembic.config import Config
-        config = Config()
-        config.set_main_option('script_location', str(Path(__file__).resolve().parent / 'migrations'))
-        config.set_main_option('codeneuro_db', args.db)
-        command.upgrade(config, 'head')
+    if args.mode == 'init-db':
+        initialize_database(args.db)
         return
     uow = SqliteUnitOfWork(args.db)
     try:

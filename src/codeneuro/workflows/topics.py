@@ -18,16 +18,6 @@ def require_topics(tx, project_id, keys, *, lock=True):
 
 
 class Topics(Workspaces):
-    def _project(self, tx, actor, project_id, session_id):
-        if (project_id is None) == (session_id is None):
-            raise ProductError('Supply either a human project target or an active session.')
-        if session_id is not None:
-            return self._session(tx, actor, session_id).project_id
-        if actor.role != 'human':
-            raise ProductError('Agent topic writes require an active session.', 'forbidden')
-        tx.workspaces.project_revision(project_id)
-        return project_id
-
     def list_topics(self, actor, project_id, query='', include_deleted=False, cursor=None, limit=50):
         if not 1 <= limit <= 100 or len(query) > 200:
             raise ProductError('Use a bounded topic search and a page size of 1–100.')
@@ -51,12 +41,12 @@ class Topics(Workspaces):
                               references={kind: items[:20] for kind, items in usage.items()})
             return result
 
-    def create_topic(self, actor, key, name, description, reason, *, project_id=None, session_id=None):
+    def create_topic(self, actor, key, name, description, reason, *, project_id):
         validate_definition(key, name, description)
         if not reason.strip():
             raise ProductError('Topic creation reason is required.')
         with self.uow.write() as tx:
-            project_id = self._project(tx, actor, project_id, session_id)
+            tx.workspaces.project_revision(project_id)
             if tx.topics.get(project_id, key):
                 raise Conflict('Topic key already exists or is reserved by deleted history; reuse or choose a new key.')
             topic = Topic(project_id, key, name, description)
@@ -65,11 +55,11 @@ class Topics(Workspaces):
             return topic
 
     def update_topic(self, actor, key, expected_version, reason, name=None, description=None,
-                     *, project_id=None, session_id=None):
+                     *, project_id):
         if not reason.strip():
             raise ProductError('Topic update reason is required.')
         with self.uow.write() as tx:
-            project_id = self._project(tx, actor, project_id, session_id)
+            tx.workspaces.project_revision(project_id)
             old = tx.topics.get(project_id, key)
             if not old or old.status != 'active':
                 raise ProductError('Active topic not found.', 'not_found')
@@ -88,11 +78,11 @@ class Topics(Workspaces):
                             {'reason': reason, 'before': asdict(old), 'after': asdict(changed)})
             return changed
 
-    def delete_topic(self, actor, key, expected_version, reason, *, project_id=None, session_id=None):
+    def delete_topic(self, actor, key, expected_version, reason, *, project_id):
         if not reason.strip():
             raise ProductError('Topic deletion reason is required.')
         with self.uow.write() as tx:
-            project_id = self._project(tx, actor, project_id, session_id)
+            tx.workspaces.project_revision(project_id)
             old = tx.topics.get(project_id, key)
             if old is None:
                 raise ProductError('Topic not found.', 'not_found')

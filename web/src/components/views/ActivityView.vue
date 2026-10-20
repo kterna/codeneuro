@@ -107,8 +107,8 @@ const actionNameMap: Record<string, string> = {
   'contract.reviewed': '审阅契约',
   'context.delivered': '下发上下文',
   'test.client_reported': '客户端上报测试',
-  'session.started': '启动会话',
-  'session.closed': '关闭会话',
+  'session.started': '历史会话开始',
+  'session.closed': '历史会话关闭',
 }
 
 function formatAction(action: string): string {
@@ -121,7 +121,7 @@ function formatAction(action: string): string {
     <div class="section-head">
       <div>
         <h2>变更审计流水</h2>
-        <span class="caption">每一次需求完成归档、规则演进与审批决策均在同一事务持久化留存</span>
+        <span class="caption">每一次需求与子任务推进、整体验收、规则演进均在同一事务持久化留存</span>
       </div>
       <span v-if="loadedRange" class="caption font-mono">{{ loadedRange }}</span>
     </div>

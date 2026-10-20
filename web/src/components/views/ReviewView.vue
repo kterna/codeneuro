@@ -37,14 +37,14 @@ function isStale(prop: Proposal): boolean {
 
 function hasApprovalBlock(prop: Proposal): boolean {
   if (prop.status !== 'pending') return false
-  return prop.schema_version !== 2 || isStale(prop) ||
+  return !prop.source_rule_id || !prop.validation_spec || isStale(prop) ||
     prop.current_target_version === null ||
     prop.current_target_version === undefined ||
     !prop.target_snapshot
 }
 
 function getApprovalBlockReason(prop: Proposal): string {
-  if (prop.schema_version !== 2) return '旧分类提案只供历史查看，请按新主题与验证计划重新提交候选。'
+  if (!prop.source_rule_id || !prop.validation_spec) return '提案缺少候选规则或验证依据，请补全后重新提交。'
   if (isStale(prop)) {
     return `目标规则已在此提案提交后发生变更（最新版本为 v${prop.current_target_version}，提案基于 v${prop.target_version}）。此提案已过时，无法直接批准，请刷新页面重新核对或要求重新提交。`
   }

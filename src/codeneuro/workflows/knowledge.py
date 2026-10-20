@@ -3,7 +3,7 @@ from dataclasses import replace
 
 from ..modules.governance import validate_plan
 from ..modules.knowledge import ContractProposal, Priority, Rule, check_promotable, validate_rule
-from ..modules.tasks import Conflict, ProductError, RequirementStatus, TaskStatus
+from ..modules.tasks import Conflict, ProductError
 from ..modules.workspaces import Actor
 from .common import _id
 from .governance import require_test_activation
@@ -28,9 +28,7 @@ class Knowledge(Workspaces):
         with self.uow.write() as tx:
             tx.workspaces.project_revision(project_id)
             if task_id:
-                task = tx.workspaces.get_task(task_id, project_id)
-                if task is None or task.status not in (TaskStatus.ACTIVE, TaskStatus.TESTING):
-                    raise Conflict('Task Rule needs an active/testing Task.')
+                self._task(tx, task_id, project_id, writable=True)
             require_topics(tx, project_id, topics)
             tx.knowledge.create_rule(rule)
             tx.governance.record_review(_id('review'), project_id, rule.id, rule.version,
@@ -65,29 +63,23 @@ class Knowledge(Workspaces):
                              'basis': 'human_normative_review_not_test_evidence'})
             return changed
 
-    def propose_contract(self, actor: Actor, session_id: str, target_rule_id: str,
+    def propose_contract(self, actor: Actor, task_id: str, target_rule_id: str,
                          expected_target_version: int, candidate_rule_id: str,
                          expected_candidate_version: int, reason: str):
         if not reason.strip():
             raise ProductError('Proposal reason is required.')
         with self.uow.write() as tx:
-            session = self._session(tx, actor, session_id)
-            task = tx.workspaces.get_task(session.task_id, session.project_id) if session.task_id else None
-            if not task or task.status not in (TaskStatus.ACTIVE, TaskStatus.TESTING):
-                raise Conflict('Contract proposal needs an active/testing Task.')
+            task, _ = self._task(tx, task_id, writable=True, allow_completed=True)
             target = tx.knowledge.get_rule(target_rule_id)
-            if not target or target.project_id != session.project_id or target.task_id is not None or target.status != 'active':
+            if not target or target.project_id != task.project_id or target.task_id is not None or target.status != 'active':
                 raise ProductError('Only an active project contract can be proposed for update.', 'not_found')
             if target.version != expected_target_version:
                 raise Conflict('Target contract version changed.')
             source = tx.knowledge.get_rule(candidate_rule_id)
-            if not source or source.project_id != session.project_id or source.task_id != task.id:
+            if not source or source.project_id != task.project_id or source.task_id != task.id:
                 raise ProductError('Candidate must belong to the selected Task.', 'not_found')
             if source.version != expected_candidate_version or source.status not in ('draft', 'active'):
                 raise Conflict('Candidate version or state changed.')
-            linked = tx.requirements.linked_requirement(source.id)
-            if linked and linked.status != RequirementStatus.ACTIVE:
-                raise Conflict('Candidate Requirement is archived.')
             validate_rule(source)
             validate_plan(source.validation_spec, len(source.points))
             require_topics(tx, source.project_id, source.topics)
@@ -95,12 +87,12 @@ class Knowledge(Workspaces):
                 if source.status != 'active':
                     raise Conflict('Validate and activate the test-backed candidate first.')
                 require_test_activation(tx, source)
-            proposal = ContractProposal(_id('proposal'), session.project_id, task.id, session.id,
+            proposal = ContractProposal(_id('proposal'), task.project_id, task.id,
                 target.id, target.version, source.title, source.points, source.patterns, source.priority,
                 source.topics, reason, is_global=source.is_global, priority_reason=source.priority_reason,
                 validation_spec=source.validation_spec, source_rule_id=source.id, source_version=source.version)
             tx.knowledge.create_proposal(proposal)
-            tx.audit.record(session.project_id, actor.id, 'contract.proposed', proposal.id,
+            tx.audit.record(task.project_id, actor.id, 'contract.proposed', proposal.id,
                             {'target_rule_id': target.id, 'target_version': target.version,
                              'source_rule_id': source.id, 'source_version': source.version})
             return proposal
@@ -119,20 +111,16 @@ class Knowledge(Workspaces):
                     return proposal
                 raise Conflict('Contract proposal already reviewed with different input.')
             if approve:
-                if proposal.schema_version != 2:
-                    raise Conflict('Legacy proposals must be resubmitted with a classified candidate.')
+                if not proposal.source_rule_id or not proposal.validation_spec:
+                    raise Conflict('A candidate and validation plan are required; resubmit this incomplete proposal.')
                 target = tx.knowledge.get_rule(proposal.target_rule_id)
                 source = tx.knowledge.get_rule(proposal.source_rule_id)
-                task = tx.workspaces.get_task(proposal.task_id, project_id)
+                task, _ = self._task(tx, proposal.task_id, project_id, writable=True, allow_completed=True)
                 if (not target or target.project_id != project_id or target.task_id is not None
                         or target.status != 'active' or target.version != proposal.target_version
                         or not source or source.project_id != project_id or source.task_id != proposal.task_id
-                        or source.version != proposal.source_version or source.status not in ('draft', 'active')
-                        or not task or task.status not in (TaskStatus.ACTIVE, TaskStatus.TESTING)):
+                        or source.version != proposal.source_version or source.status not in ('draft', 'active')):
                     raise Conflict('Target contract or candidate changed since the proposal.')
-                linked = tx.requirements.linked_requirement(source.id)
-                if linked and linked.status != RequirementStatus.ACTIVE:
-                    raise Conflict('Candidate Requirement was archived.')
                 validate_rule(source)
                 validate_plan(source.validation_spec, len(source.points))
                 require_topics(tx, project_id, source.topics)
@@ -154,24 +142,20 @@ class Knowledge(Workspaces):
                             {'decision': result, 'reason': reason})
             return tx.knowledge.get_proposal(proposal.id)
 
-    def promote_rule(self, actor: Actor, session_id: str, rule_id: str,
+    def promote_rule(self, actor: Actor, task_id: str, rule_id: str,
                      expected_version: int, reason: str):
         with self.uow.write() as tx:
-            session = self._session(tx, actor, session_id)
-            if not session.task_id:
-                raise ProductError('Rule promotion requires a Task-bound session.')
-            task = tx.workspaces.get_task(session.task_id, session.project_id)
+            task, _ = self._task(tx, task_id)
             source = tx.knowledge.get_rule(rule_id)
-            if source is None or source.project_id != session.project_id or source.task_id != session.task_id:
+            if source is None or source.project_id != task.project_id or source.task_id != task.id:
                 raise ProductError('Rule outside this Task.', 'not_found')
             previous = tx.knowledge.promoted_rule(rule_id, expected_version)
             if previous:
                 if previous.origin_reason != reason:
                     raise Conflict('Rule was already promoted with another reason.')
                 return previous
-            if task.status not in (TaskStatus.ACTIVE, TaskStatus.TESTING):
-                raise Conflict('Cannot promote a Rule from an inactive Task.')
-            check_promotable(source, session.task_id, expected_version, reason)
+            self._task(tx, task_id, writable=True, allow_completed=True)
+            check_promotable(source, task.id, expected_version, reason)
             validate_rule(source)
             validate_plan(source.validation_spec, len(source.points))
             require_topics(tx, source.project_id, source.topics)
@@ -180,6 +164,6 @@ class Knowledge(Workspaces):
             promoted = replace(source, id=_id('rule'), task_id=None, version=1, origin_reason=reason)
             tx.knowledge.create_rule(promoted, origin=(rule_id, expected_version))
             tx.knowledge.deprecate_rule(source)
-            tx.audit.record(session.project_id, actor.id, 'rule.promoted', promoted.id,
+            tx.audit.record(task.project_id, actor.id, 'rule.promoted', promoted.id,
                             {'source_id': rule_id, 'source_version': expected_version, 'reason': reason})
             return promoted

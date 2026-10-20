@@ -116,11 +116,11 @@ function handleDelete() {
       <div class="stats-overview-bar">
         <div class="stat-pill">
           <span>任务流转</span>
-          <strong>{{ ledger?.tasks.length ?? 0 }} 个</strong>
+          <strong>{{ ledger?.counts.tasks.total ?? 0 }} 个</strong>
         </div>
         <div class="stat-pill">
           <span>业务需求</span>
-          <strong>{{ ledger?.requirements.length ?? 0 }} 条</strong>
+          <strong>{{ ledger?.counts.requirements.total ?? 0 }} 条</strong>
         </div>
         <div class="stat-pill">
           <span>生效规则</span>

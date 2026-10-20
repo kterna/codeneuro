@@ -1,112 +1,81 @@
-# Task 与 Requirement 的 MCP CRUD
+# MCP 与 HTTP 资源
 
-Task 使用 `codeneuro_task`，Requirement 使用 `codeneuro_requirement`。两者均使用 `action=create/list/get/update/delete`；状态变化属于 update，不增加 archive/reopen 等工具或动作参数。
+所有 MCP 工具返回一段 JSON 文本，拒绝未声明参数。直接使用项目、父需求、Task 或实际记录 ID；没有 Session 生命周期或产品协议选择参数。
 
-## 参数
+## Requirement / Task CRUD
 
-| 参数 | Task | Requirement | 规则 |
-| --- | --- | --- | --- |
-| `project_id` | 必填 | — | Task 所属项目 |
-| `task_id` | — | 必填 | Requirement 所属 Task，无需 Session |
-| `action` | 必填 | 必填 | create / list / get / update / delete |
-| `id` | 条件必填 | 条件必填 | get/update/delete 的目标对象 ID |
-| `expected_version` | 条件必填 | 条件必填 | update/delete 使用查询结果中的 version |
-| `changes` | 条件必填 | 条件必填 | create/update 的类型化字段对象，不接受未知字段 |
-| `reason` | 条件必填 | 条件必填 | update/delete 的非空变更原因 |
-| `request_id` | — | 可选 | 仅 create 使用，在项目内去重需求录入；重试必须保持同一 Task 和初始原文 |
-| `statuses` | 可选 | — | 仅 list：非空、不重复的状态数组；省略时查询全部未删除状态 |
-| `cursor` | 可选 | — | 仅 list：上一页的 next_cursor，续页时保持相同 statuses |
-| `limit` | 可选 | — | 仅 list：每页 1–100 条，省略时为 20 条 |
+共同动作：`create/list/get/update/delete`。更新和删除必须给出 `id`、`expected_version`、非空 `reason`；传入的是本次要修改的 `changes`，未传字段保持原值，显式 null 与未知字段会被拒绝。
 
-Task 的 changes 支持 `title`、`description`、`status`。create 要求非空 title，默认 status=active，允许 draft；update 可同时修改元数据与状态。
+| 参数 | Requirement | Task |
+| --- | --- | --- |
+| project_id | 必填 | 必填 |
+| requirement_id | 不使用 | create 必填；list 可按父需求筛选 |
+| changes.title | 创建必填 | 创建必填 |
+| changes.text | 创建必填，整体目标 | 不使用 |
+| changes.description | 不使用 | 本任务实现范围 |
+| changes.acceptance_criteria | 整体验收要求 | 本任务验证要求 |
+| changes.status | draft/active/accepting/completed | draft/active/testing/paused/completed |
+| changes.completion_summary | 整体验收结论 | 不使用 |
+| changes.verification_summary | 不使用 | 独立验证方式与结果 |
+| changes.verification_report_ids | 不使用 | 可选的本 Task 成功报告 ID |
+| changes.archived | 归档/恢复，布尔值 | 归档/恢复，布尔值 |
 
-Requirement 的 changes 支持 `text`、`status`、`summary`。create 要求非空 text，初始状态为 active，不接受完成摘要。update 可以修订正文，也可以修改状态和归档摘要；active 状态没有完成摘要。
+创建默认 active；draft 父需求仅接受 draft 子任务。Task 不能通过 update 改换父需求。删除为软删除，不接收客户端设置的 deleted_at；有未删除子任务的需求不能删除。完整状态规则见[需求与任务](requirement-task-hierarchy.md)。
 
-查询时不要附带变更参数；delete 不接受 changes。MCP 中 Task 与 Requirement 都返回 `version`；Task 数据库/Web 的 revision 由 MCP 映射为 version，不要求调用方了解内部命名。
-
-## 示例
-
-新建 Task：
-
-```json
-{"project_id":"p","action":"create","changes":{"title":"退款处理"}}
+```python
+codeneuro_requirement(project_id="archive", action="create",
+    changes={"title": "档号要素维护", "text": "整体业务目标"}, request_id="create-goal")
+codeneuro_task(project_id="archive", action="create", requirement_id="返回的需求ID",
+    changes={"title": "全宗号", "description": "独立实现范围", "acceptance_criteria": "验证要求"})
 ```
 
-查询 Task 列表（默认包含归档、发布等历史状态，按 ID 排序）：
+list 返回 `items/next_cursor`，默认 20 条、最大 100 条；文本摘要最多 200 字符，并返回 `truncated`。默认包含非删除的归档记录，可用 statuses 筛业务状态。游标必须沿用相同项目、资源、父需求与状态筛选；筛选变化应重新开始列表。
 
-```json
-{"project_id":"p","action":"list"}
+get 返回完整当前内容和分页修订历史；`history_cursor` 是上次最后修订号，`history_limit` 默认 20。软删除记录仍能通过 get 查到。source 可选提供 workspace、machine_name、platform、repo_identity、git_branch，仅作来源声明。
+
+## 上下文、下发和反馈
+
+```python
+codeneuro_get_context(project_id="archive", task_id="明确选中的任务ID",
+    priorities=["P0", "P1"], files=["src/ArchiveService.java"])
 ```
 
-返回分页摘要，不再返回完整数组：
+`files` 与 `file_path` 二选一；必须有真实相对文件或已登记 topics。priorities 是明确集合，不是阈值。`max_chars` 默认 24000，范围 512–200000，约束 Markdown 而非整个 JSON。`intent` 为 implementing/debugging，`mode` 为 detailed/checklist。
 
-```json
-{"items":[{"id":"task-id","title":"退款处理","description":"业务说明","status":"active","version":0,"truncated":false}],"next_cursor":null}
+Task 查询包含父需求和本任务，不带入兄弟内容；项目级查询不推导 Task。结果含正文、实际引用、查询、匹配依据与省略信息，不重复返回 sections。
+
+相同项目、操作和 request_id 的相同输入重放原响应，变更输入冲突；省略或更换 ID 获取当前知识。`codeneuro_get_delivery(delivery_id)` 读取当时快照，不重新计算。迁入的旧下发正文仍是原始记录，其中旧字段不会用于当前上下文装配。
+
+`codeneuro_rate_rule(delivery_id, rule_id, score, reason)` 只接受真实下发的规则；score=0 是已知统计，不隐藏未来正文。`codeneuro_report_issue(project_id, issue_type, title, description, ...)` 可选 Task；conflict 必须指定 Task 和至少两条不同规则。两者没有 debug 前置。
+
+## 工具目录
+
+| 范围 | 工具 |
+| --- | --- |
+| 项目 | codeneuro_list_projects |
+| 需求/任务 | codeneuro_requirement、codeneuro_task |
+| 上下文 | codeneuro_get_context、codeneuro_get_delivery |
+| Task 规则 | codeneuro_create_task_rule、codeneuro_mutate_task_rule、codeneuro_promote_rule、codeneuro_propose_contract |
+| Task 验证 | codeneuro_report_test、codeneuro_observe_rule |
+| Task 观察 | codeneuro_record_finding、codeneuro_update_finding |
+| 项目主题 | codeneuro_list_topics、codeneuro_get_topic、codeneuro_create_topic、codeneuro_update_topic、codeneuro_delete_topic |
+| 反馈 | codeneuro_rate_rule、codeneuro_report_issue |
+
+规则、验证和观察写操作显式提供 task_id；Topic CRUD 显式提供 project_id。具体规则证据要求见[治理说明](governance.md)。
+
+## HTTP 资源
+
+```text
+/api/projects/{project_id}/requirements
+/api/projects/{project_id}/requirements/{id}
+/api/projects/{project_id}/requirements/{id}/tasks
+/api/projects/{project_id}/tasks
+/api/projects/{project_id}/tasks/{id}
+/api/projects/{project_id}/requirements/{id}/versions
+/api/projects/{project_id}/tasks/{id}/versions
+/api/projects/{project_id}/deliveries/{delivery_id}
 ```
 
-每条摘要保留 id、title、description、status、version、truncated。title 和 description 各最多 200 字符，任一截断则 truncated=true；需要完整标题或正文时调用 `get`。本地正则未匹配到截断摘要，不能据此断言完整正文不匹配。
+列表使用 GET；创建 POST body 为 changes、可选 request_id/source，Task 还需要 requirement_id。修改 PATCH 为 expected_version、changes、reason；DELETE 为 expected_version、reason。HTTP 详情不嵌入历史，用 versions 子资源分页获取。
 
-查询可绑定任务与后续页面：
-
-```json
-{"project_id":"p","action":"list","statuses":["active","testing"],"limit":20}
-{"project_id":"p","action":"list","statuses":["active","testing"],"limit":20,"cursor":"上一页的 next_cursor"}
-```
-
-next_cursor=null 表示没有下一页；非空时继续读取。创建任务前还应检查历史任务，避免遗漏可重开的记录；可用 statuses=["archived","released"] 查询历史。deleted 不接受为列表过滤状态，仍通过 get 读取。Web 列表和账本继续使用完整任务对象。
-
-重新打开归档 Task（version 为示例，须使用查询结果）：
-
-```json
-{"project_id":"p","action":"update","id":"task-id","expected_version":7,"changes":{"status":"active"},"reason":"继续未完成的工作"}
-```
-
-修订需求正文：
-
-```json
-{"task_id":"task-id","action":"update","id":"requirement-id","expected_version":2,"changes":{"text":"修订后的验收要求"},"reason":"补充验收条件"}
-```
-
-归档需求：
-
-```json
-{"task_id":"task-id","action":"update","id":"requirement-id","expected_version":3,"changes":{"status":"archived","summary":"已完成并验证"},"reason":"确认完成"}
-```
-
-重新打开需求：将上例的 changes 换成 `{"status":"active"}`，携带最新 version 和原因；所属 Task 必须为 active/testing。
-
-软删除需求：
-
-```json
-{"task_id":"task-id","action":"delete","id":"requirement-id","expected_version":4,"reason":"撤销该需求"}
-```
-
-读取需求及版本历史：
-
-```json
-{"task_id":"task-id","action":"get","id":"requirement-id"}
-```
-
-## 生命周期与历史
-
-- Task 的暂停、恢复、发布、归档、重开均通过 status 更新，并遵循现有状态机。paused 只能回到暂停前的状态；有活跃需求时不能发布或完成 Task。
-- Requirement 正文修订产生新版本。初始 original_text、各旧版本、已签发 Delivery 不变；新的 get_context 使用当前活跃版本。
-- 归档需求仍停用关联短期规则，最后一条活跃需求归档仍自动完成 Task。重开只恢复明确选中的对象，不恢复其他需求或规则。
-- delete 是软删除，标记为 deleted。list 隐藏已删除对象；get 仍可读取记录，Requirement get 同时返回 history。deleted 不能通过普通 update 恢复。
-- 删除 Task 保留子需求记录，但其内容退出正常列表和活跃上下文；删除需求不等于完成需求，不自动完成 Task。相关短期规则停用，历史引用不删除。
-- start_session 只负责创建会话和绑定 active/testing Task，恢复为原有参数。Task/Requirement CRUD 不依赖会话，避免为管理记录而启动会话。
-
-## MCP 输出与上下文回执
-
-- 所有工具只返回一份 JSON 文本，不再通过 structuredContent.result 重复携带相同内容，也不声明结构化 outputSchema。两种 MCP 传输保持一致；客户端解析 content 中的 JSON 文本。
-- get_context 的 MCP 返回保留 markdown、规则/需求/Finding 版本引用、遗漏信息、查询与匹配元数据，去掉重复正文的 sections。数据库内完整 Delivery 及其 sections 保留，历史回执不改写。
-- max_chars 仍是 Markdown 正文预算，不是最终 JSON 或字节预算；已准入 P0 保持全文，超预算通过 budget_exceeded 标记。输出去重不截断规则正文或引用。
-- get_context 使用同一 session_id 和 request_id 重放同一次请求；相同 request_id 搭配不同查询会冲突。需要获取当前知识时省略 request_id 或使用新 ID，不按查询参数永久缓存。
-
-## 更新部署
-
-Task list 返回形态改为分页对象；get_context 不再返回 sections；全部工具取消重复的 structuredContent。宿主须刷新工具目录，调用方相应读取 items/next_cursor、markdown 与版本引用。本次输出调整不需要数据库迁移。
-
-此前的 CRUD 改动移除旧的 Task 创建/列表、需求提交/列表/归档/恢复 MCP 工具，不保留重复别名。
-
-数据库新增迁移 `3d5f9b7c012e`：扩展 deleted 状态、增加 current_text 并从原文初始化；原文、历史版本和外键引用保留。更新运行环境时须先按授权执行显式迁移，再启动新版本；应用启动不会自动修改数据库。
+账本数组是有界摘要，计数以 `ledger.counts` 为准，后续列表使用返回的游标。Web 与 MCP 共用同一用例，错误按 invalid_request、not_found、conflict、forbidden 区分。服务无鉴权，Web human/MCP actor 都是来源标签。

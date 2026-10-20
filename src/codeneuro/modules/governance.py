@@ -1,6 +1,8 @@
 """Pure agent-rule evidence policy; reports are client claims, not Hub-run tests."""
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
+import json
 
 from .tasks import Conflict, ProductError
 
@@ -8,7 +10,6 @@ from .tasks import Conflict, ProductError
 @dataclass(frozen=True)
 class TestReport:
     id: str
-    session_id: str
     project_id: str
     task_id: str
     paths: tuple[str, ...]
@@ -48,6 +49,17 @@ def require_activation(stats: EvidenceStats):
     if stats.stage != 'validated' or stats.effective_confidence < 0.6:
         raise Conflict('Activation requires two distinct fresh successful client-reported tests, '
                        'no contradictions and effective confidence >= 0.6.')
+
+
+def test_event_fingerprint(command, paths, exit_code, started_at, finished_at, test_cases):
+    """An event identity is independent of Agent, request ID, case ordering and timezone spelling."""
+    stamps = [datetime.fromisoformat(value) for value in (started_at, finished_at)]
+    if any(stamp.tzinfo is None for stamp in stamps):
+        raise ProductError('Test event timestamps require an explicit timezone.')
+    payload = [command, sorted(paths), exit_code,
+               *(stamp.astimezone(timezone.utc).isoformat() for stamp in stamps),
+               sorted(test_cases, key=lambda case: case['test_id'])]
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
 
 
 def validate_test_report(command: tuple[str, ...], paths: tuple[str, ...],

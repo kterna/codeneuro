@@ -1,5 +1,4 @@
 # Tested environment: Debian / Python 3.11. Pin constraints for requirements.txt.
-alembic==1.17.2
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
@@ -20,7 +19,6 @@ idna==3.20
 iniconfig==2.3.0
 jsonschema-specifications==2025.9.1
 jsonschema==4.26.0
-mako==1.4.3
 markupsafe==3.0.4
 mcp-types==2.3.0
 mcp==2.3.0

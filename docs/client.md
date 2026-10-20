@@ -1,13 +1,20 @@
-# Hub 客户端与工作区声明
+# 客户端使用
 
-当前产品提供同机 stdio MCP、远程 streamable HTTP MCP 和 Web HTTP API；不需要登录或 Token。直接打开 `/app/` 即加载项目。Web 的人工审阅入口与 MCP 工具分开，但**没有鉴权，不能据此证明真实操作者身份**。默认只监听本机；绑定非本机地址前须自行确认网络可信，不得直接暴露公网。
+CodeNeuro 是主动查询的知识 Hub，支持 stdio MCP 和 Streamable HTTP MCP，配置示例见 [README](../README.md)。同机 stdio 使用 Hub 本机数据库；远程客户端连接 `http://<hub>:8801/mcp/`，不直接打开共享盘 SQLite。
 
-远程 MCP 客户端调用 `codeneuro_start_session` 时可以附带 `workspace`、机器名、平台、仓库身份与分支。Hub 根据客户端声明及路径生成稳定 Worktree ID，**只证明服务收到了该声明**，不假称读取或验证过远端工作区。如果查询提供文件，路径仍须为工作区相对 POSIX 路径；不支持把 NAS 上的目录当作办公机目录。
+Agent 在分析业务或操作相关文件前查询适用上下文，宿主执行编码和测试。安装 MCP 不会自动拦截工具或注入每次读取。Web、HTTP 与 MCP 均无鉴权，默认监听本机；actor、human、Worktree/source 都只是来源声明。
 
-所有 Rule、Requirement、版本和实际 Delivery 保存在 Hub 数据库；没有本地静态规则文件或同步守护进程。`codeneuro_get_context` 需要 Agent 主动调用，预览不计作真实下发。评分只能引用该会话真实取得的 Rule 版本和 `delivery_id`；0 代表会话已知，效用均分排除 0，只有被显式选中并满足适用范围的 P0 仍完整下发。特别注意：评分（`rate_rule`）与问题报告（`report_issue`）仅在会话以 `debug=True` 启动时允许调用；常规会话默认 `debug=False`，防止生产环境误记诊断数据。
+1. 列出已登记项目，确认当前项目。
+2. 如涉及业务任务，先列出需求与子任务，明确选择已有 Task；需要创建时按用户授权创建父需求或子任务。
+3. 直接调用 get_context，传 project_id、可选 task_id、明确 priorities，以及 topics 或真实相对文件。
+4. 在选定 Task 上推进实现、记录实际测试、提交独立验证。全部子任务完成后，父需求等待用户整体验收。
 
-v2 查询必须传非空 `priorities` 数组。可只传项目已登记的 `topics` 而完全不传文件；有主题时主题决定准入，无主题时回退为文件匹配。`start_session` 返回有界主题目录及 `taxonomy_revision`，目录截断时才按需搜索/分页，不必每次查询前重复获取。项目分类未确认启用时只允许文件模式；旧分类和 `min_priority` 不再支持。详见 [v2 契约](topics-v2.md)。
+没有 Session 的创建、复用、关闭或 debug 开关。单纯项目规则查询可不选 Task；工作区路径和调用历史不自动选择 Task。可选 source 仅记录来源。
 
-已归档任务可在 Web 的「流转状态」中直接选「进行中」重新激活；MCP 使用 `codeneuro_task(action="update", changes={"status":"active"}, ...)`，然后创建绑定该 Task 的 Session。需求通过 `codeneuro_requirement` 统一执行 CRUD，重开同样是 update status=active；归档为 update status=archived 并填写 summary。两者修改和删除均使用通用 id、expected_version、reason。需求正文可按版本修订，初始原文和历史下发不变；删除保留历史，重开不自动恢复其他需求或停用规则。完整参数见 [Task 与需求 CRUD](mcp-resources.md)。
+任务开发完成先转 testing；验证后转 completed 并填写 verification_summary。父需求整体完成须用户确认，提交 completion_summary 与确认原因。归档只收纳记录；已完成工作要继续修改时显式重开。记录更新/删除使用当前 expected_version 和 reason，冲突时先读最新记录再作决定。
 
-Web 使用 `/app/`；MCP 连接与配置见 [标准接入](agent-integrations.md)。当前不内置 CodeNeuro 远程路径自动发现器或宿主钩子；不要引用旧版 `codeneuro.client`、`codeneuro.cli`、`sync/export` API。
+主题使用项目受控词表，先 list_topics/get_topic 查定义，不能凭空发明标签。主题查询需要项目分类确认；尚未启用时可以按真实文件查询。等级是精确集合，P0 不被隐式加入；匹配且已选中的 P0 保持全文。
+
+相同 request_id 重放原快照，新请求读取最新知识。需要查看当时内容时按 delivery_id 读取，不用新查询冒充原下发。反馈只能引用真实下发；0 分只作已知统计，不简写后续内容。预览不生成实际 Delivery。
+
+列表和修订历史分页，摘要截断会明确标记，需要完整文本时使用 get。接口参数见 [MCP 与 HTTP](mcp-resources.md)，治理约束见[规则治理](governance.md)。
