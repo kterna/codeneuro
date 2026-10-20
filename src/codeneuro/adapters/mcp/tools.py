@@ -42,8 +42,8 @@ def create_mcp(product: Product, actor_for_context=None, *, name='CodeNeuro'):
             value = callback(*args, **kwargs)
             if is_dataclass(value):
                 value = asdict(value)
-            if isinstance(value, dict) and 'markdown' in value and 'rule_refs' in value:
-                value = {key: item for key, item in value.items() if key != 'sections'}
+                if 'markdown' in value and 'rule_refs' in value:
+                    value = {key: item for key, item in value.items() if key != 'sections'}
             return json.dumps(value, ensure_ascii=False,
                 default=lambda item: asdict(item) if is_dataclass(item) else str(item))
         except (ProductError, ValueError) as error:
