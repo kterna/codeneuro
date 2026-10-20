@@ -57,7 +57,7 @@ const currentDepth = props.depth ?? 0
       <span class="tree-text-truncate">{{ node.name }}</span>
 
       <div class="tree-pill-tags">
-        <span v-if="node.p0Count" class="tag p0 mini" title="核心契约 (P0)">P0:{{ node.p0Count }}</span>
+        <span v-if="node.p0Count" class="tag p0 mini" title="核心规则 (P0)">P0:{{ node.p0Count }}</span>
         <span v-if="node.p1Count" class="tag p1 mini" title="重要规则 (P1)">P1:{{ node.p1Count }}</span>
         <span v-if="node.p2Count" class="tag p2 mini" title="标准实践 (P2)">P2:{{ node.p2Count }}</span>
         <span v-if="node.p3Count" class="tag mini" title="参考建议 (P3)">P3:{{ node.p3Count }}</span>

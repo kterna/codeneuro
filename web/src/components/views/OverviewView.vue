@@ -27,19 +27,18 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
   <div class="overview-view-root">
     <!-- 1. 核心业务健康度 4 维大卡片 -->
     <div class="overview-section">
-      <div class="section-title">核心指标与健康度</div>
+      <div class="section-title">核心指标</div>
       <div class="overview-cards-grid">
         <div class="overview-card accent" @click="emit('navigate', 'tasks')">
           <div class="card-head">
-            <span class="card-label">活跃业务需求</span>
+            <span class="card-label">进行中的需求</span>
             <span class="card-icon">▥</span>
           </div>
           <div class="card-value">{{ activeRequirementsCount }}</div>
           <div class="card-meta">
-            <span>待交付：{{ activeRequirementsCount }} 项</span>
-            <span>已归档：{{ archivedRequirements }} 项</span>
+            <span>待交付 {{ activeRequirementsCount }} 项 · 已归档 {{ archivedRequirements }} 项</span>
           </div>
-          <div class="card-action">前往需求看板 →</div>
+          <div class="card-action">查看需求与任务 →</div>
         </div>
 
         <div class="overview-card green" @click="emit('navigate', 'tasks')">
@@ -49,38 +48,35 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
           </div>
           <div class="card-value">{{ activeTasksCount }}</div>
           <div class="card-meta">
-            <span>执行中：{{ activeTasksCount }} 个</span>
-            <span>任务总数：{{ ledger.counts.tasks.total }} 个</span>
+            <span>执行中 {{ activeTasksCount }} 个 · 任务总数 {{ ledger.counts.tasks.total }} 个</span>
           </div>
-          <div class="card-action">查看任务流转 →</div>
+          <div class="card-action">查看任务 →</div>
         </div>
 
         <div class="overview-card purple" @click="emit('navigate', 'rules')">
           <div class="card-head">
-            <span class="card-label">P0 核心项目契约</span>
+            <span class="card-label">P0 核心规则</span>
             <span class="card-icon">≋</span>
           </div>
           <div class="card-value">{{ contractsCount }}</div>
           <div class="card-meta">
-            <span>生效中规则：{{ activeRules }} 条</span>
-            <span>规则库总数：{{ totalRules }} 条</span>
+            <span>生效中 {{ activeRules }} 条 · 全部规则 {{ totalRules }} 条</span>
           </div>
-          <div class="card-action">查阅规则库 →</div>
+          <div class="card-action">查看规则库 →</div>
         </div>
 
         <div class="overview-card amber" @click="emit('navigate', 'review')">
           <div class="card-head">
-            <span class="card-label">待审契约变更</span>
+            <span class="card-label">待审规则修改</span>
             <span class="card-icon">◈</span>
           </div>
           <div class="card-value" :class="{ 'has-pending': pendingProposalsCount > 0 }">
             {{ pendingProposalsCount }}
           </div>
           <div class="card-meta">
-            <span>待人工核准：{{ pendingProposalsCount }} 项</span>
-            <span>历史提案：{{ totalProposals }} 项</span>
+            <span>待处理 {{ pendingProposalsCount }} 项 · 历史建议 {{ totalProposals }} 项</span>
           </div>
-          <div class="card-action">审阅变更提案 →</div>
+          <div class="card-action">前往审阅 →</div>
         </div>
       </div>
     </div>
@@ -90,24 +86,24 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
       <!-- 左列：规则与契约分布 -->
       <div class="detail-panel">
         <div class="panel-header">
-          <h3>规则与规范资产分布</h3>
+          <h3>规则分布</h3>
           <button class="subtle" @click="emit('navigate', 'rules')">管理规则</button>
         </div>
         <div class="stat-list">
           <div class="stat-row">
-            <span class="stat-name">长期项目契约 (长期生效)</span>
+            <span class="stat-name">长期规则</span>
             <strong class="stat-val">{{ ledger.rules.filter(r => !r.task_id).length }}</strong>
           </div>
           <div class="stat-row">
-            <span class="stat-name">任务短期规则 (绑定活跃任务)</span>
+            <span class="stat-name">任务规则</span>
             <strong class="stat-val">{{ ledger.rules.filter(r => r.task_id).length }}</strong>
           </div>
           <div class="stat-row">
-            <span class="stat-name">纯主题规则（无文件锚点）</span>
+            <span class="stat-name">主题规则</span>
             <strong class="stat-val">{{ ledger.rules.filter(r => !r.patterns.length && !r.is_global).length }}</strong>
           </div>
           <div class="stat-row">
-            <span class="stat-name">待分类验收规则</span>
+            <span class="stat-name">待归类规则</span>
             <strong class="stat-val">{{ ledger.topic_coverage.rules.length }}</strong>
           </div>
         </div>
@@ -116,24 +112,24 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
       <!-- 右列：环境与协同状态 -->
       <div class="detail-panel">
         <div class="panel-header">
-          <h3>协同与避坑知识库</h3>
+          <h3>便签与统计</h3>
           <button class="subtle" @click="emit('navigate', 'feedback')">查看便签</button>
         </div>
         <div class="stat-list">
           <div class="stat-row">
-            <span class="stat-name">避坑便签总数 (Gotcha Findings)</span>
+            <span class="stat-name">经验便签</span>
             <strong class="stat-val">{{ totalFindings }}</strong>
           </div>
           <div class="stat-row">
-            <span class="stat-name">声明客户端工作区 (Worktrees)</span>
+            <span class="stat-name">已登记的工作区</span>
             <strong class="stat-val">{{ totalWorktrees }}</strong>
           </div>
           <div class="stat-row">
-            <span class="stat-name">审计流水事件 (Audit Events)</span>
+            <span class="stat-name">操作记录</span>
             <strong class="stat-val">{{ totalEvents }}</strong>
           </div>
           <div class="stat-row">
-            <span class="stat-name">作用域规则密度 (Scope Regions)</span>
+            <span class="stat-name">规则覆盖目录</span>
             <strong class="stat-val">{{ ledger.scope_density?.length ?? 0 }}</strong>
           </div>
         </div>
@@ -277,13 +273,13 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--gh-border-muted);
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: background 0.12s ease;
 }
 
-.stat-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+.stat-row:hover {
+  background: var(--gh-surface-card);
 }
 
 .stat-name {
@@ -292,9 +288,13 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
 }
 
 .stat-val {
-  font-size: 14px;
+  font-size: 12px;
   font-family: var(--font-mono);
   color: var(--gh-fg-default);
+  background: var(--gh-canvas-inset);
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--gh-border-muted);
 }
 
 @media (max-width: 1024px) {

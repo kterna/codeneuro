@@ -15,28 +15,42 @@ const reason = ref('')
 const busy = ref(false)
 const error = ref('')
 
+function kindLabel(kind: string): string {
+  return kind === 'review' ? '人工审阅' : kind === 'test' ? '测试验证' : kind
+}
+
+const specBasis = computed(() => {
+  const spec = props.rule.validation_spec
+  return spec?.kind === 'review' ? spec.basis : ''
+})
+
+const specChecks = computed(() => {
+  const spec = props.rule.validation_spec
+  return spec?.kind === 'test' ? spec.checks : []
+})
+
 const governanceBadge = computed(() => {
   if (props.rule.validation_spec) {
     if (props.rule.status === 'draft') {
       return {
-        label: props.rule.validation_spec.kind === 'review' ? '规范审阅候选' : '测试验证候选',
+        label: props.rule.validation_spec.kind === 'review' ? '待人工审阅' : '待测试验证',
         variant: 'purple' as const,
       }
     }
     if (props.rule.validation_spec.kind === 'review') {
       return {
-        label: '规范审阅依据',
+        label: '人工审阅通过',
         variant: 'accent' as const,
       }
     } else {
       return {
-        label: '测试验证计划',
+        label: '测试验证中',
         variant: 'purple' as const,
       }
     }
   }
   return {
-    label: '存量规范治理',
+    label: '历史规则待补依据',
     variant: 'neutral' as const,
   }
 })
@@ -52,7 +66,7 @@ watch(() => props.rule, rule => {
 
 async function submit(approve: boolean) {
   if (!reason.value.trim()) {
-    error.value = '请填写审阅依据与理由。'
+    error.value = '请填写审阅理由。'
     return
   }
   busy.value = true
@@ -84,7 +98,7 @@ async function submit(approve: boolean) {
     <!-- 面板标题与类型标识 -->
     <div class="gov-header">
       <div class="gov-title-row">
-        <h4 class="gov-title">规则成立依据与规范治理</h4>
+        <h4 class="gov-title">规则依据</h4>
         <GhTag :variant="governanceBadge.variant">
           {{ governanceBadge.label }}
         </GhTag>
@@ -94,15 +108,22 @@ async function submit(approve: boolean) {
     <!-- 验证规格展示 (如有结构化依据) -->
     <div v-if="rule.validation_spec" class="spec-container">
       <div class="spec-header">
-        <span class="caption">验证规格 (Validation Spec)</span>
-        <code class="spec-kind-tag">{{ rule.validation_spec.kind }}</code>
+        <span class="caption">验证方式</span>
+        <code class="spec-kind-tag">{{ kindLabel(rule.validation_spec.kind) }}</code>
       </div>
-      <pre class="spec-code-block">{{ JSON.stringify(rule.validation_spec, null, 2) }}</pre>
+      <div v-if="rule.validation_spec.kind === 'review'" class="spec-readable">
+        <p>核对依据：{{ specBasis || '未填写' }}</p>
+      </div>
+      <div v-else class="spec-readable">
+        <p v-for="check in specChecks" :key="check.id">
+          测试项 {{ check.id }} · 覆盖第 {{ check.clause_indexes.map(i => i + 1).join('、') || '—' }} 条 · 测试编号 {{ check.test_ids.join('、') || '未指定' }}
+        </p>
+      </div>
     </div>
 
     <!-- 优先级依据展示 (如有既定依据) -->
     <div v-if="rule.priority_reason" class="priority-reason-banner">
-      <span class="priority-label">优先级依据：</span>
+      <span class="priority-label">为什么是这个优先级：</span>
       <span class="priority-text">{{ rule.priority_reason }}</span>
     </div>
 
@@ -111,7 +132,7 @@ async function submit(approve: boolean) {
       <div class="gov-notice-callout">
         <span class="notice-icon" aria-hidden="true">💡</span>
         <p class="caption notice-text">
-          存量分类审阅：确认本规则作为规范的依据与适用范围，不代表已经运行测试。可测试的新主张应由 Agent 建立验证候选。
+          历史规则补录：仅确认规则依据与适用范围，不代表已通过测试。
         </p>
       </div>
 
@@ -119,8 +140,8 @@ async function submit(approve: boolean) {
         <!-- 业务主题 -->
         <label class="gov-field-group">
           <span class="field-title">
-            已登记主题 key（逗号分隔）
-            <span class="field-help">必须是已登记的主题标识</span>
+            所属主题
+            <span class="field-help">多个主题用逗号分隔，须为已登记主题</span>
           </span>
           <input
             v-model="topics"
@@ -142,15 +163,15 @@ async function submit(approve: boolean) {
         <div class="gov-field-group full-width">
           <label class="gov-checkbox-label">
             <input v-model="isGlobal" type="checkbox" :disabled="busy" />
-            <span class="checkbox-text">明确适用于项目所有操作（不是“重要”的同义词）</span>
+            <span class="checkbox-text">对所有文件生效</span>
           </label>
         </div>
 
         <!-- 真实检索路径 -->
         <label class="gov-field-group full-width">
           <span class="field-title">
-            真实检索路径（每行一个，可留空）
-            <span class="field-help">匹配 glob 模式；若留空则代表按主题/全局召回</span>
+            适用文件
+            <span class="field-help">每行一个，支持通配符；留空表示按主题或全局生效</span>
           </span>
           <textarea
             v-model="patterns"
@@ -164,14 +185,14 @@ async function submit(approve: boolean) {
         <!-- P0 损害与适用边界 (仅当选择 P0 时展示) -->
         <label v-if="priority === 'P0'" class="gov-field-group full-width p0-alert-group">
           <span class="field-title p0-title">
-            <span>P0 损害与适用边界</span>
-            <span class="field-help-p0">必须阐明可能造成的严重不可逆资损或灾难性后果</span>
+            <span>P0 严重后果与适用边界</span>
+            <span class="field-help-p0">说明可能造成的严重损失或安全风险</span>
           </span>
           <textarea
             v-model="priorityReason"
             :disabled="busy"
             rows="2"
-            placeholder="详述本规则违反时引发的不可逆生产资损、安全合规红线或系统瘫痪边界…"
+            placeholder="说明违反后的严重后果…"
             class="gh-textarea p0-textarea"
           />
         </label>
@@ -183,14 +204,14 @@ async function submit(approve: boolean) {
       <div class="gov-review-submit-section">
         <label class="gov-field-group full-width">
           <span class="field-title">
-            规范依据与审阅理由
-            <span class="field-required">* 必须登记人工审阅判定依据</span>
+            审阅依据
+            <span class="field-required">* 必填</span>
           </span>
           <textarea
             v-model="reason"
             :disabled="busy"
             rows="2"
-            placeholder="说明确认该规范生效的背景、人类决策依据或事实核验记录…"
+            placeholder="说明规则来源与确认依据…"
             class="gh-textarea"
           />
         </label>
@@ -201,7 +222,7 @@ async function submit(approve: boolean) {
             class="primary btn-submit-gov"
             :disabled="busy"
             @click="submit(true)"
-          >{{ rule.validation_spec ? '批准该版本规范' : '确认存量分类与规范依据' }}</button>
+          >{{ rule.validation_spec ? '通过这条规则' : '确认分类与依据' }}</button>
 
           <button
             v-if="rule.validation_spec"
@@ -209,14 +230,14 @@ async function submit(approve: boolean) {
             class="danger btn-reject-gov"
             :disabled="busy"
             @click="submit(false)"
-          >记录不批准意见</button>
+          >不通过并记录原因</button>
         </div>
       </div>
     </template>
 
     <div v-else-if="rule.validation_spec?.kind === 'test'" class="test-kind-callout">
       <span class="callout-icon" aria-hidden="true">🧪</span>
-      <p class="caption callout-text">由宿主上报真实测试项，再关联验证计划；界面审批不能替代测试。</p>
+      <p class="caption callout-text">测试结果由 AI 上报，界面通过不能代替测试。</p>
     </div>
 
     <!-- 错误反馈提示 -->
@@ -255,6 +276,19 @@ async function submit(approve: boolean) {
 }
 
 /* 规格代码卡片 */
+.spec-readable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.spec-readable p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--gh-fg-default);
+}
+
 .spec-container {
   background: var(--gh-canvas-inset);
   border: 1px solid var(--gh-border-default);

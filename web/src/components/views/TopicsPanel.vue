@@ -24,6 +24,10 @@ const isClassificationComplete = computed(() => {
   return !props.ledger.topic_coverage.rules.length && !props.ledger.topic_coverage.findings.length
 })
 
+function topicStatusLabel(status: string): string {
+  return status === 'active' ? '生效中' : status === 'deleted' ? '已删除' : status
+}
+
 const hasBlockingReferences = computed(() => {
   if (!selected.value || selected.value.status === 'deleted') return false
   const refs = selected.value.blocking_references
@@ -75,7 +79,7 @@ async function inspect(topic: Topic) {
 async function action(kind: 'save' | 'delete' | 'enable') {
   if (kind === 'enable') {
     if (!enableReason.value.trim()) {
-      error.value = '请填写启用理由。'
+      error.value = '请填写开启理由。'
       return
     }
   } else {
@@ -141,17 +145,17 @@ async function action(kind: 'save' | 'delete' | 'enable') {
           <span class="topics-icon-badge" aria-hidden="true">🏷️</span>
           <div>
             <h3 class="topics-title">业务主题管理</h3>
-            <span class="topics-subtitle">领域知识分类体系 (Topics Taxonomy)</span>
+            <span class="topics-subtitle">按业务把规则和便签分组</span>
           </div>
         </div>
         <div class="topics-status-badge">
           <GhTag :variant="page?.topic_query_enabled ? 'success' : 'amber'">
-            {{ page?.topic_query_enabled ? '主题查询已启用' : '待分类验收' }}
+            {{ page?.topic_query_enabled ? '主题检索已开启' : '还未开启主题检索' }}
           </GhTag>
         </div>
       </div>
       <p class="caption topics-notice-text">
-        key 永久稳定；已使用的业务边界不可直接修改。删除不会级联修改规则，已删除 key 不可复用。
+        主题标识不可修改；被引用的主题边界不可修改；删除的标识不可复用。
       </p>
     </header>
 
@@ -160,34 +164,25 @@ async function action(kind: 'save' | 'delete' | 'enable') {
       <div class="cutover-card-header">
         <div class="cutover-indicator">
           <span class="cutover-dot" :class="{ ready: isClassificationComplete }"></span>
-          <strong>主题检索准入验收</strong>
+          <strong>开启主题检索前，先完成分类</strong>
         </div>
         <span class="cutover-stats-pill">
-          规则 {{ ledger.topic_coverage.rules.length }} 条 · 便签 {{ ledger.topic_coverage.findings.length }} 条
+          待分类：规则 {{ ledger.topic_coverage.rules.length }} 条 · 便签 {{ ledger.topic_coverage.findings.length }} 条
         </span>
-      </div>
-
-      <div class="cutover-body">
-        <p class="cutover-desc">
-          未完成分类或验证依据/P0 理由：规则 {{ ledger.topic_coverage.rules.length }} 条，便签 {{ ledger.topic_coverage.findings.length }} 条。
-        </p>
-        <p class="caption cutover-instruction">
-          先在规则详情、开发便签中逐项完成分类与审阅，再填写理由并确认启用。系统不会自动猜测主题。
-        </p>
       </div>
 
       <!-- 独立启用理由输入区：分类完整后支持填写理由并启用 -->
       <div class="cutover-reason-box">
         <label class="form-field-group">
           <span class="field-title">
-            <span>启用理由</span>
-            <span class="field-required">* 必须登记全量主题查询启用审计理由</span>
+            <span>开启理由</span>
+            <span class="field-required">* 必填</span>
           </span>
           <textarea
             v-model="enableReason"
             :disabled="busy || !isClassificationComplete"
             rows="2"
-            placeholder="请确认存量规则与便签分类均已完成，并详实填写启用主题检索的审计理由…"
+            placeholder="说明为什么现在可以开启主题检索…"
             class="gh-textarea cutover-reason-textarea"
           />
         </label>
@@ -200,7 +195,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
           :disabled="busy || !isClassificationComplete || !enableReason.trim()"
           @click="action('enable')"
         >
-          确认分类完整，启用主题查询
+          确认分类完成，开启主题检索
         </button>
       </div>
     </div>
@@ -219,7 +214,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
             <input
               v-model="search"
               aria-label="搜索业务主题"
-              placeholder="主题 key 或名称…"
+              placeholder="搜索主题名称或标识…"
               class="topics-search-input"
               @keyup.enter="load()"
             />
@@ -262,8 +257,8 @@ async function action(kind: 'save' | 'delete' | 'enable') {
                   @click="inspect(topic)"
                 >{{ topic.name }} · {{ topic.key }}</button>
                 <div class="topic-item-meta">
-                  <span v-if="topic.definition_locked" class="topic-lock-pill" title="已锁定边界">🔒 边界锁定</span>
-                  <span class="caption topic-meta-tags">v{{ topic.version }} · {{ topic.status }}</span>
+                  <span v-if="topic.definition_locked" class="topic-lock-pill" title="边界已锁定">🔒 边界已锁定</span>
+                  <span class="caption topic-meta-tags">v{{ topic.version }} · {{ topicStatusLabel(topic.status) }}</span>
                 </div>
               </div>
             </li>
@@ -284,7 +279,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
           <span class="empty-icon" aria-hidden="true">📋</span>
           <h4 class="empty-title">未选择业务主题</h4>
           <p class="caption empty-desc">
-            请在左侧列表中点击主题条目查看详情与引用状态，或点击下方按钮登记新的业务边界。
+            请选择或新建业务主题。
           </p>
           <button type="button" class="primary btn-start-create" :disabled="busy" @click="startCreate">
             ＋ 新建主题
@@ -296,7 +291,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
           <div class="editor-card-header">
             <div class="editor-header-left">
               <h4 class="editor-heading">
-                {{ selected ? '主题详情与定义修改' : '新建业务主题' }}
+                {{ selected ? '主题详情' : '新建业务主题' }}
               </h4>
               <span v-if="selected" class="editor-key-pill">
                 <code>{{ selected.key }}</code>
@@ -304,7 +299,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
             </div>
             <div v-if="selected" class="editor-header-tags">
               <GhTag :variant="selected.status === 'deleted' ? 'danger' : 'neutral'">
-                {{ selected.status === 'deleted' ? '已标记删除' : '生效中' }}
+                {{ selected.status === 'deleted' ? '已删除' : '生效中' }}
               </GhTag>
               <GhTag v-if="selected.definition_locked" variant="amber">
                 定义已锁定
@@ -316,8 +311,8 @@ async function action(kind: 'save' | 'delete' | 'enable') {
             <!-- 稳定 key -->
             <label class="form-field-group">
               <span class="field-title">
-                <span>稳定 key</span>
-                <span class="field-help-inline">项目内唯一，创建后永久不可变</span>
+                <span>主题标识</span>
+                <span class="field-help-inline">项目内唯一，创建后不能修改</span>
               </span>
               <input
                 v-model="key"
@@ -333,7 +328,6 @@ async function action(kind: 'save' | 'delete' | 'enable') {
             <label class="form-field-group">
               <span class="field-title">
                 <span>显示名称</span>
-                <span class="field-help-inline">业务人员与开发者可读的规范名称</span>
               </span>
               <input
                 v-model="name"
@@ -349,7 +343,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
             <label class="form-field-group">
               <span class="field-title">
                 <span>业务边界</span>
-                <span class="field-help-inline">该主题管辖的职责范畴与排他边界 (引用后锁定)</span>
+                <span class="field-help-inline">主题职责与范围</span>
               </span>
               <textarea
                 v-model="description"
@@ -358,7 +352,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
                 :readonly="selected?.definition_locked"
                 :disabled="busy || selected?.status === 'deleted'"
                 rows="4"
-                placeholder="详细描述此业务主题覆盖的系统模块、业务语义与排他边界…"
+                placeholder="说明主题覆盖的模块与职责范围…"
                 class="gh-textarea font-body"
               />
             </label>
@@ -367,8 +361,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
             <div v-if="selected?.definition_locked" class="definition-lock-callout">
               <span class="lock-icon" aria-hidden="true">🔒</span>
               <div class="lock-text">
-                <strong>该定义已被引用；改变边界需要新建主题，并对知识逐项重新分类。</strong>
-                <p class="caption lock-subtext">保护历史知识库审计一致性，防止边界漂移导致归属规则失效。</p>
+                <strong>该主题已被引用，边界不可修改；如需调整请新建主题并重新归类。</strong>
               </div>
             </div>
 
@@ -376,8 +369,8 @@ async function action(kind: 'save' | 'delete' | 'enable') {
             <div v-if="hasBlockingReferences && selected?.blocking_references" class="blocking-refs-callout">
               <span class="ref-icon" aria-hidden="true">🛡️</span>
               <div class="ref-text">
-                <strong>阻断引用：规则 {{ selected.blocking_references.rules }}，便签 {{ selected.blocking_references.findings }}，提案 {{ selected.blocking_references.proposals }}。</strong>
-                <p class="caption ref-subtext">存在在用引用的主题无法删除，必须先将关联规则/便签重新分类。</p>
+                <strong>引用中：规则 {{ selected.blocking_references.rules }} 条 · 便签 {{ selected.blocking_references.findings }} 条 · 建议 {{ selected.blocking_references.proposals }} 条。</strong>
+                <p class="caption ref-subtext">存在引用时不可删除，请先调整关联规则与便签。</p>
               </div>
             </div>
 
@@ -385,14 +378,14 @@ async function action(kind: 'save' | 'delete' | 'enable') {
             <label class="form-field-group">
               <span class="field-title">
                 <span>操作理由</span>
-                <span class="field-required">* 必须登记操作审计原因</span>
+                <span class="field-required">* 必填</span>
               </span>
               <textarea
                 v-model="reason"
                 required
                 :disabled="busy"
                 rows="3"
-                placeholder="请如实记录本次新建、修改或删除此主题的业务背景与理由…"
+                placeholder="说明本次操作原因…"
                 class="gh-textarea"
               />
             </label>
@@ -414,7 +407,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
                 :disabled="busy || !selected.can_delete"
                 @click="action('delete')"
               >
-                删除无在用引用的主题
+                删除主题
               </button>
 
               <button

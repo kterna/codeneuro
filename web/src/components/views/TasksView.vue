@@ -240,7 +240,7 @@ async function showHistory(kind: EditAction['kind'], id: string, more = false) {
       <summary>＋ 新建业务需求</summary>
       <form @submit.prevent="createRequirement">
         <fieldset :disabled="busy">
-          <label class="field">需求名称<input v-model="newRequirement.title" required maxlength="500" placeholder="例如：档号要素维护" /></label>
+          <label class="field">需求名称<input v-model="newRequirement.title" required maxlength="500" placeholder="例如：规则推送记录可按会话回溯" /></label>
           <label class="field">整体目标<textarea v-model="newRequirement.text" required rows="3" /></label>
           <label class="field">整体验收要求<textarea v-model="newRequirement.acceptance_criteria" rows="2" /></label>
           <button class="primary" type="submit">创建需求</button>
@@ -250,19 +250,35 @@ async function showHistory(kind: EditAction['kind'], id: string, more = false) {
     <div class="resource-layout">
       <aside class="resource-panel requirement-list" aria-label="业务需求列表">
         <div class="row"><h2>业务需求</h2><button :disabled="busy" @click="refreshView">刷新</button></div>
-        <p v-if="!requirements.length" class="muted">尚无需求，请先创建整体业务目标。</p>
-        <button v-for="item in requirements" :key="item.id" class="requirement-item" :class="{ selected: selectedId === item.id }"
-                :disabled="busy" @click="selectRequirement(item.id)">
-          <strong>{{ item.title }}</strong>
-          <span>{{ labels[item.status] }}<template v-if="item.archived_at"> · 已归档</template></span>
-          <span>已验证 {{ item.progress.completed }} / {{ item.progress.total }}</span>
-          <span class="muted">{{ item.text }}{{ item.truncated ? '…' : '' }}</span>
+        <p v-if="!requirements.length" class="muted">暂无需求。</p>
+        <button
+          v-for="item in requirements"
+          :key="item.id"
+          class="requirement-item"
+          :class="{ selected: selectedId === item.id }"
+          :disabled="busy"
+          @click="selectRequirement(item.id)"
+        >
+          <div class="req-item-head">
+            <strong class="req-title">{{ item.title }}</strong>
+            <span class="req-badge" :class="'status-' + item.status">
+              {{ labels[item.status] }}<template v-if="item.archived_at"> · 归档</template>
+            </span>
+          </div>
+          <div class="req-item-meta">
+            <span class="req-progress">已验证 {{ item.progress.completed }} / {{ item.progress.total }}</span>
+          </div>
+          <div class="req-desc muted">{{ item.text }}{{ item.truncated ? '…' : '' }}</div>
         </button>
         <button v-if="requirementCursor" :disabled="busy" @click="loadRequirements(true).catch(failed)">加载更多需求</button>
       </aside>
       <section class="resource-panel requirement-detail" aria-label="需求详情">
         <p v-if="loading">正在读取需求…</p>
-        <p v-else-if="!selected" class="empty">选择一个需求，查看和推进其子任务。</p>
+        <div v-else-if="!selected" class="empty-state-box">
+          <div class="empty-icon">📋</div>
+          <p class="empty-title">未选择业务需求</p>
+          <p class="empty-desc">请选择业务需求查看详情。</p>
+        </div>
         <template v-else>
           <div class="row"><h2>{{ selected.title }}</h2><span>{{ labels[selected.status] }} · v{{ selected.version }}</span></div>
           <p v-if="selected.archived_at" class="caption">已归档；恢复归档后才能继续修改。</p>
@@ -278,7 +294,7 @@ async function showHistory(kind: EditAction['kind'], id: string, more = false) {
               <button v-if="selected.status === 'active' && selected.progress.total > 0 && selected.progress.completed === selected.progress.total"
                       @click="openAction('requirements', selected, '重新提交整体验收', { status: 'accepting' })">提交整体验收</button>
               <button v-if="selected.status === 'completed'" @click="openAction('requirements', selected, '重开需求', { status: 'active' })">重开需求</button>
-              <button v-else @click="openAction('requirements', selected, '修订需求', {}, true)">修订需求</button>
+              <button v-else @click="openAction('requirements', selected, '修改需求', {}, true)">修改需求</button>
               <button @click="openAction('requirements', selected, '归档需求', { archived: true })">归档</button>
               <button v-if="!selected.progress.total" @click="openAction('requirements', selected, '删除需求', {}, false, true)">删除</button>
             </template>
@@ -287,7 +303,7 @@ async function showHistory(kind: EditAction['kind'], id: string, more = false) {
           </div>
           <p v-if="selected.status === 'accepting'" class="acceptance-note">子任务已分别验证完成，请确认整体验收结果。</p>
           <h3>子任务</h3>
-          <p v-if="!tasks.length" class="muted">尚无子任务；空需求不会自动进入验收。</p>
+          <p v-if="!tasks.length" class="muted">暂无子任务。</p>
           <table v-else class="tasks-table">
             <thead><tr><th>任务</th><th>状态</th><th>版本</th></tr></thead>
             <tbody><tr v-for="item in tasks" :key="item.id">
@@ -299,7 +315,7 @@ async function showHistory(kind: EditAction['kind'], id: string, more = false) {
           <details v-if="canWork" class="new-task">
             <summary>＋ 添加子任务</summary>
             <form @submit.prevent="createTask"><fieldset :disabled="busy">
-              <label class="field">任务名称<input v-model="newTask.title" required maxlength="500" placeholder="例如：全宗号" /></label>
+              <label class="field">任务名称<input v-model="newTask.title" required maxlength="500" placeholder="例如：新增按目录查规则接口" /></label>
               <label class="field">实现范围<textarea v-model="newTask.description" rows="3" /></label>
               <label class="field">验证要求<textarea v-model="newTask.acceptance_criteria" rows="2" /></label>
               <button class="primary" type="submit">创建子任务</button>
@@ -323,7 +339,7 @@ async function showHistory(kind: EditAction['kind'], id: string, more = false) {
             <button v-if="focusedTask.status === 'testing' || focusedTask.status === 'completed'" @click="openAction('tasks', focusedTask, '退回开发', { status: 'active' })">退回开发</button>
             <button v-if="['active', 'testing'].includes(focusedTask.status)" @click="openAction('tasks', focusedTask, '暂停任务', { status: 'paused' })">暂停</button>
             <button v-if="focusedTask.status === 'paused'" @click="openAction('tasks', focusedTask, '恢复任务', { status: focusedTask.paused_from })">恢复</button>
-            <button v-if="['draft', 'active'].includes(focusedTask.status)" @click="openAction('tasks', focusedTask, '修订任务', {}, true)">修订任务</button>
+            <button v-if="['draft', 'active'].includes(focusedTask.status)" @click="openAction('tasks', focusedTask, '修改任务', {}, true)">修改任务</button>
             <button @click="openAction('tasks', focusedTask, '删除子任务', {}, false, true)">删除</button>
           </template>
           <button v-if="selected && !selected.archived_at && !focusedTask.deleted_at"
@@ -332,7 +348,7 @@ async function showHistory(kind: EditAction['kind'], id: string, more = false) {
         </div>
         <h3>任务规则</h3><p v-if="!relatedRules.length" class="muted">暂无任务规则。</p>
         <details v-for="rule in relatedRules" :key="rule.id"><summary>{{ rule.title }} · {{ rule.status }}</summary><ul><li v-for="point in rule.points" :key="point">{{ point }}</li></ul></details>
-        <h3>发现</h3><p v-if="!relatedFindings.length" class="muted">暂无发现。</p>
+        <h3>相关便签</h3><p v-if="!relatedFindings.length" class="muted">暂无便签。</p>
         <p v-for="finding in relatedFindings" :key="finding.id" class="body-text">{{ finding.text }} · {{ finding.status }}</p>
       </template>
     </GhDrawer>
@@ -363,10 +379,119 @@ async function showHistory(kind: EditAction['kind'], id: string, more = false) {
 
 <style scoped>
 .task-workspace { display: flex; flex-direction: column; gap: 16px; }
-.resource-layout { display: grid; grid-template-columns: minmax(240px, 30%) 1fr; gap: 16px; align-items: start; }
+.resource-layout { display: grid; grid-template-columns: minmax(280px, 32%) 1fr; gap: 16px; align-items: start; }
 .resource-panel { border: 1px solid var(--gh-border-default); border-radius: 8px; background: var(--gh-canvas-default); padding: 16px; min-width: 0; }
-.requirement-item { display: flex; flex-direction: column; gap: 6px; text-align: left; width: 100%; margin: 8px 0; white-space: normal; overflow-wrap: anywhere; padding: 12px; }
-.requirement-item.selected { border-color: var(--gh-accent-fg); background: var(--gh-canvas-subtle); }
+.requirement-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  width: 100%;
+  margin: 8px 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 12px 14px;
+  background: var(--gh-canvas-subtle);
+  border: 1px solid var(--gh-border-default);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.requirement-item:hover {
+  border-color: var(--gh-border-muted);
+  background: var(--gh-surface-card);
+}
+.requirement-item.selected {
+  border-color: var(--gh-accent-fg);
+  background: rgba(56, 139, 253, 0.08);
+}
+.req-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.req-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--gh-fg-default);
+}
+.req-badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--gh-canvas-inset);
+  border: 1px solid var(--gh-border-default);
+  color: var(--gh-fg-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.req-badge.status-active {
+  color: var(--gh-accent-fg);
+  border-color: rgba(56, 139, 253, 0.4);
+  background: var(--gh-accent-subtle);
+}
+.req-badge.status-completed {
+  color: var(--gh-success-fg);
+  border-color: rgba(46, 160, 67, 0.4);
+  background: rgba(46, 160, 67, 0.15);
+}
+.req-badge.status-accepting {
+  color: var(--gh-attention-fg);
+  border-color: rgba(210, 153, 34, 0.4);
+  background: rgba(210, 153, 34, 0.15);
+}
+.req-badge.status-draft {
+  color: var(--gh-fg-subtle);
+}
+.req-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.req-progress {
+  font-size: 11px;
+  color: var(--gh-fg-muted);
+  font-family: var(--font-mono);
+}
+.req-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--gh-fg-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+.empty-state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--gh-fg-muted);
+}
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.8;
+}
+.empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gh-fg-default);
+  margin: 0 0 6px;
+}
+.empty-desc {
+  font-size: 12px;
+  max-width: 360px;
+  margin: 0;
+  line-height: 1.6;
+}
 .row, .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .row { justify-content: space-between; }
 .actions { margin: 16px 0; }

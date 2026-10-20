@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Ledger, Proposal, ProposalStatus } from '../../types/ledger'
+import type { Ledger, Proposal, ProposalStatus, ValidationSpec } from '../../types/ledger'
 
 defineProps<{
   ledger: Ledger
@@ -22,10 +22,10 @@ function statusBadgeClass(status: ProposalStatus | string): string {
 
 function statusLabel(status: ProposalStatus | string): string {
   switch (status) {
-    case 'approved': return '已批准'
+    case 'approved': return '已通过'
     case 'pending': return '待审阅'
     case 'rejected': return '已拒绝'
-    default: return `未知状态 (${status})`
+    default: return `未知状态（${status}）`
   }
 }
 
@@ -43,16 +43,24 @@ function hasApprovalBlock(prop: Proposal): boolean {
     !prop.target_snapshot
 }
 
+function formatSpec(spec: ValidationSpec | null | undefined): string {
+  if (!spec) return '未记录'
+  if (spec.kind === 'review') return `人工审阅：${spec.basis || '未填写依据'}`
+  const checks = spec.checks.map(check =>
+    `测试 ${check.test_ids.join('、') || '未指定'}（覆盖第 ${check.clause_indexes.map(i => i + 1).join('、') || '—'} 条）`)
+  return checks.length ? checks.join('；') : '未记录'
+}
+
 function getApprovalBlockReason(prop: Proposal): string {
-  if (!prop.source_rule_id || !prop.validation_spec) return '提案缺少候选规则或验证依据，请补全后重新提交。'
+  if (!prop.source_rule_id || !prop.validation_spec) return '这条建议缺少来源规则或验证方式，请补全后重新提交。'
   if (isStale(prop)) {
-    return `目标规则已在此提案提交后发生变更（最新版本为 v${prop.current_target_version}，提案基于 v${prop.target_version}）。此提案已过时，无法直接批准，请刷新页面重新核对或要求重新提交。`
+    return `提交后规则已更新至 v${prop.current_target_version}，本建议基于 v${prop.target_version}，已过期，不能直接通过。请刷新核对或重新提交。`
   }
   if (prop.current_target_version === null || prop.current_target_version === undefined) {
-    return '缺失目标规则当前最新版本信息，无法校验版本基准，禁止批准此变更。'
+    return '拿不到规则的最新版本，无法确认改动是否还成立，暂时不能通过。'
   }
   if (!prop.target_snapshot) {
-    return '缺失目标规则的历史版本快照，无法核对修改基准，禁止批准此变更。'
+    return '找不到规则的历史版本，无法对比改了什么，暂时不能通过。'
   }
   return ''
 }
@@ -60,15 +68,8 @@ function getApprovalBlockReason(prop: Proposal): string {
 
 <template>
   <div class="review-view-root">
-    <div class="section-head">
-      <div>
-        <h2>长期契约变更审阅</h2>
-        <span class="caption">对比候选版本的主题、全局范围、验证依据与条款，再决定是否批准。</span>
-      </div>
-    </div>
-
     <div v-if="!ledger.proposals.length" class="empty">
-      当前没有待审阅的契约变更提案。
+      暂无待审阅的规则修改。
     </div>
 
     <div v-else class="proposals-list">
@@ -80,13 +81,13 @@ function getApprovalBlockReason(prop: Proposal): string {
             </span>
             <h3>{{ prop.title }}</h3>
           </div>
-          <span class="caption font-mono">提案标识: {{ prop.id }}</span>
+          <span class="caption font-mono">建议编号：{{ prop.id }}</span>
         </div>
 
-        <!-- 目标契约版本信息与仅针对待审提案的过时警示 (D07) -->
+        <!-- 目标规则版本信息与仅针对待审建议的过时警示 (D07) -->
         <div class="target-meta-line">
-          <span><strong>目标契约：</strong><code>{{ prop.target_rule_id }}</code></span>
-          <span><strong>拟议基础版本：</strong><code>v{{ prop.target_version }}</code></span>
+          <span><strong>要修改的规则：</strong><code>{{ prop.target_rule_id }}</code></span>
+          <span><strong>建议基于版本：</strong><code>v{{ prop.target_version }}</code></span>
           <span v-if="prop.current_target_version !== null && prop.current_target_version !== undefined">
             <strong>当前最新版本：</strong><code>v{{ prop.current_target_version }}</code>
           </span>
@@ -103,19 +104,16 @@ function getApprovalBlockReason(prop: Proposal): string {
         </div>
 
         <div class="proposal-reason-box">
-          <span class="caption">变更理由与依据：</span>
+          <span class="caption">修改原因：</span>
           <p>{{ prop.reason }}</p>
         </div>
 
-        <p class="caption">候选：{{ prop.source_rule_id }} @ {{ prop.source_version }} · 全局适用 {{ prop.target_snapshot?.is_global ? '是' : '否' }} → {{ prop.is_global ? '是' : '否' }}</p>
-        <details><summary>验证计划与优先级依据</summary><p>原优先级依据：{{ prop.target_snapshot?.priority_reason || '未记录' }}</p><p>拟议依据：{{ prop.priority_reason || '未记录' }}</p><pre>原计划：{{ JSON.stringify(prop.target_snapshot?.validation_spec, null, 2) }}</pre><pre>拟议计划：{{ JSON.stringify(prop.validation_spec, null, 2) }}</pre></details>
+        <p class="caption">来源规则：{{ prop.source_rule_id }} @ {{ prop.source_version }} · 对所有文件生效：{{ prop.target_snapshot?.is_global ? '是' : '否' }} → {{ prop.is_global ? '是' : '否' }}</p>
+        <details><summary>验证方式与优先级说明</summary><p>原优先级说明：{{ prop.target_snapshot?.priority_reason || '未记录' }}</p><p>修改后说明：{{ prop.priority_reason || '未记录' }}</p><p>原验证方式：{{ formatSpec(prop.target_snapshot?.validation_spec) }}</p><p>修改后验证方式：{{ formatSpec(prop.validation_spec) }}</p></details>
         <!-- 不回填新分类到历史快照。 -->
         <details class="diff-container panel" :open="prop.status === 'pending'">
           <summary class="diff-summary">
-            <strong>契约变更五项对比</strong>
-            <span class="caption muted" style="margin-left: 8px">
-              {{ prop.status === 'pending' ? '标题 · 优先级 · 业务主题 · 路径模式 · 条款' : '点击查看决议前完整五项对比' }}
-            </span>
+            <strong>修改前后对比（5 项）</strong>
           </summary>
 
           <div class="diff-body" style="margin-top: 12px">
@@ -123,9 +121,9 @@ function getApprovalBlockReason(prop: Proposal): string {
             <div class="diff-field" style="margin-bottom: 12px">
               <span class="caption">1. 规则标题</span>
               <div class="diff-row">
-                <span class="diff-before">原标题：{{ prop.target_snapshot?.title || '（无历史快照）' }}</span>
+                <span class="diff-before">修改前：{{ prop.target_snapshot?.title || '无历史版本' }}</span>
                 <span class="diff-arrow">→</span>
-                <span class="diff-after">拟议标题：{{ prop.title }}</span>
+                <span class="diff-after">修改后：{{ prop.title }}</span>
               </div>
             </div>
 
@@ -134,10 +132,10 @@ function getApprovalBlockReason(prop: Proposal): string {
               <div class="diff-field">
                 <span class="caption">2. 优先级</span>
                 <div class="diff-val-row">
-                  <span class="tag neutral">原: {{ prop.target_snapshot?.priority || '（无历史快照）' }}</span>
+                  <span class="tag neutral">修改前：{{ prop.target_snapshot?.priority || '无历史版本' }}</span>
                   <span class="diff-arrow">→</span>
                   <span class="tag" :class="(prop.priority || prop.target_snapshot?.priority || 'neutral').toLowerCase()">
-                    拟议: {{ prop.priority || prop.target_snapshot?.priority || '（未变更）' }}
+                    修改后：{{ prop.priority || prop.target_snapshot?.priority || '未修改' }}
                   </span>
                 </div>
               </div>
@@ -145,38 +143,38 @@ function getApprovalBlockReason(prop: Proposal): string {
               <div class="diff-field">
                 <span class="caption">3. 业务主题</span>
                 <div class="diff-val-row">
-                  <span class="tag neutral">原: {{ prop.target_snapshot?.topics?.join(', ') || '（无主题 / 旧快照）' }}</span>
+                  <span class="tag neutral">修改前：{{ prop.target_snapshot?.topics?.join(', ') || '无主题或历史版本' }}</span>
                   <span class="diff-arrow">→</span>
                   <span class="tag neutral">
-                    拟议: {{ prop.topics.join(', ') || '（无主题）' }}
+                    修改后：{{ prop.topics.join(', ') || '无主题' }}
                   </span>
                 </div>
               </div>
             </div>
 
-            <!-- 4. 管辖模式前后对比 -->
+            <!-- 4. 适用文件前后对比 -->
             <div class="diff-field" style="margin-bottom: 12px">
-              <span class="caption">4. 管辖路径模式</span>
+              <span class="caption">4. 适用文件</span>
               <div class="diff-row" style="margin-top: 4px; gap: 16px">
                 <div>
-                  <span class="caption">原管辖模式：</span>
+                  <span class="caption">修改前：</span>
                   <div class="tags" style="margin-top: 4px">
                     <code v-for="pat in (prop.target_snapshot?.patterns || [])" :key="'orig-' + pat" class="code-badge">
                       {{ pat }}
                     </code>
                     <span v-if="!prop.target_snapshot?.patterns?.length" class="muted">
-                      {{ prop.target_snapshot ? '（无路径约束）' : '（无历史快照）' }}
+                      {{ prop.target_snapshot ? '不限文件' : '无历史版本' }}
                     </span>
                   </div>
                 </div>
                 <span class="diff-arrow" style="align-self: center">→</span>
                 <div>
-                  <span class="caption">拟议管辖模式：</span>
+                  <span class="caption">修改后：</span>
                   <div class="tags" style="margin-top: 4px">
                     <code v-for="pat in prop.patterns" :key="'new-' + pat" class="code-badge">
                       {{ pat }}
                     </code>
-                    <span v-if="!prop.patterns?.length" class="muted">（无路径约束）</span>
+                    <span v-if="!prop.patterns?.length" class="muted">不限文件</span>
                   </div>
                 </div>
               </div>
@@ -184,22 +182,22 @@ function getApprovalBlockReason(prop: Proposal): string {
 
             <!-- 5. 条款清单前后对比 -->
             <div class="diff-field">
-              <span class="caption">5. 生效条款列表</span>
+              <span class="caption">5. 条款</span>
               <div class="diff-clauses-grid" style="margin-top: 6px">
                 <div class="clauses-column">
-                  <span class="caption">原生效条款：</span>
+                  <span class="caption">修改前：</span>
                   <ul class="points-list">
                     <li v-for="(p, i) in (prop.target_snapshot?.points || [])" :key="'orig-pt-' + i">{{ p }}</li>
                     <li v-if="!prop.target_snapshot?.points?.length" class="muted">
-                      {{ prop.target_snapshot ? '（无条款）' : '（无历史快照）' }}
+                      {{ prop.target_snapshot ? '无条款' : '无历史版本' }}
                     </li>
                   </ul>
                 </div>
                 <div class="clauses-column">
-                  <span class="caption">拟议条款：</span>
+                  <span class="caption">修改后：</span>
                   <ul class="points-list">
                     <li v-for="(p, i) in prop.points" :key="'new-pt-' + i">{{ p }}</li>
-                    <li v-if="!prop.points?.length" class="muted">（无条款）</li>
+                    <li v-if="!prop.points?.length" class="muted">无条款</li>
                   </ul>
                 </div>
               </div>
@@ -208,7 +206,7 @@ function getApprovalBlockReason(prop: Proposal): string {
         </details>
 
         <div v-if="prop.decision_reason" class="decision-reason-box">
-          <strong>审阅决议结论：</strong>{{ prop.decision_reason }}
+          <strong>审阅结果：</strong>{{ prop.decision_reason }}
           <span v-if="prop.reviewer_id" class="caption" style="margin-left: 8px">
             (审阅人: {{ prop.reviewer_id }})
           </span>
@@ -222,10 +220,10 @@ function getApprovalBlockReason(prop: Proposal): string {
             :title="hasApprovalBlock(prop) ? getApprovalBlockReason(prop) : undefined"
             @click="emit('open-approve', prop)"
           >
-            批准此变更
+            通过修改
           </button>
           <button class="button danger-subtle" :disabled="busy" @click="emit('open-reject', prop)">
-            拒绝此提案
+            拒绝修改
           </button>
         </div>
       </article>

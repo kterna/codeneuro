@@ -53,44 +53,50 @@ function formatFindingStatus(status: string): string {
     archived: '已归档',
     resolved: '已处理',
   }
-  return map[status] || status
+  return map[status] || '未知状态'
+}
+
+const expandedFindings = ref<Set<string>>(new Set())
+function toggleExpandFinding(id: string) {
+  if (expandedFindings.value.has(id)) {
+    expandedFindings.value.delete(id)
+  } else {
+    expandedFindings.value.add(id)
+  }
 }
 </script>
 
 <template>
   <div class="feedback-view-root">
-    <div class="section-head">
-      <div class="head-title-wrap">
-        <h2>规则效用反馈与开发便签</h2>
-        <span class="caption">查看编码助手对规则的效用评分与实践中记录的开发便签</span>
-      </div>
-    </div>
-
     <div class="feedback-dual-grid">
       <!-- 左列：规则评分反馈矩阵 (GitHub 表格清单) -->
       <section class="feedback-card-panel">
         <div class="panel-header-line">
           <div class="panel-header-left">
             <span class="panel-icon" aria-hidden="true">📊</span>
-            <h3>规则效用评分 (0~5 分)</h3>
+            <h3>规则评分（0~5 分）</h3>
           </div>
           <span class="muted font-mono">{{ ledger.rules.length }} 条规则</span>
         </div>
 
         <div class="panel-scroll-table">
-          <div v-if="!ledger.rules.length" class="empty compact">暂无规则反馈数据。</div>
+          <div v-if="!ledger.rules.length" class="empty compact">暂无规则评分数据。</div>
           <table v-else class="feedback-table">
             <thead>
               <tr>
-                <th>规则标题 / 适用边界</th>
-                <th style="width: 80px; text-align: center">效用均分</th>
-                <th style="width: 140px; text-align: right">反馈统计</th>
+                <th>规则 / 适用文件</th>
+                <th style="width: 80px; text-align: center">平均分</th>
+                <th style="width: 150px; text-align: right">使用情况</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="rule in ledger.rules" :key="rule.id">
                 <td>
-                  <strong class="font-title">{{ rule.title }}</strong>
+                  <div class="rule-title-row">
+                    <strong class="font-title">{{ rule.title }}</strong>
+                    <GhTag v-if="rule.status === 'deprecated'" variant="neutral">已停用</GhTag>
+                    <GhTag v-else-if="rule.status === 'revoked'" variant="neutral">已撤销</GhTag>
+                  </div>
                   <code class="font-sub-code">
                     {{ rule.is_global ? '全局适用' : rule.patterns[0] || rule.topics.join(', ') || '待分类' }}
                   </code>
@@ -101,8 +107,8 @@ function formatFindingStatus(status: string): string {
                   </span>
                 </td>
                 <td class="feedback-stats-cell">
-                  <span class="font-mono stat-line">{{ rule.eval_count }} 次反馈</span>
-                  <span class="stat-sub-line">下发 {{ rule.delivery_count ?? 0 }} 次</span>
+                  <span class="font-mono stat-line">{{ rule.eval_count }} 次评分</span>
+                  <span class="stat-sub-line">推送 {{ rule.delivery_count ?? 0 }} 次</span>
                   <span class="stat-sub-line">已知 {{ rule.known_count }} 次</span>
                 </td>
               </tr>
@@ -125,7 +131,7 @@ function formatFindingStatus(status: string): string {
         <div v-if="selected" class="panel finding-triage-panel">
           <div class="triage-panel-header">
             <div class="triage-title-group">
-              <span class="triage-badge">便签处置</span>
+              <span class="triage-badge">处理便签</span>
               <strong class="triage-target">{{ selected.text }} · v{{ selected.version }}</strong>
             </div>
             <button type="button" class="subtle btn-close-triage" aria-label="关闭处置面板" @click="selected = null">✕</button>
@@ -134,16 +140,16 @@ function formatFindingStatus(status: string): string {
           <div class="triage-form">
             <label class="form-field-group">
               <span class="field-label-text">
-                已登记主题（逗号分隔）
-                <span class="field-help">业务主题 key，例如 frontend-layout</span>
+                所属主题
+                <span class="field-help">多个主题用逗号分隔</span>
               </span>
-              <input v-model="topicText" :disabled="busy" class="gh-input font-mono" />
+              <input v-model="topicText" :disabled="busy" placeholder="例如 frontend-layout" class="gh-input font-mono" />
             </label>
 
             <label class="form-field-group">
               <span class="field-label-text">
                 操作理由
-                <span class="field-required">* 必须登记审计说明</span>
+                <span class="field-required">* 必填</span>
               </span>
               <textarea
                 v-model="reason"
@@ -166,7 +172,7 @@ function formatFindingStatus(status: string): string {
         <!-- 便签流清单 -->
         <div class="panel-scroll-cards">
           <div v-if="!ledger.findings?.length" class="empty compact">
-            当前工程暂无开发便签。编码助手记录的模块便签将展示在此。
+            暂无开发便签。
           </div>
           <div v-else class="findings-cards-flow">
             <article
@@ -179,12 +185,22 @@ function formatFindingStatus(status: string): string {
               }"
             >
               <div class="gotcha-header">
-                <span class="tag warning">避坑</span>
-                <code class="gotcha-path">{{ f.target_path || '无文件锚点' }} · {{ f.topics.join(', ') || '待分类' }}</code>
+                <span class="tag warning">经验</span>
+                <code class="gotcha-path">{{ f.target_path || '未关联具体文件' }} · {{ f.topics.join(', ') || '待分类' }}</code>
               </div>
-              <p class="gotcha-body-text">{{ f.text }}</p>
+              <p class="gotcha-body-text" :class="{ 'is-clamped': !expandedFindings.has(f.id) && f.text.length > 90 }">
+                {{ f.text }}
+              </p>
+              <button
+                v-if="f.text.length > 90"
+                type="button"
+                class="btn-text-toggle"
+                @click="toggleExpandFinding(f.id)"
+              >
+                {{ expandedFindings.has(f.id) ? '收起详情 ▴' : '展开全文 ▾' }}
+              </button>
               <div class="gotcha-footer">
-                <span class="muted font-mono">关联任务: {{ f.task_id }}</span>
+                <span class="muted font-mono">关联任务：{{ f.task_id }}</span>
                 <div class="gotcha-footer-actions">
                   <GhTag
                     :variant="f.status === 'resolved' ? 'success' : (f.status === 'pending_review' ? 'amber' : 'neutral')"
@@ -214,8 +230,9 @@ function formatFindingStatus(status: string): string {
 .feedback-view-root {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  height: 100%;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -225,19 +242,17 @@ function formatFindingStatus(status: string): string {
   gap: 4px;
 }
 
-.feedback-dual-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  flex: 1;
-  overflow: hidden;
+.feedback-view-root .section-head {
+  margin-bottom: 0;
 }
 
-@media (max-width: 880px) {
-  .feedback-dual-grid {
-    grid-template-columns: 1fr;
-    overflow-y: auto;
-  }
+.feedback-dual-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .feedback-card-panel {
@@ -246,7 +261,31 @@ function formatFindingStatus(status: string): string {
   border-radius: 8px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
+}
+
+/* 窄屏：上下排列后由整页统一滚动，不再嵌套内部滚轮 */
+@media (max-width: 1180px) {
+  .feedback-view-root {
+    flex: 0 0 auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .feedback-dual-grid {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .panel-scroll-table,
+  .panel-scroll-cards {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
 }
 
 .panel-header-line {
@@ -278,22 +317,37 @@ function formatFindingStatus(status: string): string {
 
 .panel-scroll-table,
 .panel-scroll-cards {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.panel-scroll-table {
+  padding: 0 12px 12px;
+}
+
+.panel-scroll-cards {
   padding: 12px;
 }
 
-/* 规则效用表格 */
+/* 规则评分表格 */
 .feedback-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .feedback-table th {
-  padding: 8px 10px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 10px 10px;
   font-size: 11px;
   font-weight: 600;
   color: var(--gh-fg-muted);
+  background: var(--gh-canvas-subtle);
   border-bottom: 1px solid var(--gh-border-default);
   text-align: left;
 }
@@ -302,6 +356,19 @@ function formatFindingStatus(status: string): string {
   padding: 10px 10px;
   border-bottom: 1px solid var(--gh-border-muted);
   vertical-align: middle;
+  word-break: break-word;
+}
+
+.rule-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 6px;
+}
+
+.rule-title-row .tag {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .feedback-stats-cell {
@@ -332,9 +399,12 @@ function formatFindingStatus(status: string): string {
 }
 
 .font-sub-code {
+  display: block;
+  margin-top: 2px;
   font-size: 11px;
   color: var(--gh-accent-fg);
   font-family: var(--font-mono);
+  overflow-wrap: anywhere;
 }
 
 .score-badge {
@@ -459,6 +529,7 @@ function formatFindingStatus(status: string): string {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
   transition: all 0.12s ease;
 }
 
@@ -479,18 +550,27 @@ function formatFindingStatus(status: string): string {
 
 .gotcha-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
+.gotcha-header .tag {
+  flex-shrink: 0;
+}
+
 .gotcha-path {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 11px;
+  line-height: 1.5;
   color: var(--gh-fg-default);
   background: var(--gh-canvas-inset);
   padding: 2px 8px;
   border-radius: 4px;
   border: 1px solid var(--gh-border-muted);
   font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .gotcha-body-text {
@@ -501,14 +581,43 @@ function formatFindingStatus(status: string): string {
   word-break: break-word;
 }
 
+.gotcha-body-text.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-text-toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  color: var(--gh-accent-fg);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  margin: -2px 0 2px;
+}
+.btn-text-toggle:hover {
+  text-decoration: underline;
+}
+
 .gotcha-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   font-size: 11px;
   border-top: 1px solid var(--gh-border-muted);
   padding-top: 8px;
-  gap: 8px;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.gotcha-footer > .muted {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .gotcha-footer-actions {

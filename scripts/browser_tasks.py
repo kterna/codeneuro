@@ -75,7 +75,7 @@ def run_task_flow(page, fetch, base_url, wait):
     assert get_task(second)['status'] == 'paused'
     action('恢复', '恢复任务', '.task-detail')
     assert get_task(second)['status'] == 'active'
-    page.click('修订任务', '.task-detail')
+    page.click('修改任务', '.task-detail')
     page.until("!!document.querySelector('.task-action form')")
     current = get_task(second)
     api(prefix + '/tasks/' + second, 'PATCH', {'expected_version': current['version'],

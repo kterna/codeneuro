@@ -67,7 +67,7 @@ function formatTaskStatus(status: string): string {
 const directoryTree = computed<ScopeTreeNodeModel[]>(() => {
   const root: ScopeTreeNodeModel = {
     id: 'root',
-    name: '作用域根目录',
+    name: '全部目录',
     path: '',
     isDir: true,
     children: [],
@@ -248,7 +248,7 @@ async function handleInspect() {
 }
 
 const resultTaskLabel = computed(() => {
-  if (!inspectResult.value?.task_id) return '仅长期核心契约 (无任务)'
+  if (!inspectResult.value?.task_id) return '不关联任务'
   const matchedTask = props.ledger.tasks.find(t => t.id === inspectResult.value?.task_id)
   return matchedTask ? `[${formatTaskStatus(matchedTask.status)}] ${matchedTask.title}` : inspectResult.value.task_id
 })
@@ -264,10 +264,7 @@ const inspectedRules = computed<Rule[]>(() => {
   <div class="explorer-view-wrapper">
     <div class="section-head">
       <div>
-        <h2>规则作用域目录</h2>
-        <span class="caption">
-          展示项目登记的规则作用域模式，并提供真实适用的规则检查。
-        </span>
+        <span class="caption">按目录或文件查询适用规则。</span>
       </div>
     </div>
 
@@ -275,7 +272,7 @@ const inspectedRules = computed<Rule[]>(() => {
       <summary class="pathless-rules-summary">
         <span class="pathless-summary-title">
           <span class="summary-arrow" aria-hidden="true">▶</span>
-          <span>无文件锚点的主题 / 全局规则（不伪造目录）</span>
+          <span>未指定文件的规则</span>
         </span>
         <span class="caption pathless-summary-count">
           {{ ledger.rules.filter(r => r.status === 'active' && !r.patterns.length).length }} 条生效规则
@@ -303,14 +300,14 @@ const inspectedRules = computed<Rule[]>(() => {
           <!-- 标题与等级选择紧凑区 -->
           <div class="inspect-brand-group">
             <span class="inspect-icon" aria-hidden="true">🎯</span>
-            <span class="inspect-title-text">规则适用检查</span>
-            <div class="inspect-pills-row" role="group" aria-label="显式选择查询等级">
+            <span class="inspect-title-text">文件适用规则</span>
+            <div class="inspect-pills-row" role="group" aria-label="选择优先级">
               <label
                 v-for="p in priorityOptions"
                 :key="p"
                 class="priority-check-pill"
                 :class="{ 'is-checked': inspectPriorities.includes(p) }"
-                :title="`查询 ${p} 等级规则`"
+                :title="`只查 ${p} 级规则`"
               >
                 <input v-model="inspectPriorities" type="checkbox" :value="p" />
                 <span class="pill-label">{{ p }}</span>
@@ -327,14 +324,14 @@ const inspectedRules = computed<Rule[]>(() => {
               required
               aria-label="输入文件相对路径"
             />
-            <select v-model="inspectTaskId" class="select" aria-label="关联任务上下文">
-              <option value="">仅长期核心契约 (无任务)</option>
+            <select v-model="inspectTaskId" class="select" aria-label="选择关联任务">
+              <option value="">不关联任务</option>
               <option v-for="t in availableTasks" :key="t.id" :value="t.id">
                 [{{ formatTaskStatus(t.status) }}] {{ t.title }}
               </option>
             </select>
             <button type="submit" class="button primary" :disabled="inspectLoading || !inspectFilePath.trim() || !inspectPriorities.length">
-              {{ inspectLoading ? '检查中…' : '检查适用规则' }}
+              {{ inspectLoading ? '查询中…' : '查看适用规则' }}
             </button>
           </div>
         </div>
@@ -349,16 +346,15 @@ const inspectedRules = computed<Rule[]>(() => {
         <div class="inspect-results-header">
           <div class="inspect-summary">
             <span>
-              目标路径：<code>{{ inspectResult.path }}</code> ·
+              文件：<code>{{ inspectResult.path }}</code> ·
               关联任务：<code>{{ resultTaskLabel }}</code> ·
-              匹配规则：<strong>{{ inspectResult.rule_ids.length }}</strong> 条
-              <span class="caption">({{ inspectResult.task_id ? '包含选定任务规则' : '仅项目全局规则' }})</span>
+              适用规则：<strong>{{ inspectResult.rule_ids.length }}</strong> 条
             </span>
           </div>
           <button type="button" class="inspect-close-btn" aria-label="收起结果" title="收起检查结果" @click="invalidateInspect">×</button>
         </div>
         <div v-if="!inspectedRules.length" class="empty-compact">
-          该路径无适用规则（未命中全局契约或所选任务规则）。
+          该文件无适用规则。
         </div>
         <div v-else class="rule-match-chips">
           <div v-for="r in inspectedRules" :key="r.id" class="rule-chip">
@@ -376,24 +372,24 @@ const inspectedRules = computed<Rule[]>(() => {
 
     <div v-else class="explorer-split-container">
       <!-- 左侧：递归作用域目录面板 -->
-      <aside class="tree-sidebar-panel" aria-label="作用域目录结构">
+      <aside class="tree-sidebar-panel" aria-label="目录结构">
         <div class="tree-header">
-          <h3>作用域模式</h3>
-          <span class="caption font-mono">{{ directoryTree.length }} 顶层节点</span>
+          <h3>按目录查看</h3>
+          <span class="caption font-mono">{{ directoryTree.length }} 个顶层目录</span>
         </div>
 
         <div class="tree-filter-box">
           <input
             v-model="treeSearch"
-            placeholder="搜索模式或路径段…"
+            placeholder="搜索目录或路径…"
             class="tree-search-input"
-            aria-label="搜索作用域"
+            aria-label="搜索目录"
           />
         </div>
 
         <div class="tree-scroll-area">
           <div v-if="!filteredTree.length" class="empty-compact">
-            无匹配作用域
+            没有匹配的目录
           </div>
           <ul v-else class="tree-ul" role="tree">
             <ScopeTreeNodeItem
@@ -411,17 +407,17 @@ const inspectedRules = computed<Rule[]>(() => {
       </aside>
 
       <!-- 右侧：选中作用域详细规则卡片 -->
-      <section class="explorer-detail-panel" aria-label="选中作用域规则">
+      <section class="explorer-detail-panel" aria-label="当前目录的规则">
         <div class="detail-header-card">
           <div class="detail-title-line">
-            <span class="caption">当前选中作用域</span>
+            <span class="caption">当前目录</span>
             <h3 class="font-mono">{{ selectedPath || '未选择' }}</h3>
           </div>
-          <span class="caption">共关联 {{ selectedNodeRules.length }} 条生效规则</span>
+          <span class="caption">共有 {{ selectedNodeRules.length }} 条生效规则</span>
         </div>
 
         <div v-if="!selectedNodeRules.length" class="empty">
-          此节点为路径层级容器，未直接绑定独立规则；请展开下级模式节点查看。
+          该目录未直接绑定规则，请展开下级目录查看。
         </div>
 
         <div v-else class="matched-rules-list">
@@ -430,20 +426,20 @@ const inspectedRules = computed<Rule[]>(() => {
               <div>
                 <span class="tag" :class="rule.priority.toLowerCase()">{{ rule.priority }}</span>
                 <span v-for="topic in rule.topics" :key="topic" class="tag neutral" style="margin-left: 6px">{{ topic }}</span>
-                <span v-if="rule.task_id" class="tag neutral" style="margin-left: 6px">任务短期</span>
-                <span v-else class="tag success" style="margin-left: 6px">长期契约</span>
+                <span v-if="rule.task_id" class="tag neutral" style="margin-left: 6px">任务规则</span>
+                <span v-else class="tag success" style="margin-left: 6px">长期规则</span>
                 <h4 style="display: inline-block; margin-left: 8px">{{ rule.title }}</h4>
               </div>
-              <span class="caption font-mono">标识: {{ rule.id }}</span>
+              <span class="caption font-mono">编号：{{ rule.id }}</span>
             </div>
 
             <div class="card-body">
-              <div class="caption">生效条款:</div>
+              <div class="caption">具体条款：</div>
               <ul class="points-list">
                 <li v-for="(pt, idx) in rule.points" :key="idx">{{ pt }}</li>
               </ul>
               <div class="scope-badges" style="margin-top: 8px">
-                <span class="caption">覆盖范围:</span>
+                <span class="caption">适用文件：</span>
                 <code v-for="pat in rule.patterns" :key="pat" class="code-badge">{{ pat }}</code>
               </div>
             </div>

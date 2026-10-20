@@ -189,21 +189,24 @@ nav button.active {
 
 .breadcrumb-tag {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--gh-accent-fg);
   background: var(--gh-accent-subtle);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(56, 139, 253, 0.3);
+  border: 1px solid rgba(56, 139, 253, 0.25);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .title-compact {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0;
   color: var(--gh-fg-default);
-  line-height: 1.2;
+  line-height: 1.3;
 }
 
 .subtitle-compact {

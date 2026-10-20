@@ -137,18 +137,18 @@ defineExpose({
             v-model="inputProjectName"
             required
             maxlength="500"
-            placeholder="例如：CodeNeuro 核心工程服务"
+            placeholder="例如：CodeNeuro 规则中枢"
           />
         </label>
       </template>
 
       <template v-else>
         <label class="field">
-          处理依据与说明
+          说明
           <textarea
             v-model="inputReason"
             required
-            placeholder="请输入具体的完成摘要、审阅结论或调整依据（例如：已通过集成测试验证）…"
+            placeholder="写清这次操作的结论或原因（例如：已通过集成测试）…"
           ></textarea>
         </label>
       </template>

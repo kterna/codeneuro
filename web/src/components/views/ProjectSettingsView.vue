@@ -54,13 +54,6 @@ function handleDelete() {
 
 <template>
   <div class="settings-view">
-    <div class="section-head">
-      <div class="head-title-group">
-        <h2>项目管理与全局设置</h2>
-        <span class="caption">查看项目元数据、切换工程上下文或管理数据分类</span>
-      </div>
-    </div>
-
     <!-- 1. 当前项目基本概览 -->
     <section v-if="currentProject" class="settings-section-card">
       <div class="card-section-header">
@@ -68,10 +61,8 @@ function handleDelete() {
           <span class="header-icon" aria-hidden="true">🏛️</span>
           <div>
             <h3 class="card-title">当前项目基础信息</h3>
-            <span class="caption">已连接并激活中的工程上下文</span>
           </div>
         </div>
-        <GhTag variant="accent">当前工程</GhTag>
       </div>
 
       <div class="project-meta-grid">
@@ -85,10 +76,10 @@ function handleDelete() {
         </div>
 
         <div class="meta-field full-row">
-          <label>工作区声明 (共 {{ availableWorktrees.length }} 处)</label>
+          <label>工作区记录（共 {{ availableWorktrees.length }} 处）</label>
           <div class="worktree-selector-row">
-            <select v-model="selectedWorktreeId" aria-label="选择工作区声明" class="gh-select worktree-select">
-              <option value="">-- 请选择工作区声明 --</option>
+            <select v-model="selectedWorktreeId" aria-label="选择工作区" class="gh-select worktree-select">
+              <option value="">-- 请选择工作区 --</option>
               <option v-for="wt in availableWorktrees" :key="wt.id" :value="wt.id">
                 [{{ wt.platform }}] {{ wt.machine_name }} · {{ wt.workspace }}
               </option>
@@ -97,17 +88,17 @@ function handleDelete() {
 
           <div v-if="selectedWorktree" class="worktree-detail-panel">
             <div class="worktree-meta-columns">
-              <div><strong>机器节点：</strong>{{ selectedWorktree.machine_name }}</div>
+              <div><strong>机器：</strong>{{ selectedWorktree.machine_name }}</div>
               <div><strong>运行平台：</strong>{{ selectedWorktree.platform }}</div>
               <div><strong>Git 分支：</strong>{{ selectedWorktree.git_branch || '未声明' }}</div>
-              <div><strong>声明上报者：</strong>{{ selectedWorktree.actor_id || '未声明' }}</div>
+              <div><strong>上报人：</strong>{{ selectedWorktree.actor_id || '未上报' }}</div>
             </div>
             <div class="worktree-path-row">
               <strong>客户端路径：</strong><code>{{ selectedWorktree.workspace }}</code>
             </div>
           </div>
           <div v-else class="caption worktree-caption">
-            请选择工作区声明查看详情。说明：工作区路径由客户端声明，服务端不扫描本机同名路径。
+            工作区路径由 AI 客户端上报，服务端不扫描本机目录。
           </div>
         </div>
       </div>
@@ -115,7 +106,7 @@ function handleDelete() {
       <!-- 核心指标摘要卡片 -->
       <div class="stats-overview-bar">
         <div class="stat-pill">
-          <span>任务流转</span>
+          <span>任务总数</span>
           <strong>{{ ledger?.counts.tasks.total ?? 0 }} 个</strong>
         </div>
         <div class="stat-pill">
@@ -148,8 +139,7 @@ function handleDelete() {
         <div class="header-title-wrap">
           <span class="header-icon" aria-hidden="true">🗂️</span>
           <div>
-            <h3 class="card-title">已登记工程项目 ({{ projects.length }})</h3>
-            <span class="caption">支持在不同项目之间快速切换</span>
+            <h3 class="card-title">已登记项目（{{ projects.length }}）</h3>
           </div>
         </div>
         <button class="primary btn-create-proj" type="button" @click="emit('open-create-project')">
@@ -216,7 +206,7 @@ function handleDelete() {
         <div class="danger-title-wrap">
           <h3 class="danger-title">删除项目</h3>
           <p class="danger-warning-text">
-            此操作不可撤销。删除后，该项目下的任务、需求、规则、便签及审计流水都将被一并删除。
+            此操作不可撤销。删除后，该项目下的任务、需求、规则、便签及操作记录都会被一并删除。
           </p>
         </div>
       </div>

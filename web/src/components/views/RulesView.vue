@@ -70,11 +70,11 @@ function closeDetail() {
 
 function statusLabel(status: RuleStatus | string): string {
   switch (status) {
-    case 'active': return '正在生效'
-    case 'draft': return '草稿待验'
-    case 'deprecated': return '需求完成已停用'
-    case 'revoked': return '人工撤销'
-    default: return status
+    case 'active': return '生效中'
+    case 'draft': return '草稿待审核'
+    case 'deprecated': return '已停用'
+    case 'revoked': return '已撤销'
+    default: return `未知状态（${status}）`
   }
 }
 
@@ -82,35 +82,28 @@ function statusLabel(status: RuleStatus | string): string {
 
 <template>
   <div class="rules-view-root">
-    <div class="section-head">
-      <div>
-        <h2>项目规则库</h2>
-        <span class="caption">紧凑呈现项目长期契约与任务短期规则，支持按完整生命周期状态精准筛选</span>
-      </div>
-    </div>
-
     <!-- 顶部过滤栏 -->
     <div class="toolbar">
       <select v-model="topicFilter" aria-label="业务主题过滤"><option value="">主题：全部</option><option v-for="topic in ledger.topics" :key="topic.key" :value="topic.key">{{ topic.name }}</option></select>
       <select v-model="filterStatus" aria-label="规则状态过滤" style="width: 170px">
-        <option value="all">状态：全部规则</option>
-        <option value="active">状态：正在生效</option>
-        <option value="draft">状态：草稿待验</option>
-        <option value="deprecated">状态：需求完成已停用</option>
-        <option value="revoked">状态：人工撤销</option>
+        <option value="all">状态：全部</option>
+        <option value="active">状态：生效中</option>
+        <option value="draft">状态：草稿待审核</option>
+        <option value="deprecated">状态：已停用</option>
+        <option value="revoked">状态：已撤销</option>
       </select>
-      <select v-model="filterLifecycle" aria-label="生命周期过滤" style="width: 140px">
-        <option value="all">类型：全部规则</option>
-        <option value="long_term">类型：长期契约</option>
-        <option value="short_term">类型：任务约束</option>
+      <select v-model="filterLifecycle" aria-label="规则类型过滤" style="width: 140px">
+        <option value="all">类型：全部</option>
+        <option value="long_term">类型：长期规则</option>
+        <option value="short_term">类型：任务规则</option>
       </select>
       <input
         v-model="searchKeyword"
-        placeholder="搜索规则标题、条款内容或路径模式…"
+        placeholder="搜索规则标题、条款或适用文件…"
         aria-label="搜索规则"
         style="max-width: 320px"
       />
-      <span class="muted" style="margin-left: auto; font-size: 11px">
+      <span class="muted" style="margin-left: auto; font-size: 11px; white-space: nowrap; flex-shrink: 0">
         共匹配 <strong>{{ filteredRules.length }}</strong> 条规则
       </span>
     </div>
@@ -118,16 +111,16 @@ function statusLabel(status: RuleStatus | string): string {
     <!-- GitHub 经典清单表格 -->
     <div class="rules-table-container">
       <div v-if="!filteredRules.length" class="empty compact" style="margin: 20px">
-        没有找到符合条件的规则条目。
+        没有符合条件的规则。
       </div>
       <table v-else class="github-rules-table" role="table">
         <thead>
           <tr>
             <th style="width: 70px">优先级</th>
-            <th>规则标题 / 核心约束</th>
-            <th style="width: 200px">管辖路径模式</th>
-            <th style="width: 160px">类型与状态</th>
-            <th style="width: 130px; text-align: right">下发 · 反馈 · 均分</th>
+            <th>规则标题 / 主要条款</th>
+            <th style="width: 200px">适用文件</th>
+            <th style="width: 160px">类型 / 状态</th>
+            <th style="width: 130px; text-align: right">推送 · 评分 · 均分</th>
           </tr>
         </thead>
         <tbody>
@@ -153,17 +146,20 @@ function statusLabel(status: RuleStatus | string): string {
               </div>
             </td>
             <td>
-              <code class="path-mono">{{ rule.is_global ? '全局适用' : rule.patterns[0] || rule.topics.join(', ') || '待分类' }}</code>
+              <code
+                class="path-mono"
+                :title="rule.is_global ? '全局适用' : (rule.patterns.join('、') || rule.topics.join(', ') || '待分类')"
+              >{{ rule.is_global ? '全局适用' : rule.patterns[0] || rule.topics.join(', ') || '待分类' }}</code>
               <span v-if="rule.patterns.length > 1" class="muted path-extra">+{{ rule.patterns.length - 1 }}</span>
             </td>
             <td>
               <span class="tag" :class="rule.status">{{ statusLabel(rule.status) }}</span>
-              <span class="tag neutral" style="margin-left: 4px">{{ rule.task_id ? '任务短期' : '长期契约' }}</span>
+              <span class="tag neutral" style="margin-left: 4px">{{ rule.task_id ? '任务规则' : '长期规则' }}</span>
             </td>
             <td style="text-align: right">
               <span class="score-val">{{ rule.avg_score !== null ? rule.avg_score + ' 分' : '—' }}</span>
               <small class="muted" style="display: block; font-size: 10px">
-                下发 {{ rule.delivery_count ?? 0 }} 次 · 反馈 {{ rule.eval_count }} 次
+                推送 {{ rule.delivery_count ?? 0 }} 次 · 评分 {{ rule.eval_count }} 次
               </small>
             </td>
           </tr>
@@ -184,7 +180,7 @@ function statusLabel(status: RuleStatus | string): string {
         <div v-if="selectedRule" class="drawer-header-top">
           <div>
             <h3 id="rule-drawer-title">规则详情</h3>
-            <p class="muted font-mono" style="margin: 2px 0 0; font-size: 11px">标识：{{ selectedRule.id }} · 版本 v{{ selectedRule.version ?? 1 }}</p>
+            <p class="muted font-mono" style="margin: 2px 0 0; font-size: 11px">编号：{{ selectedRule.id }} · 版本 v{{ selectedRule.version ?? 1 }}</p>
           </div>
           <button
             ref="closeBtnRef"
@@ -204,15 +200,15 @@ function statusLabel(status: RuleStatus | string): string {
           </div>
           <div class="tags" style="margin-top: 8px">
             <span class="tag" :class="selectedRule.status">{{ statusLabel(selectedRule.status) }}</span>
-            <span class="tag neutral">{{ selectedRule.task_id ? '任务短期规则' : '长期项目契约' }}</span>
+            <span class="tag neutral">{{ selectedRule.task_id ? '任务规则' : '长期规则' }}</span>
             <span v-for="topic in selectedRule.topics" :key="topic" class="tag neutral">{{ topic }}</span>
-            <span v-if="selectedRule.is_global" class="tag warning">明确全局适用</span>
-            <span v-if="selectedRule.origin_rule_id" class="tag">由任务规则晋升 (源: v{{ selectedRule.origin_version }})</span>
+            <span v-if="selectedRule.is_global" class="tag warning">对所有文件生效</span>
+            <span v-if="selectedRule.origin_rule_id" class="tag">源自任务规则 v{{ selectedRule.origin_version }}</span>
           </div>
         </div>
 
         <div class="drawer-section">
-          <div class="section-label">具体执行条款 ({{ selectedRule.points.length }})</div>
+          <div class="section-label">具体条款（{{ selectedRule.points.length }} 条）</div>
           <ol class="clause-ol">
             <li v-for="(p, i) in selectedRule.points" :key="i">
               <span class="clause-text">{{ p }}</span>
@@ -221,8 +217,8 @@ function statusLabel(status: RuleStatus | string): string {
         </div>
 
         <div class="drawer-section">
-          <div class="section-label">检索路径（不是测试验证范围）</div>
-          <p v-if="!selectedRule.patterns.length" class="caption">无文件锚点，按业务主题或明确全局声明召回。</p>
+          <div class="section-label">适用文件</div>
+          <p v-if="!selectedRule.patterns.length" class="caption">无指定文件，按主题或全局规则生效。</p>
           <div class="tags">
             <code v-for="(pat, i) in selectedRule.patterns" :key="i" class="path-badge">{{ pat }}</code>
           </div>
@@ -230,22 +226,22 @@ function statusLabel(status: RuleStatus | string): string {
 
         <div class="drawer-section">
           <RuleGovernancePanel :project-id="projectId" :rule="selectedRule" @refresh="emit('refresh')" />
-          <div class="section-label">使用情况与真实反馈 (当前版本)</div>
+          <div class="section-label">使用情况</div>
           <div class="stat-meta-grid">
             <div class="stat-meta-item">
-              <span>实际下发</span>
+              <span>推送</span>
               <strong>{{ selectedRule.delivery_count ?? 0 }} 次</strong>
             </div>
             <div class="stat-meta-item">
-              <span>评价反馈</span>
+              <span>被评分</span>
               <strong>{{ selectedRule.eval_count }} 次</strong>
             </div>
             <div class="stat-meta-item">
-              <span>已掌握标记</span>
+              <span>标记为已知</span>
               <strong>{{ selectedRule.known_count }} 次</strong>
             </div>
             <div class="stat-meta-item">
-              <span>实用度均分</span>
+              <span>平均分</span>
               <strong>{{ selectedRule.avg_score !== null ? selectedRule.avg_score + ' 分' : '暂无' }}</strong>
             </div>
           </div>
@@ -253,7 +249,7 @@ function statusLabel(status: RuleStatus | string): string {
       </div>
 
       <template #footer>
-        <button type="button" @click="closeDetail">关闭抽屉</button>
+        <button type="button" @click="closeDetail">关闭</button>
       </template>
     </GhDrawer>
   </div>
@@ -286,6 +282,7 @@ function statusLabel(status: RuleStatus | string): string {
 .github-rules-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   text-align: left;
 }
 
@@ -339,12 +336,17 @@ function statusLabel(status: RuleStatus | string): string {
 }
 
 .path-mono {
+  display: block;
+  max-width: 100%;
   font-family: var(--font-mono);
   font-size: 11px;
   background: var(--gh-canvas-inset);
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid var(--gh-border-default);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .path-extra {
   font-size: 10px;

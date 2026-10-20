@@ -305,12 +305,17 @@ label.caption,
   flex-shrink: 0;
 }
 
-/* 长 ID、哈希与路径防溢出 (Requirement 2) */
+/* 长 ID 与哈希防溢出 (Requirement 2) */
 code,
 pre,
-.path-mono,
 .meta-value-code code {
   word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+/* 路径优先在 /、- 处换行，避免被从单词中间截断 */
+.path-mono {
+  word-break: normal;
   overflow-wrap: anywhere;
 }
 
@@ -455,26 +460,11 @@ section#content {
   text-wrap: pretty;
 }
 
-/* Feedback 评分与便签双栏：避免横向溢出，1280 及以下上下排，1440 宽屏保障长便签正文 >= 420px (Requirement 3) */
-.feedback-dual-grid {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 20px !important;
-  height: auto !important;
-  overflow: visible !important;
-}
-
-@media (min-width: 1440px) {
-  .feedback-dual-grid {
-    display: grid !important;
-    grid-template-columns: minmax(460px, 1fr) minmax(460px, 1fr) !important;
-    gap: 20px !important;
-  }
-}
-
+/* Feedback 评分/便签双栏的滚动与断点由组件自身控制，
+   避免全局 height:auto 覆盖容器高度，导致内部滚轮失效、内容被裁切 */
+.feedback-dual-grid,
 .feedback-card-panel {
-  min-width: 0 !important;
-  width: 100% !important;
+  min-width: 0;
 }
 
 /* Settings 统计条目 (Requirement 4) */

@@ -77,7 +77,7 @@ defineExpose({
   <dialog
     ref="dialogRef"
     id="palette"
-    aria-label="搜索与命令"
+    aria-label="搜索页面"
     role="dialog"
     aria-modal="true"
     @keydown="handleKeydown"
@@ -87,8 +87,8 @@ defineExpose({
       <input
         ref="inputRef"
         v-model="query"
-        placeholder="搜索工作台页面与核心模块…"
-        aria-label="搜索命令"
+        placeholder="搜索页面或功能…"
+        aria-label="搜索页面或功能"
         autocomplete="off"
       />
       <kbd @click="close" style="cursor: pointer">Esc</kbd>
@@ -108,7 +108,7 @@ defineExpose({
         <strong>{{ item.title }}</strong>
         <small>{{ item.subtitle }}</small>
       </button>
-      <p v-if="!results.length" class="empty compact">无匹配的页面或命令</p>
+      <p v-if="!results.length" class="empty compact">没有找到匹配的页面</p>
     </div>
     <div class="palette-footer">↑ ↓ 选择 · Enter 执行 · Esc 关闭 · Ctrl / ⌘ K 随时唤出</div>
   </dialog>
