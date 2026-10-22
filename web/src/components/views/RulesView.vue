@@ -155,6 +155,7 @@ function statusLabel(status: RuleStatus | string): string {
             <td>
               <span class="tag" :class="rule.status">{{ statusLabel(rule.status) }}</span>
               <span class="tag neutral" style="margin-left: 4px">{{ rule.task_id ? '任务规则' : '长期规则' }}</span>
+              <span v-if="rule.delivery_mode === 'card'" class="tag neutral" style="margin-left: 4px">按动作出现</span>
             </td>
             <td style="text-align: right">
               <span class="score-val">{{ rule.avg_score !== null ? rule.avg_score + ' 分' : '—' }}</span>
@@ -203,8 +204,13 @@ function statusLabel(status: RuleStatus | string): string {
             <span class="tag neutral">{{ selectedRule.task_id ? '任务规则' : '长期规则' }}</span>
             <span v-for="topic in selectedRule.topics" :key="topic" class="tag neutral">{{ topic }}</span>
             <span v-if="selectedRule.is_global" class="tag warning">对所有文件生效</span>
+            <span v-if="selectedRule.delivery_mode === 'card'" class="tag neutral">按动作出现</span>
             <span v-if="selectedRule.origin_rule_id" class="tag">源自任务规则 v{{ selectedRule.origin_version }}</span>
           </div>
+          <p v-if="selectedRule.delivery_mode === 'card'" class="caption" style="margin-top: 8px">
+            使用时机：{{ selectedRule.applies_when }}
+          </p>
+          <p v-else class="caption" style="margin-top: 8px">每次查询都给完整条款。</p>
         </div>
 
         <div class="drawer-section">
@@ -310,7 +316,11 @@ function statusLabel(status: RuleStatus | string): string {
 }
 .rule-tr:hover, .rule-tr:focus {
   background: var(--gh-surface-card-hover);
-  outline: none;
+}
+
+.rule-tr:focus-visible {
+  outline: 2px solid var(--gh-accent-fg);
+  outline-offset: -2px;
 }
 .rule-tr.selected {
   background: var(--gh-surface-card);

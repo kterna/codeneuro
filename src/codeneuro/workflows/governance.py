@@ -42,7 +42,7 @@ class Governance(Workspaces):
 
     def create_task_rule(self, actor, task_id, title, points, patterns, reason,
                          priority=Priority.P1, half_life_days=30, *, topics, validation_spec,
-                         is_global=False, priority_reason=''):
+                         is_global=False, priority_reason='', delivery_mode='full', applies_when=''):
         if not reason.strip() or type(half_life_days) is not int or not 1 <= half_life_days <= 3650:
             raise ProductError('Supply a reason and bounded evidence half-life.')
         validate_plan(validation_spec, len(points))
@@ -50,7 +50,8 @@ class Governance(Workspaces):
             task, _ = self._task(tx, task_id, writable=True)
             rule = Rule(_id('rule'), task.project_id, task.id, title, points, patterns,
                         priority, tuple(sorted(topics)), 1, 'draft', is_global=is_global,
-                        priority_reason=priority_reason, validation_spec=validation_spec)
+                        priority_reason=priority_reason, validation_spec=validation_spec,
+                        delivery_mode=delivery_mode, applies_when=applies_when.strip())
             validate_rule(rule)
             require_topics(tx, rule.project_id, topics)
             tx.knowledge.create_rule(rule)
@@ -114,12 +115,14 @@ class Governance(Workspaces):
 
     def mutate_task_rule(self, actor, task_id, rule_id, expected_version, action, reason,
                          title=None, points=None, patterns=None, priority=None,
-                         topics=None, is_global=None, priority_reason=None, validation_spec=None):
+                         topics=None, is_global=None, priority_reason=None, validation_spec=None,
+                         delivery_mode=None, applies_when=None):
         if not reason.strip():
             raise ProductError('Mutation reason is required.')
         updates = {key: value for key, value in dict(title=title, points=points, patterns=patterns,
             priority=priority, topics=topics, is_global=is_global, priority_reason=priority_reason,
-            validation_spec=validation_spec).items() if value is not None}
+            validation_spec=validation_spec, delivery_mode=delivery_mode,
+            applies_when=None if applies_when is None else applies_when.strip()).items() if value is not None}
         if topics is not None:
             updates['topics'] = tuple(sorted(topics))
         with self.uow.write() as tx:
@@ -145,7 +148,8 @@ class Governance(Workspaces):
                 validate_plan(changed.validation_spec, len(changed.points))
                 require_topics(tx, rule.project_id, changed.topics)
                 semantic_change = any(getattr(changed, key) != getattr(rule, key) for key in
-                    ('title', 'points', 'patterns', 'topics', 'is_global', 'validation_spec')) or RANK[changed.priority] < RANK[rule.priority]
+                    ('title', 'points', 'patterns', 'topics', 'is_global', 'validation_spec',
+                     'delivery_mode', 'applies_when')) or RANK[changed.priority] < RANK[rule.priority]
                 changed = replace(changed, version=rule.version + 1, status='draft' if semantic_change else rule.status)
             else:
                 raise ProductError('Unsupported Agent Rule action.')

@@ -37,10 +37,13 @@ get 返回完整当前内容和分页修订历史；`history_cursor` 是上次�
 
 ```python
 codeneuro_get_context(project_id="archive", task_id="明确选中的任务ID",
-    priorities=["P0", "P1"], files=["src/ArchiveService.java"])
+    priorities=["P0", "P1"], files=["src/ArchiveService.java"],
+    situation="准备提交本次改动")
 ```
 
-`files` 与 `file_path` 二选一；必须有真实相对文件或已登记 topics。priorities 是明确集合，不是阈值。`max_chars` 默认 24000，范围 512–200000，约束 Markdown 而非整个 JSON。`intent` 为 implementing/debugging，`mode` 为 detailed/checklist。
+`files` 与 `file_path` 二选一；必须有真实相对文件或已登记 topics。priorities 是明确集合，不是阈值。`situation` 是一句当前在做什么，只被记录，不参与筛选。`max_chars` 默认 24000，范围 512–200000，约束完整条款与头部；`budget_exceeded` 在追加按需目录前计算。目录不受此预算或单独的总字数上限限制。`intent` 为 implementing/debugging，`mode` 为 detailed/checklist。
+
+规则声明为 card 时，本次匹配到的所有目录项均进入 `markdown` 和 `rule_refs`，每项给出规则编号、版本、标题和使用时机，不包含正文。目录提示不是当前要求，不能凭提示推断完整条款。Agent 根据当前任务及下一步操作自主选择相关项，调用 `codeneuro_open_rules(delivery_id, rule_ids, reason)` 读取正文，不要求用户逐条选择，不默认加载无关正文。一次可读取 1–20 个不同编号；返回该次下发记录的版本，重复调用不重复记录取用。目录下发与实际读取分别记录，读取本身不扩大操作授权。
 
 Task 查询包含父需求和本任务，不带入兄弟内容；项目级查询不推导 Task。结果含正文、实际引用、查询、匹配依据与省略信息，不重复返回 sections。
 
@@ -54,7 +57,7 @@ Task 查询包含父需求和本任务，不带入兄弟内容；项目级查询
 | --- | --- |
 | 项目 | codeneuro_list_projects |
 | 需求/任务 | codeneuro_requirement、codeneuro_task |
-| 上下文 | codeneuro_get_context、codeneuro_get_delivery |
+| 上下文 | codeneuro_get_context、codeneuro_get_delivery、codeneuro_open_rules |
 | Task 规则 | codeneuro_create_task_rule、codeneuro_mutate_task_rule、codeneuro_promote_rule、codeneuro_propose_contract |
 | Task 验证 | codeneuro_report_test、codeneuro_observe_rule |
 | Task 观察 | codeneuro_record_finding、codeneuro_update_finding |
@@ -77,5 +80,9 @@ Task 查询包含父需求和本任务，不带入兄弟内容；项目级查询
 ```
 
 列表使用 GET；创建 POST body 为 changes、可选 request_id/source，Task 还需要 requirement_id。修改 PATCH 为 expected_version、changes、reason；DELETE 为 expected_version、reason。HTTP 详情不嵌入历史，用 versions 子资源分页获取。
+
+长期规则停用使用 `POST /api/projects/{project_id}/rules/{rule_id}/retire`，body 为 `expected_version`、非空 `reason`、严格布尔值 `confirmed: true`，可选 `request_id`。返回 `id/project_id/version/status`。这是工作台明确确认入口，不是 MCP 自动治理工具；Task Rule、陈旧修订和非活跃状态会被拒绝。重试须复用相同 request_id 和输入，不修改旧 Delivery 或旧请求结果。
+
+修改长期规则的查询形态使用 `POST /api/projects/{project_id}/rules/{rule_id}/applicability`，body 为 `expected_version`、`delivery_mode`（full/card）、`applies_when` 与非空 `reason`。它不改条款、主题、路径和等级；内容相同时不升版。
 
 账本数组是有界摘要，计数以 `ledger.counts` 为准，后续列表使用返回的游标。Web 与 MCP 共用同一用例，错误按 invalid_request、not_found、conflict、forbidden 区分。服务无鉴权，Web human/MCP actor 都是来源标签。

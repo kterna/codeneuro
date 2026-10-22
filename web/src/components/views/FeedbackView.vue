@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import type { Finding, Ledger } from '../../types/ledger'
 import { apiService } from '../../api/client'
 import GhTag from '../ui/GhTag.vue'
@@ -7,8 +7,12 @@ import GhTag from '../ui/GhTag.vue'
 const props = defineProps<{
   ledger: Ledger
   projectId: string
+  loading?: boolean
 }>()
 const emit = defineEmits<{ (e: 'refresh'): void }>()
+
+// 进入反馈页时先刷新账本，避免用旧版本提交处置
+onMounted(() => emit('refresh'))
 const selected = ref<Finding | null>(null)
 const topicText = ref('')
 const reason = ref('')
@@ -74,7 +78,7 @@ function toggleExpandFinding(id: string) {
         <div class="panel-header-line">
           <div class="panel-header-left">
             <span class="panel-icon" aria-hidden="true">📊</span>
-            <h3>规则评分（0~5 分）</h3>
+            <h2>规则评分（0~5 分）</h2>
           </div>
           <span class="muted font-mono">{{ ledger.rules.length }} 条规则</span>
         </div>
@@ -122,7 +126,7 @@ function toggleExpandFinding(id: string) {
         <div class="panel-header-line">
           <div class="panel-header-left">
             <span class="panel-icon" aria-hidden="true">💡</span>
-            <h3>开发便签</h3>
+            <h2>开发便签</h2>
           </div>
           <span class="muted font-mono">{{ ledger.findings?.length ?? 0 }} 条便签</span>
         </div>
@@ -161,8 +165,8 @@ function toggleExpandFinding(id: string) {
             </label>
 
             <div class="triage-actions-toolbar">
-              <button type="button" class="primary" :disabled="busy" @click="saveFinding(false)">更新分类</button>
-              <button type="button" class="success" :disabled="busy" @click="saveFinding(true)">标记已处理</button>
+              <button type="button" class="primary" :disabled="busy || loading" @click="saveFinding(false)">更新分类</button>
+              <button type="button" class="success" :disabled="busy || loading" @click="saveFinding(true)">标记已处理</button>
               <button type="button" class="subtle" :disabled="busy" @click="selected = null">取消</button>
             </div>
             <p v-if="error" class="error-box" role="alert">{{ error }}</p>
@@ -211,7 +215,7 @@ function toggleExpandFinding(id: string) {
                     v-if="f.status === 'pending_review'"
                     type="button"
                     class="subtle btn-triage-trigger"
-                    :disabled="busy"
+                    :disabled="busy || loading"
                     @click="editFinding(f)"
                   >
                     重新分类 / 处理
@@ -267,7 +271,7 @@ function toggleExpandFinding(id: string) {
 }
 
 /* 窄屏：上下排列后由整页统一滚动，不再嵌套内部滚轮 */
-@media (max-width: 1180px) {
+@media (max-width: 1280px) {
   .feedback-view-root {
     flex: 0 0 auto;
     min-height: 100%;
@@ -281,8 +285,8 @@ function toggleExpandFinding(id: string) {
     overflow: visible;
   }
 
-  .panel-scroll-table,
-  .panel-scroll-cards {
+  .feedback-card-panel .panel-scroll-table,
+  .feedback-card-panel .panel-scroll-cards {
     flex: 0 0 auto;
     overflow: visible;
   }
@@ -308,7 +312,7 @@ function toggleExpandFinding(id: string) {
   font-size: 15px;
 }
 
-.panel-header-line h3 {
+.panel-header-line h2 {
   font-size: 13px;
   margin: 0;
   font-weight: 600;

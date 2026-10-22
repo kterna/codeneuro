@@ -81,7 +81,7 @@ def run_task_flow(page, fetch, base_url, wait):
     api(prefix + '/tasks/' + second, 'PATCH', {'expected_version': current['version'],
         'changes': {'title': '子任务乙已由另一位 Agent 修订'}, 'reason': 'Synthetic concurrent writer'})
     page.field('操作原因', 'Attempt a stale update', '.task-action')
-    page.click('修订任务', '.task-action')
+    page.click('修改任务', '.task-action')
     page.until("document.querySelector('.task-action [role=alert]')?.textContent.includes('stale')")
     assert get_task(second)['title'] == '子任务乙已由另一位 Agent 修订'
     escape()
@@ -142,7 +142,7 @@ def run_task_flow(page, fetch, base_url, wait):
             "finally{window.pendingScopeReads--}}})()")
     page.js("(()=>{document.querySelector('.requirement-item').click();const p=document.querySelector('#project');"
             "p.value='browser-other';p.dispatchEvent(new Event('change',{bubbles:true}))})()")
-    page.until("document.querySelector('#project')?.value === 'browser-other' && document.querySelector('.requirement-list')?.textContent.includes('尚无需求')")
+    page.until("document.querySelector('#project')?.value === 'browser-other' && document.querySelector('.requirement-list')?.textContent.includes('暂无需求')")
     page.until('window.pendingScopeReads === 0')
     assert page.js("document.querySelectorAll('.tasks-table tbody tr').length") == 0
     page.js("(()=>{window.fetch=window.originalFetch;delete window.originalFetch;const p=document.querySelector('#project');"

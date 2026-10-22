@@ -17,12 +17,13 @@
   /* 边框色阶 (Border) */
   --gh-border-default: var(--scale-gray-8);      /* #30363d 主分割线、外边框 */
   --gh-border-muted: var(--scale-gray-85);       /* #21262d 托盘内微弱线 */
+  --gh-border-control: #656c78;                  /* 表单控件边界，画布上满足 3:1 */
   --gh-border-subtle: rgba(240, 246, 252, 0.10);
 
   /* 前景色与文字阶层 (Foreground / Typography) */
   --gh-fg-default: #e6edf3;                      /* 主正文白 */
-  --gh-fg-muted: #9ea8b3;                        /* 辅助说明灰，满足 >= 4.5:1 对比度 */
-  --gh-fg-subtle: #a8b4be;                       /* 弱化元数据，对比度 >= 6.4:1 */
+  --gh-fg-muted: #9ea8b3;                        /* 辅助说明灰，对比度 >= 7:1 */
+  --gh-fg-subtle: #858e99;                       /* 弱化元数据，深色卡片上仍 >= 4.5:1 */
 
   /* 功能强调与状态色 (Accents & Status) */
   --gh-accent-fg: var(--scale-blue-3);           /* #58a6ff 经典 GitHub 蓝 */

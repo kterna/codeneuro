@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import type { Ledger, TabId } from '../../types/ledger'
+import type { TabId } from '../../types/ledger'
 
 defineProps<{
-  ledger: Ledger | null
   title: string
   currentTab: TabId
   refreshing: boolean
@@ -23,25 +22,26 @@ const emit = defineEmits<{
     <h1 id="title" class="strip-title">{{ title }}</h1>
 
     <div class="pill-set">
-      <div class="metric-pill" title="查看需求" @click="emit('navigate', 'tasks')">
+      <button type="button" class="metric-pill" title="查看需求" @click="emit('navigate', 'tasks')">
         <span class="pill-dot blue"></span>
         <span class="pill-label">进行中需求</span>
         <strong class="pill-value">{{ activeRequirementsCount }}</strong>
-      </div>
+      </button>
 
-      <div class="metric-pill" title="查看任务看板" @click="emit('navigate', 'tasks')">
+      <button type="button" class="metric-pill" title="查看任务看板" @click="emit('navigate', 'tasks')">
         <span class="pill-dot green"></span>
         <span class="pill-label">进行中任务</span>
         <strong class="pill-value">{{ activeTasksCount }}</strong>
-      </div>
+      </button>
 
-      <div class="metric-pill" title="P0：最高优先级规则" @click="emit('navigate', 'rules')">
+      <button type="button" class="metric-pill" title="P0：最高优先级规则" @click="emit('navigate', 'rules')">
         <span class="pill-dot purple"></span>
         <span class="pill-label">P0 规则</span>
         <strong class="pill-value">{{ contractsCount }}</strong>
-      </div>
+      </button>
 
-      <div
+      <button
+        type="button"
         class="metric-pill"
         :class="{ 'has-proposals': pendingProposalsCount > 0 }"
         title="查看待审阅的规则修改"
@@ -50,16 +50,17 @@ const emit = defineEmits<{
         <span class="pill-dot amber"></span>
         <span class="pill-label">待审建议</span>
         <strong class="pill-value">{{ pendingProposalsCount }}</strong>
-      </div>
+      </button>
 
-      <div
+      <button
         v-if="currentTab !== 'overview'"
+        type="button"
         class="metric-pill overview-entry"
         title="查看项目总览"
         @click="emit('navigate', 'overview')"
       >
         <span class="pill-label">项目总览 ↗</span>
-      </div>
+      </button>
     </div>
 
     <div class="strip-actions">
@@ -109,6 +110,7 @@ const emit = defineEmits<{
 .metric-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   padding: 3px 10px;
   background: var(--gh-canvas-subtle);

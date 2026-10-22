@@ -29,6 +29,14 @@ function statusLabel(status: ProposalStatus | string): string {
   }
 }
 
+function deliveryModeLabel(mode: Proposal['delivery_mode'] | undefined): string {
+  switch (mode) {
+    case 'full': return '完整条款'
+    case 'card': return '一行提示（按需读取正文）'
+    default: return '未记录'
+  }
+}
+
 function isStale(prop: Proposal): boolean {
   if (prop.status !== 'pending') return false
   if (prop.current_target_version === null || prop.current_target_version === undefined) return false
@@ -73,7 +81,7 @@ function getApprovalBlockReason(prop: Proposal): string {
     </div>
 
     <div v-else class="proposals-list">
-      <article v-for="prop in ledger.proposals" :key="prop.id" class="card proposal-card">
+      <article v-for="prop in ledger.proposals" :key="prop.id" :data-proposal-id="prop.id" class="card proposal-card">
         <div class="card-head">
           <div class="proposal-title-row">
             <span class="tag" :class="statusBadgeClass(prop.status)">
@@ -113,7 +121,7 @@ function getApprovalBlockReason(prop: Proposal): string {
         <!-- 不回填新分类到历史快照。 -->
         <details class="diff-container panel" :open="prop.status === 'pending'">
           <summary class="diff-summary">
-            <strong>修改前后对比（5 项）</strong>
+            <strong>修改前后对比（7 项）</strong>
           </summary>
 
           <div class="diff-body" style="margin-top: 12px">
@@ -199,6 +207,26 @@ function getApprovalBlockReason(prop: Proposal): string {
                     <li v-for="(p, i) in prop.points" :key="'new-pt-' + i">{{ p }}</li>
                     <li v-if="!prop.points?.length" class="muted">无条款</li>
                   </ul>
+                </div>
+              </div>
+            </div>
+            <!-- 6 & 7. 下发方式与使用时机，缺失的历史字段不回填。 -->
+            <div class="diff-grid" style="margin-top: 12px">
+              <div class="diff-field" data-field="delivery_mode">
+                <span class="caption">6. 下发方式</span>
+                <div class="diff-row">
+                  <span class="diff-before">修改前：{{ deliveryModeLabel(prop.target_snapshot?.delivery_mode) }}</span>
+                  <span class="diff-arrow">→</span>
+                  <span class="diff-after">修改后：{{ deliveryModeLabel(prop.delivery_mode) }}</span>
+                </div>
+              </div>
+
+              <div class="diff-field" data-field="applies_when">
+                <span class="caption">7. 使用时机</span>
+                <div class="diff-row">
+                  <span class="diff-before">修改前：{{ prop.target_snapshot?.applies_when === '' ? '未设置' : (prop.target_snapshot?.applies_when ?? '未记录') }}</span>
+                  <span class="diff-arrow">→</span>
+                  <span class="diff-after">修改后：{{ prop.applies_when || '未设置' }}</span>
                 </div>
               </div>
             </div>

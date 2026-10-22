@@ -22,6 +22,11 @@ def create_mcp(product: Product, actor_for_context=None, *, name='CodeNeuro'):
         'in items/next_cursor, and get returns full detail with bounded history. '
         'Explicitly select a Task; do not infer one from a workspace or recent call. '
         'Get context before business/file work using project_id, optional task_id and explicit priorities P0–P3. '
+        'State the current situation in one line; it is recorded, never used to filter. '
+        'Card Rules arrive as a complete lightweight directory of IDs, versions, titles and applicability, without bodies. '
+        'Judge relevance to the current task or next action yourself, then read the relevant bodies with '
+        'codeneuro_open_rules before relying on them; do not ask the user to select entries or load unrelated bodies. '
+        'Reassess relevance when the task changes. Directory hints are not requirements; reading grants no action permission. '
         'Reuse registered topics via list_topics/get_topic; pure topic queries need project classification approval. '
         'Task coding completion enters testing; testing → completed needs an explicit verification_summary. '
         'All child Tasks completed only moves the Requirement to accepting. '
@@ -97,22 +102,36 @@ def create_mcp(product: Product, actor_for_context=None, *, name='CodeNeuro'):
     def codeneuro_get_context(project_id: str, priorities: list[str], ctx: Context,
             task_id: Optional[str] = None, file_path: Optional[str] = None, files: Optional[list[str]] = None,
             topics: Optional[list[str]] = None, request_id: Optional[str] = None, max_chars: int = 24000,
-            intent: str = 'implementing', mode: str = 'detailed', source: Optional[Source] = None) -> str:
+            intent: str = 'implementing', mode: str = 'detailed', situation: str = '',
+            source: Optional[Source] = None) -> str:
         """Direct project/Task context with explicit priorities; no implicit P0 or Session.
         Task queries include its parent goal and own scope, never sibling Task content.
         Supply real relative files or registered topics; topics govern relevance when present.
+        situation is one recorded line about what you are doing; it never filters Rules.
+        Card Rules form a complete directory of IDs, versions, titles and applicability, without bodies.
+        Judge relevance to the current task or next action and read selected bodies with codeneuro_open_rules;
+        do not ask the user to select entries or load unrelated bodies. Hints are not requirements.
         Same request_id replays its snapshot; new/omitted ID sees current knowledge.
-        max_chars budgets Markdown; admitted selected P0 stays full. One JSON text, no duplicate sections."""
+        max_chars and budget_exceeded apply to the body before the directory; directory entries are never dropped."""
         if file_path is not None and files is not None:
             raise ToolError('invalid_request: Supply files or file_path, not both.')
         try:
             query = ContextQuery(tuple(parse_priority(item) for item in priorities),
                 tuple(files) if files is not None else ((file_path,) if file_path else ()),
-                tuple(topics or ()), intent, mode, max_chars)
+                tuple(topics or ()), intent, mode, max_chars, situation)
         except ProductError as error:
             raise ToolError(f'{error.code}: {error}') from error
         return invoke(product.context.get_context, actor(ctx), project_id, query, request_id,
                       task_id=task_id, source=fields(source))
+
+    @server.tool(structured_output=False)
+    def codeneuro_open_rules(delivery_id: str, rule_ids: list[str], reason: str, ctx: Context) -> str:
+        """Read selected Rule bodies from a Delivery's on-demand directory.
+        Select 1–20 distinct IDs relevant to your current task or next action, without asking the user to choose.
+        Do not load unrelated bodies or infer requirements from directory hints alone.
+        Only Rules recorded on that Delivery are readable; the recorded version is returned even after
+        later edits. Selection is recorded once per Rule and Delivery; repeated reads return the same body."""
+        return invoke(product.context.open_rules, actor(ctx), delivery_id, tuple(rule_ids), reason)
 
     @server.tool(structured_output=False)
     def codeneuro_get_delivery(delivery_id: str, ctx: Context) -> str:
@@ -122,13 +141,16 @@ def create_mcp(product: Product, actor_for_context=None, *, name='CodeNeuro'):
     @server.tool(structured_output=False)
     def codeneuro_create_task_rule(task_id: str, title: str, content_points: list[str],
             scope_patterns: list[str], topics: list[str], validation_spec: dict, reason: str, ctx: Context,
-            priority: str = 'P1', is_global: bool = False, priority_reason: str = '') -> str:
+            priority: str = 'P1', is_global: bool = False, priority_reason: str = '',
+            delivery_mode: str = 'full', applies_when: str = '') -> str:
         """Create a Task-owned draft. Non-global Rules need registered topics; empty path patterns are allowed.
         validation_spec: {kind:review,basis:...} or {kind:test,checks:[{id,clause_indexes:[0],test_ids:[...]}]}.
+        delivery_mode 'card' needs a one-line applies_when; 'full' leaves it empty.
         Cover every clause; P0 requires priority_reason. No originating-session ownership."""
         return invoke(product.governance.create_task_rule, actor(ctx), task_id, title, tuple(content_points),
             tuple(scope_patterns), reason, priority=parse_priority(priority), topics=tuple(topics),
-            validation_spec=validation_spec, is_global=is_global, priority_reason=priority_reason)
+            validation_spec=validation_spec, is_global=is_global, priority_reason=priority_reason,
+            delivery_mode=delivery_mode, applies_when=applies_when)
 
     @server.tool(structured_output=False)
     def codeneuro_report_test(task_id: str, request_id: str, command: list[str], paths: list[str],
@@ -151,13 +173,14 @@ def create_mcp(product: Product, actor_for_context=None, *, name='CodeNeuro'):
             reason: str, ctx: Context, title: Optional[str] = None, content_points: Optional[list[str]] = None,
             scope_patterns: Optional[list[str]] = None, priority: Optional[str] = None,
             topics: Optional[list[str]] = None, is_global: Optional[bool] = None,
-            priority_reason: Optional[str] = None, validation_spec: Optional[dict] = None) -> str:
+            priority_reason: Optional[str] = None, validation_spec: Optional[dict] = None,
+            delivery_mode: Optional[str] = None, applies_when: Optional[str] = None) -> str:
         """Versioned update/activate/reduce_priority/revoke of a Task candidate; another Agent may continue the Task."""
         return invoke(product.governance.mutate_task_rule, actor(ctx), task_id, rule_id, expected_version,
             action, reason, title, tuple(content_points) if content_points is not None else None,
             tuple(scope_patterns) if scope_patterns is not None else None,
             parse_priority(priority) if priority is not None else None, tuple(topics) if topics is not None else None,
-            is_global, priority_reason, validation_spec)
+            is_global, priority_reason, validation_spec, delivery_mode, applies_when)
 
     @server.tool(structured_output=False)
     def codeneuro_promote_rule(task_id: str, rule_id: str, expected_version: int, reason: str, ctx: Context) -> str:

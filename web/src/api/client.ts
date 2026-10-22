@@ -19,6 +19,22 @@ export class ApiError extends Error {
   }
 }
 
+function friendlyStatusPrefix(status: number): string {
+  switch (status) {
+    case 403: return '没有操作权限'
+    case 404: return '找不到对应数据'
+    case 409: return '数据已被其他操作修改'
+    case 422: return '填写内容不完整或格式不正确'
+    default: return '操作未完成'
+  }
+}
+
+function withFriendlyPrefix(message: string, status: number): string {
+  // 中文提示保持原样；英文诊断前补一句中文结论，便于快速判断
+  if (/[\u4e00-\u9fff]/.test(message)) return message
+  return `${friendlyStatusPrefix(status)}：${message}`
+}
+
 export async function requestApi<T>(path: string, method = 'GET', body?: object, signal?: AbortSignal): Promise<T> {
   let response: Response
   try {
@@ -59,7 +75,9 @@ export async function requestApi<T>(path: string, method = 'GET', body?: object,
     let message = `请求失败 (${response.status})`
     if (data && typeof data === 'object') {
       const errObj = data as Record<string, unknown>
-      if (typeof errObj.detail === 'string') {
+      if (Array.isArray(errObj.detail)) {
+        message = '填写内容不完整或格式不正确，请检查后重试。'
+      } else if (typeof errObj.detail === 'string') {
         message = errObj.detail
       } else if (errObj.detail && typeof errObj.detail === 'object') {
         const detailRecord = errObj.detail as Record<string, unknown>
@@ -75,7 +93,7 @@ export async function requestApi<T>(path: string, method = 'GET', body?: object,
         message = rawText.trim().slice(0, 300)
       }
     }
-    throw new ApiError(message, response.status, response.statusText, data)
+    throw new ApiError(withFriendlyPrefix(message, response.status), response.status, response.statusText, data)
   }
 
   if (!rawText.trim()) {
@@ -184,8 +202,17 @@ export const apiService = {
   reviewTaskRule: (projectId: string, rule: Rule, approve: boolean, reason: string) =>
     requestApi(buildProjectPath(projectId, `rules/${encodeURIComponent(rule.id)}/review`), 'POST', { expected_version: rule.version, approve, reason }),
 
+  retireProjectRule: (projectId: string, rule: Rule, reason: string, confirmed: boolean, requestId: string) =>
+    requestApi<{ id: string; project_id: string; version: number; status: string }>(
+      buildProjectPath(projectId, `rules/${encodeURIComponent(rule.id)}/retire`), 'POST',
+      { expected_version: rule.version, reason, confirmed, request_id: requestId }),
+
   classifyLegacyRule: (projectId: string, rule: Rule, payload: { topics: string[]; patterns: string[]; priority: RulePriority; is_global: boolean; priority_reason: string; reason: string }) =>
     requestApi(buildProjectPath(projectId, `rules/${encodeURIComponent(rule.id)}/classify`), 'POST', { ...payload, expected_version: rule.version }),
+
+  setRuleApplicability: (projectId: string, rule: Rule, deliveryMode: 'full' | 'card', appliesWhen: string, reason: string) =>
+    requestApi(buildProjectPath(projectId, `rules/${encodeURIComponent(rule.id)}/applicability`), 'POST',
+      { expected_version: rule.version, delivery_mode: deliveryMode, applies_when: appliesWhen, reason }),
 
   updateFinding: (projectId: string, id: string, expectedVersion: number, topics: string[], resolve: boolean, reason: string) =>
     requestApi(buildProjectPath(projectId, `findings/${encodeURIComponent(id)}`), 'PATCH', { expected_version: expectedVersion, topics, resolve, reason }),

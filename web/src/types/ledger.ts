@@ -79,6 +79,8 @@ export type RuleSnapshot = {
   priority_reason: string
   validation_spec: ValidationSpec | null
   status: RuleStatus
+  delivery_mode?: 'full' | 'card'
+  applies_when?: string
 }
 
 export type Rule = {
@@ -94,6 +96,8 @@ export type Rule = {
   task_id: string | null
   status: RuleStatus
   version: number
+  delivery_mode: 'full' | 'card'
+  applies_when: string
   origin_rule_id: string | null
   origin_version: number | null
   delivery_count?: number
@@ -127,6 +131,8 @@ export type Proposal = {
   validation_spec: ValidationSpec | null
   source_rule_id: string | null
   source_version: number | null
+  delivery_mode: 'full' | 'card'
+  applies_when: string
   reason: string
   status: ProposalStatus
   decision_reason: string | null

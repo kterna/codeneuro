@@ -21,13 +21,15 @@ def _proposal(row):
         status=row['status'], decision_reason=row['decision_reason'], reviewer_id=row['reviewer_id'],
         is_global=bool(row['is_global']), priority_reason=row['priority_reason'],
         validation_spec=json.loads(row['validation_spec_json']) if row['validation_spec_json'] else None,
-        source_rule_id=row['source_rule_id'], source_version=row['source_version'])
+        source_rule_id=row['source_rule_id'], source_version=row['source_version'],
+        delivery_mode=row.get('delivery_mode') or 'full', applies_when=row.get('applies_when') or '')
 
 
 def _content(rule):
     return dict(title=rule.title, points_json=_json(rule.points), patterns_json=_json(rule.patterns),
                 priority=rule.priority, status=rule.status, is_global=rule.is_global,
-                priority_reason=rule.priority_reason,
+                priority_reason=rule.priority_reason, delivery_mode=rule.delivery_mode,
+                applies_when=rule.applies_when,
                 validation_spec_json=_json(rule.validation_spec) if rule.validation_spec is not None else None)
 
 

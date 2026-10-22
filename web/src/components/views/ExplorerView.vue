@@ -43,6 +43,12 @@ watch(
   },
 )
 
+watch(() => props.projectId, () => {
+  selectedPath.value = ''
+  treeSearch.value = ''
+  openDirs.value.clear()
+})
+
 onUnmounted(() => {
   invalidateInspect()
 })
@@ -374,7 +380,7 @@ const inspectedRules = computed<Rule[]>(() => {
       <!-- 左侧：递归作用域目录面板 -->
       <aside class="tree-sidebar-panel" aria-label="目录结构">
         <div class="tree-header">
-          <h3>按目录查看</h3>
+          <h2>按目录查看</h2>
           <span class="caption font-mono">{{ directoryTree.length }} 个顶层目录</span>
         </div>
 
@@ -411,7 +417,7 @@ const inspectedRules = computed<Rule[]>(() => {
         <div class="detail-header-card">
           <div class="detail-title-line">
             <span class="caption">当前目录</span>
-            <h3 class="font-mono">{{ selectedPath || '未选择' }}</h3>
+            <h2 class="font-mono">{{ selectedPath || '未选择' }}</h2>
           </div>
           <span class="caption">共有 {{ selectedNodeRules.length }} 条生效规则</span>
         </div>
@@ -428,7 +434,7 @@ const inspectedRules = computed<Rule[]>(() => {
                 <span v-for="topic in rule.topics" :key="topic" class="tag neutral" style="margin-left: 6px">{{ topic }}</span>
                 <span v-if="rule.task_id" class="tag neutral" style="margin-left: 6px">任务规则</span>
                 <span v-else class="tag success" style="margin-left: 6px">长期规则</span>
-                <h4 style="display: inline-block; margin-left: 8px">{{ rule.title }}</h4>
+                <h3 style="display: inline-block; margin: 0 0 0 8px">{{ rule.title }}</h3>
               </div>
               <span class="caption font-mono">编号：{{ rule.id }}</span>
             </div>
@@ -748,7 +754,7 @@ details[open] .summary-arrow {
   align-items: center;
 }
 
-.detail-title-line h3 {
+.detail-title-line h2 {
   margin: 2px 0 0;
   font-size: 15px;
 }

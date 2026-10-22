@@ -144,7 +144,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
         <div class="topics-title-group">
           <span class="topics-icon-badge" aria-hidden="true">🏷️</span>
           <div>
-            <h3 class="topics-title">业务主题管理</h3>
+            <h2 class="topics-title">业务主题管理</h2>
             <span class="topics-subtitle">按业务把规则和便签分组</span>
           </div>
         </div>
@@ -277,7 +277,7 @@ async function action(kind: 'save' | 'delete' | 'enable') {
         <!-- 未选择主题时的克制空态展示 -->
         <div v-if="mode === 'none'" class="topics-empty-selection">
           <span class="empty-icon" aria-hidden="true">📋</span>
-          <h4 class="empty-title">未选择业务主题</h4>
+          <h3 class="empty-title">未选择业务主题</h3>
           <p class="caption empty-desc">
             请选择或新建业务主题。
           </p>
@@ -290,9 +290,9 @@ async function action(kind: 'save' | 'delete' | 'enable') {
         <div v-else class="topic-editor-card">
           <div class="editor-card-header">
             <div class="editor-header-left">
-              <h4 class="editor-heading">
+              <h3 class="editor-heading">
                 {{ selected ? '主题详情' : '新建业务主题' }}
-              </h4>
+              </h3>
               <span v-if="selected" class="editor-key-pill">
                 <code>{{ selected.key }}</code>
               </span>

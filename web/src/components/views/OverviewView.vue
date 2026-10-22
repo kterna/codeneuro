@@ -29,7 +29,7 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
     <div class="overview-section">
       <div class="section-title">核心指标</div>
       <div class="overview-cards-grid">
-        <div class="overview-card accent" @click="emit('navigate', 'tasks')">
+        <button type="button" class="overview-card accent" @click="emit('navigate', 'tasks')">
           <div class="card-head">
             <span class="card-label">进行中的需求</span>
             <span class="card-icon">▥</span>
@@ -39,9 +39,9 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
             <span>待交付 {{ activeRequirementsCount }} 项 · 已归档 {{ archivedRequirements }} 项</span>
           </div>
           <div class="card-action">查看需求与任务 →</div>
-        </div>
+        </button>
 
-        <div class="overview-card green" @click="emit('navigate', 'tasks')">
+        <button type="button" class="overview-card green" @click="emit('navigate', 'tasks')">
           <div class="card-head">
             <span class="card-label">进行中任务</span>
             <span class="card-icon">⚡</span>
@@ -51,9 +51,9 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
             <span>执行中 {{ activeTasksCount }} 个 · 任务总数 {{ ledger.counts.tasks.total }} 个</span>
           </div>
           <div class="card-action">查看任务 →</div>
-        </div>
+        </button>
 
-        <div class="overview-card purple" @click="emit('navigate', 'rules')">
+        <button type="button" class="overview-card purple" @click="emit('navigate', 'rules')">
           <div class="card-head">
             <span class="card-label">P0 核心规则</span>
             <span class="card-icon">≋</span>
@@ -63,9 +63,9 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
             <span>生效中 {{ activeRules }} 条 · 全部规则 {{ totalRules }} 条</span>
           </div>
           <div class="card-action">查看规则库 →</div>
-        </div>
+        </button>
 
-        <div class="overview-card amber" @click="emit('navigate', 'review')">
+        <button type="button" class="overview-card amber" @click="emit('navigate', 'review')">
           <div class="card-head">
             <span class="card-label">待审规则修改</span>
             <span class="card-icon">◈</span>
@@ -77,7 +77,7 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
             <span>待处理 {{ pendingProposalsCount }} 项 · 历史建议 {{ totalProposals }} 项</span>
           </div>
           <div class="card-action">前往审阅 →</div>
-        </div>
+        </button>
       </div>
     </div>
 
@@ -86,7 +86,7 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
       <!-- 左列：规则与契约分布 -->
       <div class="detail-panel">
         <div class="panel-header">
-          <h3>规则分布</h3>
+          <h2>规则分布</h2>
           <button class="subtle" @click="emit('navigate', 'rules')">管理规则</button>
         </div>
         <div class="stat-list">
@@ -112,7 +112,7 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
       <!-- 右列：环境与协同状态 -->
       <div class="detail-panel">
         <div class="panel-header">
-          <h3>便签与统计</h3>
+          <h2>便签与统计</h2>
           <button class="subtle" @click="emit('navigate', 'feedback')">查看便签</button>
         </div>
         <div class="stat-list">
@@ -143,8 +143,7 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
   display: flex;
   flex-direction: column;
   gap: 20px;
-  height: 100%;
-  overflow-y: auto;
+  min-height: 100%;
   padding-bottom: 24px;
 }
 
@@ -175,6 +174,10 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  width: 100%;
+  text-align: left;
   gap: 6px;
   cursor: pointer;
   transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
@@ -257,7 +260,7 @@ const totalEvents = computed(() => props.ledger.events?.length ?? 0)
   align-items: center;
 }
 
-.panel-header h3 {
+.panel-header h2 {
   margin: 0;
   font-size: 13px;
   font-weight: 600;

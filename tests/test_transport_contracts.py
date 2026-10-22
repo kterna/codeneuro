@@ -35,7 +35,7 @@ async def exercise_mcp(session, product):
     await session.initialize()
     tools = (await session.list_tools()).tools
     names = {item.name for item in tools}
-    assert len(names) == 20 and 'codeneuro_get_delivery' in names
+    assert len(names) == 21 and {'codeneuro_get_delivery', 'codeneuro_open_rules'} <= names
     assert not {'codeneuro_start_session', 'codeneuro_end_session'} & names
     assert all(item.output_schema is None for item in tools)
 

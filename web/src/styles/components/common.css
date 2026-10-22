@@ -66,7 +66,7 @@ button {
 
 button:hover {
   background: var(--gh-surface-card-hover);
-  border-color: #8b949e;
+  border-color: var(--gh-fg-muted);
 }
 
 button.primary {
@@ -77,7 +77,8 @@ button.primary {
 }
 
 button.primary:hover {
-  background: #2ea043;
+  background: var(--gh-success-emphasis);
+  filter: brightness(0.94);
 }
 
 button.danger {
@@ -108,7 +109,7 @@ input[type="search"],
 select,
 textarea {
   background: var(--gh-canvas-inset);
-  border: 1px solid var(--gh-border-default);
+  border: 1px solid var(--gh-border-control);
   color: var(--gh-fg-default);
   padding: 6px 12px;
   border-radius: 6px;
@@ -362,7 +363,7 @@ dialog::backdrop {
 }
 
 .command-palette {
-  background: #1c2128;
+  background: var(--gh-canvas-overlay);
   border: 1px solid var(--gh-border-default);
   border-radius: 8px;
   width: min(600px, 92vw);
@@ -378,4 +379,13 @@ dialog::backdrop {
   color: var(--gh-fg-default);
   padding: 12px 16px;
   font-size: 14px;
+}
+
+/* 通用文本工具类 */
+.muted {
+  color: var(--gh-fg-muted);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
 }

@@ -23,6 +23,14 @@
   left: 14px;
 }
 
+/* 抽屉打开时锁定背景滚动（覆盖移动端 html/body 的 auto 滚动） */
+html.drawer-open,
+body.drawer-open,
+html.modal-open,
+body.modal-open {
+  overflow: hidden !important;
+}
+
 /* 屏幕阅读器专用隐藏类 */
 .sr-only {
   position: absolute;
@@ -34,6 +42,12 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* 统一键盘焦点样式 */
+:where(button, a, [role="button"], [role="treeitem"], [tabindex]):focus-visible {
+  outline: 2px solid var(--gh-accent-fg);
+  outline-offset: 2px;
 }
 
 /* 快捷键标记徽标 */
@@ -83,4 +97,16 @@ th,
   word-break: break-word;
   overflow-wrap: break-word;
   white-space: pre-wrap;
+}
+
+/* 遵循系统减少动态效果设置 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

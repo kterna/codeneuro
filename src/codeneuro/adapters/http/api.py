@@ -1,7 +1,8 @@
 """HTTP resource mapping; business transitions live in the shared workflows."""
 from dataclasses import asdict
+from typing import Literal
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from ...modules.tasks import ProductError
 from ...modules.knowledge import Priority
@@ -71,6 +72,12 @@ class RuleReviewInput(VersionedInput):
     approve: bool
 
 
+class RuleRetirementInput(VersionedInput):
+    expected_version: int = Field(ge=1, strict=True)
+    confirmed: StrictBool
+    request_id: str | None = None
+
+
 class FindingUpdateInput(VersionedInput):
     topics: list[str] | None = None
     resolve: bool = False
@@ -82,6 +89,13 @@ class ClassifyInput(VersionedInput):
     priority: Priority | None = None
     is_global: bool = False
     priority_reason: str = ''
+    delivery_mode: Literal['full', 'card'] | None = None
+    applies_when: str | None = None
+
+
+class ApplicabilityInput(VersionedInput):
+    delivery_mode: Literal['full', 'card']
+    applies_when: str = ''
 
 
 def create_router(product: Product):
@@ -221,11 +235,21 @@ def create_router(product: Product):
     def review_rule(project_id: str, rule_id: str, body: RuleReviewInput):
         return call(product.governance.review_task_rule, project_id, rule_id, body.expected_version, body.approve, body.reason)
 
+    @router.post('/projects/{project_id}/rules/{rule_id}/retire')
+    def retire_project_rule(project_id: str, rule_id: str, body: RuleRetirementInput):
+        return call(product.knowledge.retire_project_rule, project_id, rule_id, body.expected_version,
+                    body.reason, confirmed=body.confirmed, request_id=body.request_id)
+
     @router.post('/projects/{project_id}/rules/{rule_id}/classify')
     def classify_legacy_rule(project_id: str, rule_id: str, body: ClassifyInput):
         return call(product.knowledge.classify_legacy_rule, project_id, rule_id, body.expected_version,
                     tuple(body.topics), body.reason, tuple(body.patterns) if body.patterns is not None else None,
-                    body.priority, body.is_global, body.priority_reason)
+                    body.priority, body.is_global, body.priority_reason, body.delivery_mode, body.applies_when)
+
+    @router.post('/projects/{project_id}/rules/{rule_id}/applicability')
+    def set_rule_applicability(project_id: str, rule_id: str, body: ApplicabilityInput):
+        return call(product.knowledge.set_rule_applicability, project_id, rule_id, body.expected_version,
+                    body.delivery_mode, body.applies_when, body.reason)
 
     @router.patch('/projects/{project_id}/findings/{finding_id}')
     def update_finding(project_id: str, finding_id: str, body: FindingUpdateInput):

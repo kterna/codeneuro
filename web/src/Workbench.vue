@@ -143,8 +143,16 @@ function syncUrl(push = false) {
   }
 }
 
+function resetContentScroll() {
+  const content = document.getElementById('content')
+  if (content) content.scrollTop = 0
+  window.scrollTo(0, 0)
+}
+
 function handleSelectTab(newTab: TabId) {
   tab.value = newTab
+  notice.value = ''
+  resetContentScroll()
   syncUrl(true)
 }
 
@@ -242,6 +250,7 @@ async function handleSelectProject(id: string) {
   dialogRef.value?.close()
 
   projectId.value = id
+  resetContentScroll()
   syncUrl(true)
   await refresh()
 }
@@ -315,6 +324,7 @@ const pendingProposalsCount = computed(
 // 打开弹窗系列
 function openCreateProject() {
   modalEpoch++
+  error.value = ''
   modalMode.value = 'project'
   modalTarget.value = null
   dialogRef.value?.open()
@@ -322,6 +332,7 @@ function openCreateProject() {
 
 function openApprove(prop: Proposal) {
   modalEpoch++
+  error.value = ''
   modalMode.value = 'approve'
   modalTarget.value = prop
   dialogRef.value?.open()
@@ -329,6 +340,7 @@ function openApprove(prop: Proposal) {
 
 function openReject(prop: Proposal) {
   modalEpoch++
+  error.value = ''
   modalMode.value = 'reject'
   modalTarget.value = prop
   dialogRef.value?.open()
@@ -402,6 +414,7 @@ async function handleDialogSubmit(data: {
 
 function handleGlobalKeydown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    if (document.querySelector('dialog[open]')) return
     event.preventDefault()
     paletteRef.value?.open()
   }
@@ -411,6 +424,8 @@ function handleHashChange() {
   const { projId, tabId } = parseLocationFromUrl()
   if (tabId && tabId !== tab.value) {
     tab.value = tabId
+    notice.value = ''
+    resetContentScroll()
   }
   if (projId && projId !== projectId.value && projects.value.some(p => p.id === projId)) {
     void handleSelectProject(projId)
@@ -444,10 +459,8 @@ onUnmounted(() => {
       :tabs="tabs"
       :current-tab="tab"
       :connection-status="connectionStatus"
-      :error-text="error"
       @select-project="handleSelectProject"
       @open-create-project="openCreateProject"
-      @delete-current-project="handleDeleteProject"
       @select-tab="handleSelectTab"
       @open-palette="paletteRef?.open()"
     />
@@ -456,7 +469,6 @@ onUnmounted(() => {
     <main>
       <!-- 页面标题、核心指标与刷新合并为单行胶囊条，不再单独占用顶部标题区 -->
       <MetricBar
-        :ledger="ledger"
         :title="current.title"
         :current-tab="tab"
         :refreshing="loading || busy"
@@ -473,8 +485,11 @@ onUnmounted(() => {
       <div v-else-if="notice" id="notice" role="status">{{ notice }}</div>
 
       <!-- 主视图容器 -->
-      <section id="content" aria-label="工作区内容" tabindex="-1">
-        <div v-if="!projectId" class="empty">
+      <section id="content" aria-label="工作区内容" tabindex="-1" :aria-busy="loading">
+        <div v-if="loading && !ledger" class="empty">
+          正在加载项目数据…
+        </div>
+        <div v-else-if="!projectId" class="empty">
           当前还没有登记项目。点击左侧「＋ 注册」开始。
         </div>
 
@@ -515,7 +530,14 @@ onUnmounted(() => {
           />
 
           <!-- 5. 规则反馈与工作区 (Feedback) -->
-          <FeedbackView v-else-if="tab === 'feedback'" :key="projectId" :ledger="ledger" :project-id="projectId" @refresh="refresh" />
+          <FeedbackView
+            v-else-if="tab === 'feedback'"
+            :key="projectId"
+            :ledger="ledger"
+            :project-id="projectId"
+            :loading="loading"
+            @refresh="refresh"
+          />
 
           <!-- 6. 变更审计流水 (Activity) -->
           <ActivityView v-else-if="tab === 'activity'" :ledger="ledger" :project-id="projectId" />

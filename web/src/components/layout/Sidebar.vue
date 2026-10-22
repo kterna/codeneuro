@@ -9,10 +9,8 @@ const props = withDefaults(defineProps<{
   tabs: readonly TabItem[]
   currentTab: TabId
   connectionStatus?: 'connecting' | 'connected' | 'disconnected'
-  errorText?: string
 }>(), {
   connectionStatus: 'connected',
-  errorText: '',
 })
 
 const emit = defineEmits<{
@@ -25,7 +23,7 @@ const emit = defineEmits<{
 const { theme, setTheme } = useTheme()
 
 function toggleTheme() {
-  setTheme(theme.value === 'dark' ? 'light' : 'dark')
+  setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark')
 }
 
 // 明确分离业务工作区（项目级）与系统配置（系统级）
@@ -75,6 +73,7 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
         :key="item.id"
         class="nav-tab-item"
         :class="{ active: currentTab === item.id }"
+        :aria-current="currentTab === item.id ? 'page' : undefined"
         @click="emit('select-tab', item.id)"
       >
         <span class="nav-icon">{{ item.icon }}</span>
@@ -87,6 +86,7 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
         v-if="systemTab"
         class="nav-tab-item"
         :class="{ active: currentTab === systemTab.id }"
+        :aria-current="currentTab === systemTab.id ? 'page' : undefined"
         @click="emit('select-tab', systemTab.id)"
       >
         <span class="nav-icon">{{ systemTab.icon }}</span>
@@ -108,7 +108,10 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
 
         <button
           class="theme-toggle-btn"
+          type="button"
           :title="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'"
+          :aria-label="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'"
+          :aria-pressed="theme === 'light'"
           @click="toggleTheme"
         >
           {{ theme === 'dark' ? '🌙' : '☀️' }}
@@ -361,6 +364,22 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+  }
+
+  .nav-tab-item {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .brand {

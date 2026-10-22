@@ -18,12 +18,13 @@
   /* 边框色阶 (Border) */
   --gh-border-default: var(--scale-gray-3);      /* #d0d7de 分割线 */
   --gh-border-muted: var(--scale-gray-2);        /* #eaeef2 微弱分割线 */
+  --gh-border-control: #7d8590;                  /* 表单控件边界，浅色画布上满足 3:1 */
   --gh-border-subtle: rgba(31, 35, 40, 0.15);
 
   /* 前景色与文字阶层 (Foreground / Typography) */
   --gh-fg-default: #1f2328;                      /* 主正文深黑 */
-  --gh-fg-muted: #656d76;                        /* 辅助说明灰 */
-  --gh-fg-subtle: #8c959f;                       /* 弱化元数据 */
+  --gh-fg-muted: #57606a;                        /* 辅助说明灰，对比度 >= 6:1 */
+  --gh-fg-subtle: #68737d;                       /* 弱化元数据，对比度 >= 4.5:1 */
 
   /* 功能强调与状态色 (Accents & Status) */
   --gh-accent-fg: var(--scale-blue-6);           /* #0969da 强调蓝 */
@@ -34,14 +35,14 @@
   --gh-success-emphasis: var(--scale-green-5);
   --gh-success-subtle: #dafbe1;
 
-  --gh-attention-fg: var(--scale-yellow-5);      /* #9e6a03 警示金 */
+  --gh-attention-fg: #7d5403;                    /* 警示金，tag 背景上满足 4.5:1 */
   --gh-attention-subtle: #fff8c5;
 
   --gh-danger-fg: var(--scale-red-6);            /* #cf222e 危险红 */
   --gh-danger-emphasis: var(--scale-red-4);
   --gh-danger-subtle: #ffebe9;
 
-  --gh-done-purple: var(--scale-purple-4);       /* #8957e5 归档紫 */
+  --gh-done-purple: #6e40c9;                     /* 归档紫，tag 背景上满足 4.5:1 */
   --gh-done-subtle: #fbefff;
 
   /* 通用规范别名 */

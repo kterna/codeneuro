@@ -38,6 +38,8 @@ class ContractProposal:
     validation_spec: dict | None = None
     source_rule_id: str | None = None
     source_version: int | None = None
+    delivery_mode: str = 'full'
+    applies_when: str = ''
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,8 @@ class Rule:
     is_global: bool = False
     priority_reason: str = ''
     validation_spec: dict | None = None
+    delivery_mode: str = 'full'
+    applies_when: str = ''
 
     def matches(self, files: tuple[str, ...]) -> bool:
         return any(matches(pattern, file) for pattern in self.patterns for file in files)
@@ -71,6 +75,17 @@ def validate_rule(rule: Rule):
         raise ProductError('Non-global Rules require registered topics; empty scope is not global.')
     if rule.priority == Priority.P0 and not rule.priority_reason.strip():
         raise ProductError('P0 requires an explicit consequence and applicability rationale.')
+    if rule.delivery_mode not in ('full', 'card'):
+        raise ProductError('Delivery mode must be full or card.')
+    if rule.delivery_mode == 'card':
+        if not rule.applies_when.strip():
+            raise ProductError('Card Rules require a one-line applicability statement.')
+        if len(rule.applies_when.strip()) > 60:
+            raise ProductError('Applicability statements must stay within 60 characters.')
+        if rule.is_global:
+            raise ProductError('Global Rules must stay full text; they cannot be card-only.')
+    elif rule.applies_when.strip():
+        raise ProductError('Full-text Rules cannot carry an applicability statement.')
     for pattern in rule.patterns:
         relative_path(pattern, pattern=True)
 

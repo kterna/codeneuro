@@ -14,6 +14,14 @@ const priorityReason = ref('')
 const reason = ref('')
 const busy = ref(false)
 const error = ref('')
+const retirementReason = ref('')
+const retirementConfirmed = ref(false)
+const retirementRequest = ref<{ key: string; id: string } | null>(null)
+const retiredHere = ref(false)
+const deliveryMode = ref<'full' | 'card'>('full')
+const appliesWhen = ref('')
+const modeReason = ref('')
+const ruleScope = computed(() => JSON.stringify([props.projectId, props.rule.id, props.rule.version, props.rule.status]))
 
 function kindLabel(kind: string): string {
   return kind === 'review' ? '人工审阅' : kind === 'test' ? '测试验证' : kind
@@ -55,20 +63,28 @@ const governanceBadge = computed(() => {
   }
 })
 
-watch(() => props.rule, rule => {
+watch(ruleScope, () => {
+  const rule = props.rule
   topics.value = rule.topics.join(', ')
   patterns.value = rule.patterns.join('\n')
   priority.value = rule.priority
   isGlobal.value = rule.is_global
   priorityReason.value = rule.priority_reason
-  reason.value = error.value = ''
+  deliveryMode.value = rule.delivery_mode
+  appliesWhen.value = rule.applies_when
+  modeReason.value = ''
+  reason.value = error.value = retirementReason.value = ''
+  retirementConfirmed.value = retiredHere.value = false
+  retirementRequest.value = null
 }, { immediate: true })
 
 async function submit(approve: boolean) {
+  if (busy.value) return
   if (!reason.value.trim()) {
     error.value = '请填写审阅理由。'
     return
   }
+  const scope = ruleScope.value
   busy.value = true
   error.value = ''
   try {
@@ -84,9 +100,63 @@ async function submit(approve: boolean) {
     } else {
       await apiService.reviewTaskRule(props.projectId, props.rule, approve, reason.value)
     }
-    emit('refresh')
+    if (scope === ruleScope.value) emit('refresh')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    if (scope === ruleScope.value) error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function saveDeliveryMode() {
+  if (busy.value) return
+  if (!modeReason.value.trim()) {
+    error.value = '请填写修改原因。'
+    return
+  }
+  if (deliveryMode.value === 'card' && !appliesWhen.value.trim()) {
+    error.value = '只给一行时需要填写使用时机。'
+    return
+  }
+  const scope = ruleScope.value
+  busy.value = true
+  error.value = ''
+  try {
+    await apiService.setRuleApplicability(props.projectId, props.rule, deliveryMode.value,
+      deliveryMode.value === 'card' ? appliesWhen.value.trim() : '', modeReason.value.trim())
+    if (scope === ruleScope.value) {
+      modeReason.value = ''
+      emit('refresh')
+    }
+  } catch (e) {
+    if (scope === ruleScope.value) error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function retire() {
+  if (busy.value || retiredHere.value || props.rule.task_id || props.rule.status !== 'active') return
+  if (!retirementConfirmed.value || !retirementReason.value.trim()) {
+    error.value = '请填写停用原因，并确认停用当前规则。'
+    return
+  }
+  const scope = ruleScope.value
+  const reason = '用户在工作台明确确认停用：' + retirementReason.value.trim()
+  const key = JSON.stringify([scope, reason])
+  if (retirementRequest.value?.key !== key) {
+    retirementRequest.value = { key, id: crypto.randomUUID() }
+  }
+  busy.value = true
+  error.value = ''
+  try {
+    await apiService.retireProjectRule(props.projectId, props.rule, reason, retirementConfirmed.value, retirementRequest.value.id)
+    if (scope === ruleScope.value) {
+      retiredHere.value = true
+      emit('refresh')
+    }
+  } catch (e) {
+    if (scope === ruleScope.value) error.value = e instanceof Error ? e.message : String(e)
   } finally {
     busy.value = false
   }
@@ -239,6 +309,62 @@ async function submit(approve: boolean) {
       <span class="callout-icon" aria-hidden="true">🧪</span>
       <p class="caption callout-text">测试结果由 AI 上报，界面通过不能代替测试。</p>
     </div>
+
+    <section v-if="!rule.task_id && rule.status === 'active'" class="gov-review-submit-section" aria-label="查询时怎么给">
+      <h4 class="gov-title">查询时怎么给</h4>
+      <p class="caption">每次都给完整条款；或只给一行使用时机，需要时再由 Agent 取全文。</p>
+      <div class="gov-field-group full-width">
+        <label class="gov-checkbox-label">
+          <input v-model="deliveryMode" type="radio" value="full" :disabled="busy" :name="'delivery-mode-' + rule.id" />
+          <span class="checkbox-text">每次都给完整条款</span>
+        </label>
+        <label class="gov-checkbox-label">
+          <input v-model="deliveryMode" type="radio" value="card" :disabled="busy || rule.is_global" :name="'delivery-mode-' + rule.id" />
+          <span class="checkbox-text">只给一行使用时机</span>
+        </label>
+        <span v-if="rule.is_global" class="field-help">全局规则每次都发完整条款。</span>
+      </div>
+      <label v-if="deliveryMode === 'card'" class="gov-field-group full-width">
+        <span class="field-title">使用时机 <span class="field-required">* 必填</span></span>
+        <input
+          v-model="appliesWhen"
+          :disabled="busy"
+          maxlength="60"
+          class="gh-input"
+          placeholder="例如：准备执行 git commit、merge 或 push 时"
+        />
+        <span class="field-help">不超过 60 字，写清在什么动作之前需要看它。</span>
+      </label>
+      <label class="gov-field-group full-width">
+        <span class="field-title">修改原因 <span class="field-required">* 必填</span></span>
+        <textarea v-model="modeReason" :disabled="busy" rows="2" class="gh-textarea" placeholder="说明为什么这样给…" />
+      </label>
+      <div class="gov-actions-toolbar">
+        <button
+          type="button"
+          :disabled="busy || !modeReason.trim() || (deliveryMode === 'card' && !appliesWhen.trim())"
+          @click="saveDeliveryMode"
+        >保存</button>
+      </div>
+    </section>
+
+    <section v-if="!rule.task_id && rule.status === 'active' && !retiredHere" class="gov-review-submit-section rule-retirement" aria-label="停用长期规则">
+      <h4 class="gov-title">停用长期规则</h4>
+      <p class="caption">停用后不再用于新的查询，历史内容、评分和已下发记录仍保留。评分低不会自动停用规则。</p>
+      <p v-if="rule.priority === 'P0'" class="caption">这是 P0 规则，请先核对停用后是否仍有必要的保护要求。</p>
+      <label class="gov-field-group">
+        <span class="field-title">停用原因 <span class="field-required">* 必填</span></span>
+        <textarea v-model="retirementReason" :disabled="busy" rows="2" class="gh-textarea" placeholder="说明为什么停用，以及仍需保留的要求由哪里保证…" />
+      </label>
+      <label class="gov-checkbox-label">
+        <input v-model="retirementConfirmed" type="checkbox" :disabled="busy" />
+        <span class="checkbox-text">我确认停用「{{ rule.title }}」（v{{ rule.version }}），新的查询不再返回它，历史记录保留。</span>
+      </label>
+      <div class="gov-actions-toolbar">
+        <button type="button" class="danger" :disabled="busy || !retirementConfirmed || !retirementReason.trim()" @click="retire">确认停用这条长期规则</button>
+      </div>
+    </section>
+    <p v-else-if="!rule.task_id && (retiredHere || ['deprecated', 'revoked'].includes(rule.status))" class="caption retirement-result" role="status">这条长期规则已停用，不再用于新的查询；历史记录保留，不会自动恢复。</p>
 
     <!-- 错误反馈提示 -->
     <p v-if="error" class="error-box" role="alert">{{ error }}</p>

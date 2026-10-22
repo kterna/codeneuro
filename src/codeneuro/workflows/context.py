@@ -72,6 +72,46 @@ class Context(Workspaces):
                 raise ProductError('Delivery not found in the selected scope.', 'not_found')
             return tx.context.get_delivery(delivery_id)
 
+    def open_rules(self, actor, delivery_id, rule_ids, reason, *, project_id=None):
+        """Full text for Rules a Delivery offered as one-line cards; the version stays fixed."""
+        if not isinstance(rule_ids, (list, tuple)) or not 1 <= len(rule_ids) <= 20:
+            raise ProductError('Supply 1–20 Rule ids.')
+        if len(set(rule_ids)) != len(rule_ids) or any(not isinstance(item, str) or not item.strip()
+                                                     for item in rule_ids):
+            raise ProductError('Supply distinct non-empty Rule ids.')
+        if not reason.strip():
+            raise ProductError('Say why these Rules are needed now.')
+        with self.uow.write() as tx:
+            scope = tx.context.delivery_scope(delivery_id)
+            if not scope or (project_id is not None and scope['project_id'] != project_id):
+                raise ProductError('Delivery not found in the selected scope.', 'not_found')
+            refs = {row['rule_id']: row for row in tx.context.delivery_rule_refs(delivery_id)}
+            missing = [item for item in rule_ids if item not in refs]
+            if missing:
+                raise ProductError('Rules not offered by this Delivery: ' + ', '.join(missing), 'not_found')
+            opened, already_full = [], []
+            for rule_id in rule_ids:
+                ref = refs[rule_id]
+                if ref['representation'] != 'card':
+                    already_full.append(rule_id)
+                    continue
+                snapshot = tx.knowledge.rule_snapshot(rule_id, ref['version'])
+                if not snapshot:
+                    raise ProductError('Rule version is no longer readable.', 'not_found')
+                points = snapshot.get('points') or ()
+                markdown = (f"[{snapshot.get('priority')}] {snapshot.get('title')} "
+                            f"({rule_id}@{ref['version']})\n"
+                            + '\n'.join(f'- {point}' for point in points) + '\n')
+                opened.append({'id': rule_id, 'version': ref['version'],
+                               'priority': snapshot.get('priority'), 'title': snapshot.get('title'),
+                               'applies_when': snapshot.get('applies_when') or '', 'markdown': markdown})
+                if not tx.context.selection(delivery_id, rule_id):
+                    tx.context.record_selection(delivery_id, rule_id, ref['version'], reason.strip(), actor.id)
+            if opened:
+                tx.audit.record(scope['project_id'], actor.id, 'delivery.rules_opened', delivery_id,
+                                {'rules': [item['id'] for item in opened], 'reason': reason.strip()})
+            return {'delivery_id': delivery_id, 'rules': opened, 'already_full': already_full}
+
     def record_finding(self, actor, task_id, target_path, text, priority=Priority.P1, *, topics, source=None):
         if not text.strip():
             raise ProductError('Finding text is required.')

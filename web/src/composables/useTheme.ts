@@ -8,6 +8,13 @@ const currentTheme = ref<ThemeMode>(
   (localStorage.getItem(THEME_KEY) as ThemeMode) || 'dark'
 )
 
+const media = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null
+media?.addEventListener('change', () => {
+  if (currentTheme.value === 'auto') {
+    document.documentElement.setAttribute('data-theme', media.matches ? 'dark' : 'light')
+  }
+})
+
 function resolveTheme(mode: ThemeMode): 'dark' | 'light' {
   if (mode === 'auto') {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches

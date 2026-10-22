@@ -60,7 +60,7 @@ function handleDelete() {
         <div class="header-title-wrap">
           <span class="header-icon" aria-hidden="true">🏛️</span>
           <div>
-            <h3 class="card-title">当前项目基础信息</h3>
+            <h2 class="card-title">当前项目基础信息</h2>
           </div>
         </div>
       </div>
@@ -139,7 +139,7 @@ function handleDelete() {
         <div class="header-title-wrap">
           <span class="header-icon" aria-hidden="true">🗂️</span>
           <div>
-            <h3 class="card-title">已登记项目（{{ projects.length }}）</h3>
+            <h2 class="card-title">已登记项目（{{ projects.length }}）</h2>
           </div>
         </div>
         <button class="primary btn-create-proj" type="button" @click="emit('open-create-project')">
@@ -204,7 +204,7 @@ function handleDelete() {
       <div class="danger-header">
         <span class="danger-icon" aria-hidden="true">⚠️</span>
         <div class="danger-title-wrap">
-          <h3 class="danger-title">删除项目</h3>
+          <h2 class="danger-title">删除项目</h2>
           <p class="danger-warning-text">
             此操作不可撤销。删除后，该项目下的任务、需求、规则、便签及操作记录都会被一并删除。
           </p>
