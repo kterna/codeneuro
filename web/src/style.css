@@ -235,15 +235,6 @@ kbd {
   overflow: hidden;
 }
 
-.workbench > main > header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
 h1 {
   font-size: 20px;
   font-weight: 600;
@@ -305,12 +296,17 @@ label.caption,
   flex-shrink: 0;
 }
 
-/* 长 ID、哈希与路径防溢出 (Requirement 2) */
+/* 长 ID 与哈希防溢出 (Requirement 2) */
 code,
 pre,
-.path-mono,
 .meta-value-code code {
   word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+/* 路径优先在 /、- 处换行，避免被从单词中间截断 */
+.path-mono {
+  word-break: normal;
   overflow-wrap: anywhere;
 }
 
@@ -455,26 +451,11 @@ section#content {
   text-wrap: pretty;
 }
 
-/* Feedback 评分与便签双栏：避免横向溢出，1280 及以下上下排，1440 宽屏保障长便签正文 >= 420px (Requirement 3) */
-.feedback-dual-grid {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 20px !important;
-  height: auto !important;
-  overflow: visible !important;
-}
-
-@media (min-width: 1440px) {
-  .feedback-dual-grid {
-    display: grid !important;
-    grid-template-columns: minmax(460px, 1fr) minmax(460px, 1fr) !important;
-    gap: 20px !important;
-  }
-}
-
+/* Feedback 评分/便签双栏的滚动与断点由组件自身控制，
+   避免全局 height:auto 覆盖容器高度，导致内部滚轮失效、内容被裁切 */
+.feedback-dual-grid,
 .feedback-card-panel {
-  min-width: 0 !important;
-  width: 100% !important;
+  min-width: 0;
 }
 
 /* Settings 统计条目 (Requirement 4) */
@@ -585,7 +566,7 @@ button {
 
 button:hover {
   background: var(--gh-surface-card);
-  border-color: #8b949e;
+  border-color: var(--gh-fg-muted);
 }
 
 button.primary {
@@ -596,7 +577,8 @@ button.primary {
 }
 
 button.primary:hover {
-  background: #2ea043;
+  background: var(--gh-success-emphasis);
+  filter: brightness(0.94);
 }
 
 button.subtle {
@@ -614,13 +596,21 @@ button.subtle:hover {
 input, select, textarea {
   font: inherit;
   font-size: 12px;
-  border: 1px solid var(--gh-border-default);
+  border: 1px solid var(--gh-border-control);
   border-radius: 6px;
   background: var(--gh-canvas-inset);
   color: var(--gh-fg-default);
   padding: 6px 10px;
   width: 100%;
   transition: border-color 0.15s;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--gh-accent-emphasis);
 }
 
 input:focus, select:focus, textarea:focus {
@@ -663,8 +653,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 .tag.p2 {
-  color: #79c0ff;
-  background: rgba(56, 139, 253, 0.15);
+  color: var(--gh-accent-fg);
+  background: var(--gh-accent-subtle);
   border-color: rgba(56, 139, 253, 0.4);
 }
 
@@ -732,20 +722,20 @@ input:focus, select:focus, textarea:focus {
   font-size: 12px;
   border: 1px solid rgba(46, 160, 67, 0.4);
   background: var(--gh-success-subtle);
-  color: #3fb950;
+  color: var(--gh-success-fg);
   flex-shrink: 0;
 }
 
 #notice.error {
   border-color: rgba(248, 81, 73, 0.4);
   background: var(--gh-danger-subtle);
-  color: #f85149;
+  color: var(--gh-danger-fg);
 }
 
 code {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: #79c0ff;
+  color: var(--gh-accent-fg);
 }
 
 .original-text {
@@ -782,7 +772,7 @@ code {
 /* 1. 原生模态弹窗规范 (<dialog>) */
 dialog {
   color: var(--gh-fg-default);
-  background: #161b22;
+  background: var(--gh-canvas-overlay);
   border: 1px solid var(--gh-border-default);
   border-radius: 8px;
   width: min(560px, 92vw);
@@ -798,7 +788,7 @@ dialog::backdrop {
 
 .dialog-head {
   padding: 16px 20px;
-  background: #161b22;
+  background: var(--gh-canvas-subtle);
   border-bottom: 1px solid var(--gh-border-default);
   display: flex;
   align-items: center;
@@ -840,8 +830,8 @@ dialog form {
 
 .field input, .field textarea, .field select {
   margin-top: 6px;
-  background: #010409;
-  border: 1px solid var(--gh-border-default);
+  background: var(--gh-canvas-inset);
+  border: 1px solid var(--gh-border-control);
   color: var(--gh-fg-default);
 }
 
@@ -868,7 +858,7 @@ dialog footer {
 .gh-drawer-content, .task-drawer-content, .detail-drawer {
   width: min(720px, 94vw) !important;
   max-width: 94vw !important;
-  background: #161b22;
+  background: var(--gh-canvas-overlay);
   border-left: 1px solid var(--gh-border-default);
   height: 100vh;
   display: flex;
@@ -885,7 +875,7 @@ dialog footer {
 .drawer-header {
   padding: 18px 24px;
   border-bottom: 1px solid var(--gh-border-default);
-  background: #161b22;
+  background: var(--gh-canvas-subtle);
   flex-shrink: 0;
 }
 
@@ -907,13 +897,13 @@ dialog footer {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: #0d1117;
+  background: var(--gh-canvas-default);
 }
 
 .drawer-footer {
   padding: 14px 24px;
   border-top: 1px solid var(--gh-border-default);
-  background: #161b22;
+  background: var(--gh-canvas-subtle);
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
@@ -921,7 +911,7 @@ dialog footer {
 
 /* 抽屉内卡片条目 */
 .drawer-req-item {
-  background: #161b22;
+  background: var(--gh-canvas-subtle);
   border: 1px solid var(--gh-border-default);
   border-left: 3px solid var(--gh-accent-fg);
   border-radius: 6px;
@@ -944,7 +934,7 @@ dialog footer {
 }
 
 .req-original-block .original-text {
-  background: #010409;
+  background: var(--gh-canvas-inset);
   border: 1px solid var(--gh-border-muted);
   border-left: 2px solid var(--gh-accent-fg);
   padding: 8px 12px;
@@ -1010,6 +1000,7 @@ dialog footer {
   background: transparent;
   text-align: left;
   align-items: center;
+  justify-content: flex-start;
   cursor: pointer;
   font-size: 12px;
 }
@@ -1038,7 +1029,7 @@ dialog footer {
   backdrop-filter: blur(2px);
 }
 .task-drawer-content, .detail-drawer {
-  background: var(--gh-canvas-subtle) !important;
+  background: var(--gh-canvas-overlay) !important;
   opacity: 1 !important;
   border-left: 1px solid var(--gh-border-default);
   box-shadow: -6px 0 28px rgba(0, 0, 0, 0.5);
@@ -1238,18 +1229,6 @@ dialog footer {
     overflow: visible !important;
     display: flex !important;
     flex-direction: column !important;
-  }
-
-  .workbench > main > header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .header-actions {
-    width: 100%;
-    display: flex;
-    justify-content: flex-end;
   }
 
   /* 移动端 4 维指标必须呈现为 2 列 */

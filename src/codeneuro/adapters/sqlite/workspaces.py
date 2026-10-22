@@ -31,7 +31,8 @@ class WorkspacesRepo(Repo):
             'rule_versions': s.rule_versions.c.rule_id.in_(rules),
             'projects': s.projects.c.id == project_id,
         }
-        for name in ('delivery_rules', 'delivery_requirements', 'delivery_tasks', 'delivery_findings', 'feedback'):
+        for name in ('delivery_rules', 'delivery_requirements', 'delivery_tasks', 'delivery_findings',
+                     'delivery_selections', 'feedback'):
             indirect[name] = s.metadata.tables[name].c.delivery_id.in_(deliveries)
         for table in reversed(s.metadata.sorted_tables):
             predicate = table.c.project_id == project_id if 'project_id' in table.c else indirect[table.name]

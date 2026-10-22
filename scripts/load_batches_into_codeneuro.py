@@ -68,6 +68,8 @@ class RuleInput(Record):
     is_global: bool = False
     priority_reason: str = ''
     validation_spec: dict
+    delivery_mode: Literal['full', 'card'] = 'full'
+    applies_when: str = ''
 
 
 class FindingInput(Record):

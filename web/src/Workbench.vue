@@ -20,14 +20,14 @@ import ProjectSettingsView from './components/views/ProjectSettingsView.vue'
 import OverviewView from './components/views/OverviewView.vue'
 
 const tabs: readonly TabItem[] = [
-  { id: 'overview', icon: '◫', title: '数据全貌看板', subtitle: '查看项目核心指标、契约规则健康度与资产分布全貌。' },
-  { id: 'tasks', icon: '▥', title: '需求与任务看板', subtitle: '管理整体目标、独立子任务、验证与整体验收。' },
-  { id: 'rules', icon: '≋', title: '项目规则库', subtitle: '长期契约与任务短期规则统一管理，多维分类检索。' },
-  { id: 'explorer', icon: '⌘', title: '规则作用域', subtitle: '按路径检索代码模块适用的工程规范与核心约束。' },
-  { id: 'review', icon: '◈', title: '规范变更审阅', subtitle: '审阅编码助手提交的长期契约变更提案并核准。' },
-  { id: 'feedback', icon: '◎', title: '规则反馈与便签', subtitle: '查看规则真实效用评分与开发便签。' },
-  { id: 'activity', icon: '↗', title: '变更审计流水', subtitle: '记录需求归档、规则演进与状态转换的审计日志。' },
-  { id: 'settings', icon: '⚙', title: '项目设置与管理', subtitle: '查看项目信息、切换工程或清理数据。' },
+  { id: 'overview', icon: '◫', title: '项目总览', subtitle: '查看项目核心指标与规则、便签分布。' },
+  { id: 'tasks', icon: '▥', title: '需求与任务看板', subtitle: '管理业务需求、子任务与整体验收。' },
+  { id: 'rules', icon: '≋', title: '项目规则库', subtitle: '管理长期规则与任务规则。' },
+  { id: 'explorer', icon: '⌘', title: '按目录查规则', subtitle: '按目录或文件查询适用规则。' },
+  { id: 'review', icon: '◈', title: '规则修改审阅', subtitle: '审阅规则修改建议。' },
+  { id: 'feedback', icon: '◎', title: '规则反馈与便签', subtitle: '查看规则评分与开发便签。' },
+  { id: 'activity', icon: '↗', title: '操作记录', subtitle: '查看需求、任务与规则的变更历史。' },
+  { id: 'settings', icon: '⚙', title: '项目设置与管理', subtitle: '管理项目信息、切换项目与数据清理。' },
 ]
 
 const tab = ref<TabId>('tasks')
@@ -84,8 +84,8 @@ const modalMode = ref<'project' | 'approve' | 'reject'>('project')
 const modalTitle = computed(() => {
   switch (modalMode.value) {
     case 'project': return '注册新项目'
-    case 'approve': return '批准长期契约变更'
-    case 'reject': return '拒绝契约变更提案'
+    case 'approve': return '通过规则修改'
+    case 'reject': return '拒绝规则修改'
   }
 })
 const modalTarget = ref<Proposal | null>(null)
@@ -143,8 +143,16 @@ function syncUrl(push = false) {
   }
 }
 
+function resetContentScroll() {
+  const content = document.getElementById('content')
+  if (content) content.scrollTop = 0
+  window.scrollTo(0, 0)
+}
+
 function handleSelectTab(newTab: TabId) {
   tab.value = newTab
+  notice.value = ''
+  resetContentScroll()
   syncUrl(true)
 }
 
@@ -242,6 +250,7 @@ async function handleSelectProject(id: string) {
   dialogRef.value?.close()
 
   projectId.value = id
+  resetContentScroll()
   syncUrl(true)
   await refresh()
 }
@@ -265,7 +274,7 @@ async function handleDeleteProject(targetId?: string) {
     const isContextValid = capturedProjectEpoch === projectEpoch && capturedProjectId === projectId.value
 
     if (isContextValid) {
-      notice.value = `项目【${currentProjectName}】已安全永久删除。`
+      notice.value = `项目「${currentProjectName}」已删除。`
       if (projectId.value === idToDelete) {
         projectId.value = updatedProjects[0]?.id || ''
         ledger.value = null
@@ -315,6 +324,7 @@ const pendingProposalsCount = computed(
 // 打开弹窗系列
 function openCreateProject() {
   modalEpoch++
+  error.value = ''
   modalMode.value = 'project'
   modalTarget.value = null
   dialogRef.value?.open()
@@ -322,6 +332,7 @@ function openCreateProject() {
 
 function openApprove(prop: Proposal) {
   modalEpoch++
+  error.value = ''
   modalMode.value = 'approve'
   modalTarget.value = prop
   dialogRef.value?.open()
@@ -329,6 +340,7 @@ function openApprove(prop: Proposal) {
 
 function openReject(prop: Proposal) {
   modalEpoch++
+  error.value = ''
   modalMode.value = 'reject'
   modalTarget.value = prop
   dialogRef.value?.open()
@@ -371,7 +383,7 @@ async function handleDialogSubmit(data: {
       const list = await apiService.getProjects()
       projects.value = list
       if (!isModalContextValid()) return
-      notice.value = `项目【${created.name}】注册成功。`
+      notice.value = `项目「${created.name}」已注册。`
       modalEpoch++
       dialogRef.value?.close()
       projectId.value = created.id
@@ -386,7 +398,7 @@ async function handleDialogSubmit(data: {
         data.reason || '',
       )
       if (!isModalContextValid()) return
-      notice.value = capturedMode === 'approve' ? '提案已核准生效。' : '提案已拒绝。'
+      notice.value = capturedMode === 'approve' ? '规则修改已通过。' : '已拒绝这条规则修改。'
       modalEpoch++
       dialogRef.value?.close()
       await refresh()
@@ -402,6 +414,7 @@ async function handleDialogSubmit(data: {
 
 function handleGlobalKeydown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    if (document.querySelector('dialog[open]')) return
     event.preventDefault()
     paletteRef.value?.open()
   }
@@ -411,9 +424,15 @@ function handleHashChange() {
   const { projId, tabId } = parseLocationFromUrl()
   if (tabId && tabId !== tab.value) {
     tab.value = tabId
+    notice.value = ''
+    resetContentScroll()
   }
   if (projId && projId !== projectId.value && projects.value.some(p => p.id === projId)) {
     void handleSelectProject(projId)
+  }
+  // 无效或缺失的页面地址直接改回当前页面，避免 URL 与界面不一致
+  if (!tabId) {
+    syncUrl()
   }
 }
 
@@ -440,39 +459,25 @@ onUnmounted(() => {
       :tabs="tabs"
       :current-tab="tab"
       :connection-status="connectionStatus"
-      :error-text="error"
       @select-project="handleSelectProject"
       @open-create-project="openCreateProject"
-      @delete-current-project="handleDeleteProject"
       @select-tab="handleSelectTab"
       @open-palette="paletteRef?.open()"
     />
 
     <!-- 主展示区 -->
     <main>
-      <header class="main-header-compact">
-        <div class="header-left">
-          <span id="breadcrumb" class="breadcrumb-tag">
-            {{ projects.find(item => item.id === projectId)?.name || '未选项目' }}
-          </span>
-          <h1 id="title" class="title-compact">{{ current.title }}</h1>
-          <span id="subtitle" class="subtitle-compact">{{ current.subtitle }}</span>
-        </div>
-        <div class="header-actions">
-          <button id="refresh" class="subtle action-btn-compact" aria-label="刷新当前视图" :disabled="loading || busy" @click="connect">
-            {{ loading ? '⟳ 刷新中…' : '⟳ 刷新' }}
-          </button>
-        </div>
-      </header>
-
-      <!-- 顶栏指标卡组件 (重构为微型轻量内联胶囊条，释放垂直空间) -->
+      <!-- 页面标题、核心指标与刷新合并为单行胶囊条，不再单独占用顶部标题区 -->
       <MetricBar
-        :ledger="ledger"
+        :title="current.title"
+        :current-tab="tab"
+        :refreshing="loading || busy"
         :active-requirements-count="activeRequirementsCount"
         :active-tasks-count="activeTasksCount"
         :contracts-count="contractsCount"
         :pending-proposals-count="pendingProposalsCount"
         @navigate="handleSelectTab"
+        @refresh="connect"
       />
 
       <!-- 全局通知与错误浮条 -->
@@ -480,9 +485,12 @@ onUnmounted(() => {
       <div v-else-if="notice" id="notice" role="status">{{ notice }}</div>
 
       <!-- 主视图容器 -->
-      <section id="content" aria-label="工作区内容" tabindex="-1">
-        <div v-if="!projectId" class="empty">
-          当前尚未登记工程项目。点击左侧「＋ 注册项目」即可开始。
+      <section id="content" aria-label="工作区内容" tabindex="-1" :aria-busy="loading">
+        <div v-if="loading && !ledger" class="empty">
+          正在加载项目数据…
+        </div>
+        <div v-else-if="!projectId" class="empty">
+          当前还没有登记项目。点击左侧「＋ 注册」开始。
         </div>
 
         <template v-else-if="ledger">
@@ -522,7 +530,14 @@ onUnmounted(() => {
           />
 
           <!-- 5. 规则反馈与工作区 (Feedback) -->
-          <FeedbackView v-else-if="tab === 'feedback'" :key="projectId" :ledger="ledger" :project-id="projectId" @refresh="refresh" />
+          <FeedbackView
+            v-else-if="tab === 'feedback'"
+            :key="projectId"
+            :ledger="ledger"
+            :project-id="projectId"
+            :loading="loading"
+            @refresh="refresh"
+          />
 
           <!-- 6. 变更审计流水 (Activity) -->
           <ActivityView v-else-if="tab === 'activity'" :ledger="ledger" :project-id="projectId" />

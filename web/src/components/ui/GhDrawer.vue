@@ -34,6 +34,25 @@ const emit = defineEmits<{
 const drawerRef = ref<HTMLElement | null>(null)
 const closeBtnRef = ref<HTMLButtonElement | null>(null)
 let previousActiveElement: HTMLElement | null = null
+let backgroundLocked = false
+
+function lockBackground() {
+  if (backgroundLocked) return
+  backgroundLocked = true
+  document.documentElement.classList.add('drawer-open')
+  document.body.classList.add('drawer-open')
+  const app = document.getElementById('app') as (HTMLElement & { inert: boolean }) | null
+  if (app) app.inert = true
+}
+
+function unlockBackground() {
+  if (!backgroundLocked) return
+  backgroundLocked = false
+  document.documentElement.classList.remove('drawer-open')
+  document.body.classList.remove('drawer-open')
+  const app = document.getElementById('app') as (HTMLElement & { inert: boolean }) | null
+  if (app) app.inert = false
+}
 
 function close() {
   emit('update:modelValue', false)
@@ -93,6 +112,7 @@ watch(
   (val) => {
     if (val) {
       previousActiveElement = document.activeElement as HTMLElement | null
+      lockBackground()
       nextTick(() => {
         if (!drawerRef.value) return
         // 优先聚焦自定义 header 中的关闭按钮或通用关闭按钮
@@ -111,8 +131,11 @@ watch(
           drawerRef.value.focus()
         }
       })
-    } else if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
-      previousActiveElement.focus()
+    } else {
+      unlockBackground()
+      if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
+        previousActiveElement.focus()
+      }
       previousActiveElement = null
     }
   }
@@ -121,10 +144,12 @@ watch(
 onMounted(() => {
   if (props.modelValue) {
     previousActiveElement = document.activeElement as HTMLElement | null
+    lockBackground()
   }
 })
 
 onUnmounted(() => {
+  unlockBackground()
   if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
     previousActiveElement.focus()
   }
@@ -200,7 +225,7 @@ onUnmounted(() => {
 .gh-drawer-content {
   background: var(--gh-canvas-overlay);
   border-left: 1px solid var(--gh-border-default);
-  height: 100vh;
+  height: 100dvh;
   box-shadow: -8px 0 24px rgba(1, 4, 9, 0.6);
   display: flex;
   flex-direction: column;

@@ -44,13 +44,54 @@ async def test_catalogue_has_no_session_lifecycle_or_duplicate_output(mcp):
     server, *_ = mcp
     tools = await server.list_tools()
     names = {tool.name for tool in tools}
-    assert len(names) == 20
-    assert {'codeneuro_task', 'codeneuro_requirement', 'codeneuro_get_delivery'} <= names
+    assert len(names) == 21
+    assert {'codeneuro_task', 'codeneuro_requirement', 'codeneuro_get_delivery',
+            'codeneuro_open_rules'} <= names
     assert not {'codeneuro_start_session', 'codeneuro_end_session'} & names
     for tool in tools:
         assert tool.output_schema is None
         assert 'session_id' not in tool.input_schema['properties']
+    context_tool = next(tool for tool in tools if tool.name == 'codeneuro_get_context')
+    assert context_tool.input_schema['properties']['situation']['default'] == ''
+    assert 'required' not in context_tool.input_schema['properties']['situation']
     assert unwrap(await server.call_tool('codeneuro_list_projects', {}))[0]['id'] == 'p'
+
+
+@pytest.mark.asyncio
+async def test_directory_exposes_metadata_and_opens_only_selected_bodies(mcp):
+    server, product, human, _ = mcp
+    git = product.knowledge.create_rule(human, 'p', 'Git workflow', ('GIT_BODY_ONLY',), ('src/**',),
+        delivery_mode='card', applies_when='准备 commit、merge 或 push 时')
+    signing = product.knowledge.create_rule(human, 'p', 'Signing boundary', ('SIGNING_BODY_ONLY',), ('src/**',),
+        delivery_mode='card', applies_when='分析或修改签章调用与事务逻辑时')
+    unrelated = product.knowledge.create_rule(human, 'p', 'Other files', ('OTHER_BODY_ONLY',), ('docs/**',),
+        delivery_mode='card', applies_when='修改文档时')
+    args = {'project_id': 'p', 'files': ['src/sign.py'], 'priorities': ['P1'],
+            'situation': '分析签章逻辑', 'request_id': 'on-demand', 'max_chars': 512}
+    context = unwrap(await server.call_tool('codeneuro_get_context', args))
+    assert 'sections' not in context and not context['omitted_rule_ids']
+    assert {tuple(ref) for ref in context['rule_refs']} == {(rule.id, rule.version, 'card') for rule in (git, signing)}
+    assert not context['budget_exceeded']
+    assert 'codeneuro_open_rules' in context['markdown']
+    for rule in (git, signing):
+        assert f'{rule.id}@{rule.version} {rule.title} — {rule.applies_when}' in context['markdown']
+        assert context['markdown'].count(rule.title) == 1
+        assert rule.points[0] not in json.dumps(context)
+    with product.context.uow.read() as tx:
+        assert not tx.context.delivery_selections(context['id'])
+    with pytest.raises(ToolError, match='not offered'):
+        await server.call_tool('codeneuro_open_rules', {'delivery_id': context['id'],
+            'rule_ids': [unrelated.id], 'reason': 'Outside the recorded directory'})
+    opening = {'delivery_id': context['id'], 'rule_ids': [signing.id], 'reason': '当前正在分析签章事务边界'}
+    opened = unwrap(await server.call_tool('codeneuro_open_rules', opening))
+    assert [rule['id'] for rule in opened['rules']] == [signing.id]
+    assert signing.points[0] in opened['rules'][0]['markdown']
+    assert git.points[0] not in json.dumps(opened)
+    assert unwrap(await server.call_tool('codeneuro_open_rules', opening)) == opened
+    with product.context.uow.read() as tx:
+        selected = tx.context.delivery_selections(context['id'])
+        assert [(item['rule_id'], item['version']) for item in selected] == [(signing.id, signing.version)]
+    assert unwrap(await server.call_tool('codeneuro_get_context', args)) == context
 
 
 @pytest.mark.asyncio

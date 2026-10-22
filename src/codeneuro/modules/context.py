@@ -16,6 +16,7 @@ class ContextQuery:
     intent: str = 'implementing'
     mode: str = 'detailed'
     max_chars: int = 24000
+    situation: str = ''
 
     def __post_init__(self):
         if len(self.files) > 50 or len(set(self.files)) != len(self.files):
@@ -35,6 +36,12 @@ class ContextQuery:
             raise ProductError('Unsupported intent or output mode.')
         if not 512 <= self.max_chars <= 200000:
             raise ProductError('max_chars must be 512–200000.')
+        if not isinstance(self.situation, str):
+            raise ProductError('Situation must be plain text.')
+        situation = ' '.join(self.situation.split())
+        if len(situation) > 200:
+            raise ProductError('Situation must stay within 200 characters.')
+        object.__setattr__(self, 'situation', situation)
 
 
 @dataclass(frozen=True)
@@ -90,17 +97,23 @@ def assemble(delivery_id: str, query: ContextQuery, rules: tuple[Rule, ...],
         header += f'Files: {", ".join(query.files)}\n'
     if query.topics:
         header += f'Topics: {", ".join(query.topics)}\n'
+    if query.situation:
+        header += f'Situation: {query.situation}\n'
     header += f'Priorities: {", ".join(query.priorities)}\n'
     reasons = {}
+    cards: list[tuple[int, str, Rule]] = []
     entries: list[tuple[str, str, int, str, str, int, int, bool]] = []
     for rule in candidates:
-        bullet = '- [ ] ' if query.mode == 'checklist' else '- '
-        clauses = '\n'.join(f'{bullet}{p}' for p in rule.points)
-        content = f'[{rule.priority}] {rule.title} ({rule.id}@{rule.version})\n{clauses}\n'
         topic_hit = bool(set(rule.topics) & set(query.topics))
         path_hit = rule.matches(query.files)
         reasons[rule.id] = tuple(name for name, hit in (
             ('topic', topic_hit), ('path', path_hit), ('global', rule.is_global)) if hit)
+        if rule.delivery_mode == 'card':
+            cards.append((RANK[rule.priority], rule.id, rule))
+            continue
+        bullet = '- [ ] ' if query.mode == 'checklist' else '- '
+        clauses = '\n'.join(f'{bullet}{p}' for p in rule.points)
+        content = f'[{rule.priority}] {rule.title} ({rule.id}@{rule.version})\n{clauses}\n'
         boost = -(4 * topic_hit + 2 * path_hit)
         entries.append(('rule', rule.id, rule.version, 'full',
                         content, RANK[rule.priority], boost, rule.priority == Priority.P0))
@@ -158,26 +171,46 @@ def assemble(delivery_id: str, query: ContextQuery, rules: tuple[Rule, ...],
         omitted.append(removed)
         length -= len(removed[4])
     markdown = header + ''.join(e[4] for e in selected) + omissions()
+    budget_exceeded = len(markdown) > query.max_chars
     sections = {'must_obey_contracts': [], 'task_actionable_checklist': [],
-                'module_gotchas': [], 'reported_conflicts': []}
+                'module_gotchas': [], 'reported_conflicts': [], 'applicable_cards': []}
     for entry in selected:
         kind, identity, version, representation, content, _, _, mandatory = entry
         bucket = ('must_obey_contracts' if mandatory else 'module_gotchas' if kind == 'finding'
                   else 'reported_conflicts' if kind == 'conflict' else 'task_actionable_checklist')
         sections[bucket].append({'id': identity, 'version': version, 'kind': kind,
                                  'representation': representation or 'full', 'content': content})
+    cards.sort(key=lambda item: (item[0], item[1]))
+    card_lines, listed_cards = [], []
+    for _, _, rule in cards:
+        line = (f'- {rule.priority} {rule.id}@{rule.version} {" ".join(rule.title.split())} — '
+                f'{" ".join(rule.applies_when.split())}\n')
+        card_lines.append(line)
+        listed_cards.append(rule)
+        sections['applicable_cards'].append({'id': rule.id, 'version': rule.version, 'kind': 'rule',
+            'representation': 'card', 'priority': rule.priority, 'title': rule.title,
+            'applies_when': rule.applies_when})
+    if cards:
+        markdown += ('\nOn-demand Rule directory (hints, not requirements):\n'
+                     'Use titles and applicability to select Rules relevant to your current task or next action. '
+                     'Read those bodies yourself with codeneuro_open_rules(delivery_id, rule_ids, reason) '
+                     'before relying on them; do not ask the user to select entries or load unrelated bodies.\n'
+                     + ''.join(card_lines))
+    matched = {e[1]: reasons[e[1]] for e in selected if e[0] == 'rule'}
+    matched.update({rule.id: reasons[rule.id] for rule in listed_cards})
     return Delivery(delivery_id, markdown,
-        tuple((e[1], e[2], e[3]) for e in selected if e[0] == 'rule'),
+        tuple((e[1], e[2], e[3]) for e in selected if e[0] == 'rule')
+        + tuple((rule.id, rule.version, 'card') for rule in listed_cards),
         tuple((e[1], e[2]) for e in selected if e[0] == 'requirement'),
         tuple(e[1] for e in omitted if e[0] == 'rule'),
         tuple(e[1] for e in omitted if e[0] == 'requirement'),
-        len(markdown) > query.max_chars,
+        budget_exceeded,
         finding_refs=tuple((e[1], e[2]) for e in selected if e[0] == 'finding'),
         omitted_finding_ids=tuple(e[1] for e in omitted if e[0] == 'finding'),
         sections={name: tuple(items) for name, items in sections.items()},
         reported_conflicts=tuple(report for report in conflict_reports if report['id'] in
                                  {e[1] for e in selected if e[0] == 'conflict'}),
         omitted_conflict_ids=tuple(e[1] for e in omitted if e[0] == 'conflict'),
-        query=asdict(query), match_reasons={e[1]: reasons[e[1]] for e in selected if e[0] == 'rule'},
+        query=asdict(query), match_reasons=matched,
         task_refs=tuple((e[1], e[2]) for e in selected if e[0] == 'task'),
         omitted_task_ids=tuple(e[1] for e in omitted if e[0] == 'task'))

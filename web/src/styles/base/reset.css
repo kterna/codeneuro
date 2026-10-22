@@ -28,3 +28,28 @@ html, body {
   width: 100%;
   display: flex;
 }
+
+/* 全局统一现代化半透明细滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(125, 133, 144, 0.3) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(125, 133, 144, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(125, 133, 144, 0.5);
+}
+

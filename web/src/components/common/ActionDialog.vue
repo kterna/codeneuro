@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onUnmounted } from 'vue'
 
 const props = withDefaults(defineProps<{
   title: string
@@ -23,6 +23,11 @@ let previousActiveElement: HTMLElement | null = null
 let parentDialogEl: HTMLElement | null = null
 let openFocusTimer: ReturnType<typeof setTimeout> | null = null
 
+function setModalOpen(open: boolean) {
+  document.documentElement.classList.toggle('modal-open', open)
+  document.body.classList.toggle('modal-open', open)
+}
+
 function open(initialReason = '') {
   if (openFocusTimer) {
     clearTimeout(openFocusTimer)
@@ -35,6 +40,7 @@ function open(initialReason = '') {
   inputProjectId.value = ''
   inputProjectName.value = ''
   inputReason.value = initialReason
+  setModalOpen(true)
   dialogRef.value?.showModal()
 
   // Focus the first input, tracking timer so close can invalidate it
@@ -52,6 +58,7 @@ function close() {
     openFocusTimer = null
   }
   dialogRef.value?.close()
+  setModalOpen(false)
   emit('close')
 
   nextTick(() => {
@@ -95,6 +102,8 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
+onUnmounted(() => setModalOpen(false))
+
 defineExpose({
   open,
   close,
@@ -102,63 +111,65 @@ defineExpose({
 </script>
 
 <template>
-  <dialog
-    ref="dialogRef"
-    id="editor"
-    aria-labelledby="dialog-title"
-    role="dialog"
-    aria-modal="true"
-    @keydown="handleKeydown"
-  >
-    <form @submit.prevent="handleSubmit">
-      <div class="dialog-head">
-        <h2 id="dialog-title">{{ title }}</h2>
-        <button type="button" aria-label="关闭窗口" @click="close">×</button>
-      </div>
+  <Teleport to="body">
+    <dialog
+      ref="dialogRef"
+      id="editor"
+      aria-labelledby="dialog-title"
+      role="dialog"
+      aria-modal="true"
+      @keydown="handleKeydown"
+    >
+      <form @submit.prevent="handleSubmit">
+        <div class="dialog-head">
+          <h2 id="dialog-title">{{ title }}</h2>
+          <button type="button" aria-label="关闭窗口" @click="close">×</button>
+        </div>
 
-      <template v-if="isProjectModal">
-        <label class="field">
-          项目标识
-          <input
-            id="new-project-id"
-            v-model="inputProjectId"
-            required
-            maxlength="128"
-            pattern="^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
-            title="只能以字母或数字开头，可包含字母、数字、下划线与短横线，长度 1-128"
-            placeholder="例如：codeneuro-hub"
-          />
-          <small class="caption">以字母/数字开头，支持 _ 和 -，禁止包含空格或斜杠</small>
-        </label>
-        <label class="field">
-          项目名称
-          <input
-            id="new-project-name"
-            v-model="inputProjectName"
-            required
-            maxlength="500"
-            placeholder="例如：CodeNeuro 核心工程服务"
-          />
-        </label>
-      </template>
+        <template v-if="isProjectModal">
+          <label class="field">
+            项目标识
+            <input
+              id="new-project-id"
+              v-model="inputProjectId"
+              required
+              maxlength="128"
+              pattern="^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+              title="只能以字母或数字开头，可包含字母、数字、下划线与短横线，长度 1-128"
+              placeholder="例如：codeneuro-hub"
+            />
+            <small class="caption">以字母/数字开头，支持 _ 和 -，禁止包含空格或斜杠</small>
+          </label>
+          <label class="field">
+            项目名称
+            <input
+              id="new-project-name"
+              v-model="inputProjectName"
+              required
+              maxlength="500"
+              placeholder="例如：CodeNeuro 规则中枢"
+            />
+          </label>
+        </template>
 
-      <template v-else>
-        <label class="field">
-          处理依据与说明
-          <textarea
-            v-model="inputReason"
-            required
-            placeholder="请输入具体的完成摘要、审阅结论或调整依据（例如：已通过集成测试验证）…"
-          ></textarea>
-        </label>
-      </template>
+        <template v-else>
+          <label class="field">
+            说明
+            <textarea
+              v-model="inputReason"
+              required
+              placeholder="写清这次操作的结论或原因（例如：已通过集成测试）…"
+            ></textarea>
+          </label>
+        </template>
 
-      <div v-if="errorText" id="editor-error" role="alert">{{ errorText }}</div>
+        <div v-if="errorText" id="editor-error" role="alert">{{ errorText }}</div>
 
-      <footer>
-        <button type="button" @click="close">取消</button>
-        <button type="submit" class="primary" :disabled="busy">保存</button>
-      </footer>
-    </form>
-  </dialog>
+        <footer>
+          <button type="button" @click="close">取消</button>
+          <button type="submit" class="primary" :disabled="busy">保存</button>
+        </footer>
+      </form>
+    </dialog>
+  </Teleport>
 </template>

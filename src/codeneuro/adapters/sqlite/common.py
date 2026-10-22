@@ -37,7 +37,8 @@ def _rule(row, topics=()):
                 tuple(json.loads(row['points_json'])), tuple(json.loads(row['patterns_json'])),
                 Priority(row['priority']), tuple(topics), row['version'], row['status'],
                 row['origin_reason'], bool(row['is_global']), row['priority_reason'],
-                json.loads(row['validation_spec_json']) if row['validation_spec_json'] else None) if row else None
+                json.loads(row['validation_spec_json']) if row['validation_spec_json'] else None,
+                row.get('delivery_mode') or 'full', row.get('applies_when') or '') if row else None
 
 
 def _worktree(row):

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import type { TabId, TabItem } from '../../types/ledger'
 
 const props = defineProps<{
@@ -21,24 +21,38 @@ const results = computed(() => {
   return props.tabs.filter(item => !text || item.title.includes(text) || item.subtitle.includes(text))
 })
 
+const activeOptionId = computed(() => {
+  const item = results.value[selectedIndex.value]
+  return item ? `palette-option-${item.id}` : undefined
+})
+
 watch(query, () => {
   selectedIndex.value = 0
 })
+
+function setModalOpen(open: boolean) {
+  document.documentElement.classList.toggle('modal-open', open)
+  document.body.classList.toggle('modal-open', open)
+}
 
 function open() {
   previousActiveElement = document.activeElement as HTMLElement | null
   query.value = ''
   selectedIndex.value = 0
+  setModalOpen(true)
   dialogRef.value?.showModal()
   setTimeout(() => inputRef.value?.focus(), 50)
 }
 
 function close() {
   dialogRef.value?.close()
+  setModalOpen(false)
   if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
     previousActiveElement.focus()
   }
 }
+
+onUnmounted(() => setModalOpen(false))
 
 function choose(id: TabId) {
   emit('select-tab', id)
@@ -74,42 +88,50 @@ defineExpose({
 </script>
 
 <template>
-  <dialog
-    ref="dialogRef"
-    id="palette"
-    aria-label="搜索与命令"
-    role="dialog"
-    aria-modal="true"
-    @keydown="handleKeydown"
-  >
-    <div class="palette-search">
-      <span aria-hidden="true">⌕</span>
-      <input
-        ref="inputRef"
-        v-model="query"
-        placeholder="搜索工作台页面与核心模块…"
-        aria-label="搜索命令"
-        autocomplete="off"
-      />
-      <kbd @click="close" style="cursor: pointer">Esc</kbd>
-    </div>
-    <div class="palette-results" role="listbox">
-      <button
-        v-for="(item, idx) in results"
-        :key="item.id"
-        class="command"
-        :class="{ selected: idx === selectedIndex }"
-        role="option"
-        :aria-selected="idx === selectedIndex"
-        @click="choose(item.id)"
-        @mouseenter="selectedIndex = idx"
-      >
-        <span style="font-size: 16px; margin-right: 8px">{{ item.icon }}</span>
-        <strong>{{ item.title }}</strong>
-        <small>{{ item.subtitle }}</small>
-      </button>
-      <p v-if="!results.length" class="empty compact">无匹配的页面或命令</p>
-    </div>
-    <div class="palette-footer">↑ ↓ 选择 · Enter 执行 · Esc 关闭 · Ctrl / ⌘ K 随时唤出</div>
-  </dialog>
+  <Teleport to="body">
+    <dialog
+      ref="dialogRef"
+      id="palette"
+      aria-label="搜索页面"
+      role="dialog"
+      aria-modal="true"
+      @keydown="handleKeydown"
+    >
+      <div class="palette-search">
+        <span aria-hidden="true">⌕</span>
+        <input
+          ref="inputRef"
+          v-model="query"
+          placeholder="搜索页面或功能…"
+          role="combobox"
+          aria-label="搜索页面或功能"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          aria-controls="palette-results"
+          :aria-activedescendant="activeOptionId"
+          autocomplete="off"
+        />
+        <kbd @click="close" style="cursor: pointer">Esc</kbd>
+      </div>
+      <div id="palette-results" class="palette-results" role="listbox">
+        <button
+          v-for="(item, idx) in results"
+          :id="'palette-option-' + item.id"
+          :key="item.id"
+          class="command"
+          :class="{ selected: idx === selectedIndex }"
+          role="option"
+          :aria-selected="idx === selectedIndex"
+          @click="choose(item.id)"
+          @mouseenter="selectedIndex = idx"
+        >
+          <span style="font-size: 16px; margin-right: 8px">{{ item.icon }}</span>
+          <strong>{{ item.title }}</strong>
+          <small>{{ item.subtitle }}</small>
+        </button>
+        <p v-if="!results.length" class="empty compact">没有找到匹配的页面</p>
+      </div>
+      <div class="palette-footer">↑ ↓ 选择 · Enter 执行 · Esc 关闭 · Ctrl / ⌘ K 随时唤出</div>
+    </dialog>
+  </Teleport>
 </template>

@@ -9,10 +9,8 @@ const props = withDefaults(defineProps<{
   tabs: readonly TabItem[]
   currentTab: TabId
   connectionStatus?: 'connecting' | 'connected' | 'disconnected'
-  errorText?: string
 }>(), {
   connectionStatus: 'connected',
-  errorText: '',
 })
 
 const emit = defineEmits<{
@@ -25,7 +23,7 @@ const emit = defineEmits<{
 const { theme, setTheme } = useTheme()
 
 function toggleTheme() {
-  setTheme(theme.value === 'dark' ? 'light' : 'dark')
+  setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark')
 }
 
 // 明确分离业务工作区（项目级）与系统配置（系统级）
@@ -39,7 +37,7 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
     <div class="sidebar-brand-project">
       <a class="brand" href="/app/" aria-label="CodeNeuro 首页">
         <span class="brand-mark">C</span>
-        <span class="brand-title">CodeNeuro<small>工程治理工作台</small></span>
+        <span class="brand-title">CodeNeuro<small>任务与规则工作台</small></span>
       </a>
 
       <!-- 紧凑型项目切换栏：下拉框与新增按钮并列 -->
@@ -48,6 +46,7 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
           id="project"
           class="project-select-input"
           :value="currentProjectId"
+          :title="projects.find(p => p.id === currentProjectId)?.name || '未选项目'"
           aria-label="切换项目"
           @change="emit('select-project', ($event.target as HTMLSelectElement).value)"
         >
@@ -57,8 +56,8 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
         <button
           id="new-project"
           class="btn-add-project"
-          title="注册新工程"
-          aria-label="注册新工程"
+          title="注册新项目"
+          aria-label="注册新项目"
           @click="emit('open-create-project')"
         >
           ＋
@@ -74,6 +73,7 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
         :key="item.id"
         class="nav-tab-item"
         :class="{ active: currentTab === item.id }"
+        :aria-current="currentTab === item.id ? 'page' : undefined"
         @click="emit('select-tab', item.id)"
       >
         <span class="nav-icon">{{ item.icon }}</span>
@@ -86,6 +86,7 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
         v-if="systemTab"
         class="nav-tab-item"
         :class="{ active: currentTab === systemTab.id }"
+        :aria-current="currentTab === systemTab.id ? 'page' : undefined"
         @click="emit('select-tab', systemTab.id)"
       >
         <span class="nav-icon">{{ systemTab.icon }}</span>
@@ -99,7 +100,7 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
         <button
           id="open-palette"
           class="palette-btn-compact"
-          title="全局命令面板 (Ctrl K)"
+          title="打开命令面板 (Ctrl K)"
           @click="emit('open-palette')"
         >
           ⌘ 命令 <kbd>Ctrl K</kbd>
@@ -107,7 +108,10 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
 
         <button
           class="theme-toggle-btn"
+          type="button"
           :title="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'"
+          :aria-label="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'"
+          :aria-pressed="theme === 'light'"
           @click="toggleTheme"
         >
           {{ theme === 'dark' ? '🌙' : '☀️' }}
@@ -127,7 +131,7 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
               ? '连接中…'
               : connectionStatus === 'disconnected'
                 ? '服务断开'
-                : '服务正常 (8801)'
+                : '服务正常'
           }}
         </span>
       </div>
@@ -360,6 +364,22 @@ const systemTab = computed(() => props.tabs.find(t => t.id === 'settings'))
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+  }
+
+  .nav-tab-item {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .brand {

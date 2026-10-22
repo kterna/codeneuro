@@ -66,6 +66,24 @@ class ContextRepo(Repo):
         return self._one(sa.select(s.deliveries.c.project_id, s.deliveries.c.task_id,
             s.deliveries.c.source_json).where(s.deliveries.c.id == delivery_id))
 
+    def delivery_rule_refs(self, delivery_id):
+        return [dict(row) for row in self.c.execute(sa.select(s.delivery_rules).where(
+            s.delivery_rules.c.delivery_id == delivery_id)).mappings()]
+
+    def selection(self, delivery_id, rule_id):
+        return self._one(sa.select(s.delivery_selections).where(
+            s.delivery_selections.c.delivery_id == delivery_id,
+            s.delivery_selections.c.rule_id == rule_id))
+
+    def record_selection(self, delivery_id, rule_id, version, reason, actor):
+        self.c.execute(s.delivery_selections.insert().values(delivery_id=delivery_id,
+            rule_id=rule_id, version=version, reason=reason, actor=actor,
+            created_at=datetime.now(timezone.utc).isoformat()))
+
+    def delivery_selections(self, delivery_id):
+        return [dict(row) for row in self.c.execute(sa.select(s.delivery_selections).where(
+            s.delivery_selections.c.delivery_id == delivery_id)).mappings()]
+
     def save_delivery(self, project_id, task_id, result, source):
         self.c.execute(s.deliveries.insert().values(id=result.id, project_id=project_id, task_id=task_id,
             response_json=_json(asdict(result)), source_json=_json(source),

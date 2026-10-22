@@ -168,63 +168,6 @@ nav button.active {
   overflow: hidden;
 }
 
-.workbench > main > header,
-.main-header-compact {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--gh-border-muted);
-  flex-shrink: 0;
-}
-
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.breadcrumb-tag {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--gh-accent-fg);
-  background: var(--gh-accent-subtle);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(56, 139, 253, 0.3);
-  white-space: nowrap;
-}
-
-.title-compact {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0;
-  color: var(--gh-fg-default);
-  line-height: 1.2;
-}
-
-.subtitle-compact {
-  font-size: 12px;
-  color: var(--gh-fg-muted);
-  line-height: 1.2;
-}
-
-.action-btn-compact {
-  padding: 4px 10px;
-  font-size: 11px;
-  background: var(--gh-surface-card);
-  border: 1px solid var(--gh-border-default);
-  border-radius: var(--radius-sm);
-  color: var(--gh-fg-default);
-}
-.action-btn-compact:hover {
-  background: var(--gh-surface-card-hover);
-  border-color: var(--gh-accent-fg);
-}
-
 h1 {
   font-size: 20px;
   font-weight: 600;
